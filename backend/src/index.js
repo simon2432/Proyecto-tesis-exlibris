@@ -31,6 +31,9 @@ app.use("/auth", authRoutes);
 const bookRoutes = require("./routes/bookRoutes");
 app.use("/books", bookRoutes);
 
+const chatRoutes = require("./routes/chatRoutes");
+app.use(chatRoutes);
+
 // Iniciar el servidor
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

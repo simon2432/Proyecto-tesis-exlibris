@@ -37,12 +37,16 @@ export default function HomeScreen() {
       params: {
         id: book.id,
         title: book.title,
-        authors: book.authors?.join(", ") || "",
+        authors: Array.isArray(book.authors)
+          ? book.authors.join(", ")
+          : book.authors || "",
         publisher: book.publisher || "",
         publishedDate: book.publishedDate || "",
         description: book.description || "",
         pageCount: book.pageCount || "",
-        categories: book.categories?.join(", ") || "",
+        categories: Array.isArray(book.categories)
+          ? book.categories.join(", ")
+          : book.categories || "",
         language: book.language || "",
         image: book.image || "",
       },
@@ -90,7 +94,11 @@ export default function HomeScreen() {
         />
 
         {/* Botón flotante de recomendaciones */}
-        <TouchableOpacity style={styles.fab} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.fab}
+          activeOpacity={0.8}
+          onPress={() => router.replace("/chat" as any)}
+        >
           <Text style={styles.fabText}>Recomendaciones inteligentes 📚</Text>
         </TouchableOpacity>
       </View>

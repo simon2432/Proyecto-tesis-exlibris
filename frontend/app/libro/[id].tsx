@@ -17,6 +17,15 @@ export default function LibroDetalleScreen() {
   const params = useLocalSearchParams();
   const libro: any = params;
 
+  const renderField = (label: string, value: string | undefined) => {
+    if (!value || value.trim() === "") return null;
+    return (
+      <Text style={styles.bookMeta}>
+        <Text style={styles.bold}>{label}:</Text> {value}
+      </Text>
+    );
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: "#FFF" }}>
       <View style={styles.header}>
@@ -37,26 +46,22 @@ export default function LibroDetalleScreen() {
           )}
           <View style={styles.bookInfoCol}>
             <Text style={styles.bookTitle}>{libro.title}</Text>
-            <Text style={styles.bookMeta}>
-              <Text style={styles.bold}>Autor:</Text> {libro.authors}
-            </Text>
-            <Text style={styles.bookMeta}>
-              <Text style={styles.bold}>Género:</Text> {libro.categories}
-            </Text>
-            <Text style={styles.bookMeta}>
-              <Text style={styles.bold}>Editorial:</Text> {libro.publisher}
-            </Text>
-            <Text style={styles.bookMeta}>
-              <Text style={styles.bold}>Cantidad de páginas:</Text>{" "}
-              {libro.pageCount}
-            </Text>
-            <Text style={styles.bookMeta}>
-              <Text style={styles.bold}>Idioma:</Text> {libro.language}
-            </Text>
+            {renderField("Autor", libro.authors)}
+            {renderField("Género", libro.categories)}
+            {renderField("Editorial", libro.publisher)}
+            {renderField("Fecha de publicación", libro.publishedDate)}
+            {renderField("Páginas", libro.pageCount)}
+            {renderField("Idioma", libro.language)}
           </View>
         </View>
-        <Text style={styles.sectionTitle}>Descripción:</Text>
-        <Text style={styles.description}>{libro.description}</Text>
+
+        {libro.description && (
+          <>
+            <Text style={styles.sectionTitle}>Descripción:</Text>
+            <Text style={styles.description}>{libro.description}</Text>
+          </>
+        )}
+
         <Text style={styles.sectionTitle}>Reseñas</Text>
         <View style={styles.reviewsPlaceholder}>
           <Text style={{ color: "#a08b7d", fontStyle: "italic" }}>

@@ -23,8 +23,13 @@ exports.searchGoogleBooks = async (req, res) => {
       .map((item) => ({
         id: item.id,
         title: item.volumeInfo.title,
-        authors: (item.volumeInfo.authors || []).join(", "),
-        description: item.volumeInfo.description,
+        authors: item.volumeInfo.authors || [],
+        publisher: item.volumeInfo.publisher || "",
+        publishedDate: item.volumeInfo.publishedDate || "",
+        description: item.volumeInfo.description || "",
+        pageCount: item.volumeInfo.pageCount || "",
+        categories: item.volumeInfo.categories || [],
+        language: item.volumeInfo.language || "",
         image: item.volumeInfo.imageLinks.thumbnail,
       }));
 
