@@ -7,8 +7,11 @@ import {
   TouchableOpacity,
   Animated,
   Pressable,
+  Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useUser } from "../contexts/UserContext";
+import { useRouter } from "expo-router";
 
 const MENU_OPTIONS = [
   { label: "Editar perfil", onPress: () => {} },
@@ -20,6 +23,8 @@ const MENU_OPTIONS = [
 export default function HeaderPerfil() {
   const [menuVisible, setMenuVisible] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
+  const { logout } = useUser();
+  const router = useRouter();
 
   const toggleMenu = () => {
     setMenuVisible((prev) => !prev);
@@ -30,11 +35,39 @@ export default function HeaderPerfil() {
     }).start();
   };
 
+  const handleLogout = () => {
+    Alert.alert(
+      "Cerrar sesión",
+      "¿Estás seguro de que quieres cerrar sesión?",
+      [
+        {
+          text: "Cancelar",
+          style: "cancel",
+        },
+        {
+          text: "Cerrar sesión",
+          style: "destructive",
+          onPress: () => {
+            logout();
+            router.replace("/");
+          },
+        },
+      ]
+    );
+  };
+
+  const MENU_OPTIONS = [
+    { label: "Editar perfil", onPress: () => {} },
+    { label: "Soporte", onPress: () => {} },
+    { label: "Políticas", onPress: () => {} },
+    { label: "Cerrar sesión", onPress: handleLogout },
+  ];
+
   return (
     <View style={styles.header}>
       <View style={styles.headerLeft}>
         <Image
-          source={require("../assets/images/Lechuza.png")}
+          source={require("../assets/images/lechuza.png")}
           style={styles.logo}
           resizeMode="contain"
         />

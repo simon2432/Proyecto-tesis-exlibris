@@ -20,7 +20,7 @@ export default function HomeScreen() {
 
   const handleSearch = (text: string) => {
     // Aquí puedes implementar la lógica de búsqueda
-    console.log("Buscando:", text);
+    // (ya no es necesario para Google Books, pero se deja para filtros futuros)
   };
 
   const handleFilterChange = (filters: {
@@ -29,7 +29,24 @@ export default function HomeScreen() {
     genero: boolean;
   }) => {
     // Aquí puedes implementar la lógica de filtros
-    console.log("Filtros:", filters);
+  };
+
+  const handleBookSelect = (book: any) => {
+    router.push({
+      pathname: "/libro/[id]",
+      params: {
+        id: book.id,
+        title: book.title,
+        authors: book.authors?.join(", ") || "",
+        publisher: book.publisher || "",
+        publishedDate: book.publishedDate || "",
+        description: book.description || "",
+        pageCount: book.pageCount || "",
+        categories: book.categories?.join(", ") || "",
+        language: book.language || "",
+        image: book.image || "",
+      },
+    });
   };
 
   return (
@@ -39,6 +56,7 @@ export default function HomeScreen() {
         <HeaderHome
           onSearch={handleSearch}
           onFilterChange={handleFilterChange}
+          onBookSelect={handleBookSelect}
         />
 
         {/* Contenido principal */}

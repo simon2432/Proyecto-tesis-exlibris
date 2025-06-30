@@ -25,9 +25,20 @@ exports.register = async (req, res) => {
         ubicacion,
       },
     });
-    return res
-      .status(201)
-      .json({ message: "Usuario registrado correctamente" });
+
+    // Generar token para el usuario registrado
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
+      expiresIn: "7d",
+    });
+
+    // No enviar password al frontend
+    const { password: _, ...userData } = user;
+
+    return res.status(201).json({
+      message: "Usuario registrado correctamente",
+      token,
+      user: userData,
+    });
   } catch (error) {
     return res.status(500).json({ error: "Error en el registro" });
   }

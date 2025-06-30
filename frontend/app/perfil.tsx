@@ -10,9 +10,12 @@ import {
 import HeaderPerfil from "../components/HeaderPerfil";
 import CustomTabBar from "../components/CustomTabBar";
 import { useRouter } from "expo-router";
+import { useUser } from "../contexts/UserContext";
 
 export default function PerfilScreen() {
   const router = useRouter();
+  const { user } = useUser();
+
   return (
     <View style={{ flex: 1, backgroundColor: "#FFF" }}>
       <HeaderPerfil />
@@ -30,7 +33,7 @@ export default function PerfilScreen() {
             source={{ uri: "https://placehold.co/100x100" }}
             style={styles.profileImage}
           />
-          <Text style={styles.profileName}>SimonF</Text>
+          <Text style={styles.profileName}>{user?.nombre || "Usuario"}</Text>
           <Text style={styles.profileGenre}>
             Género más leído:{" "}
             <Text style={{ fontWeight: "bold" }}>Ciencia ficción</Text>

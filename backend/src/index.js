@@ -28,6 +28,9 @@ app.use("/lecturas", lecturaRoutes);
 const authRoutes = require("./routes/authRoutes");
 app.use("/auth", authRoutes);
 
+const bookRoutes = require("./routes/bookRoutes");
+app.use("/books", bookRoutes);
+
 // Iniciar el servidor
 const PORT = process.env.PORT || 3001;
 app.listen(PORT, () => {

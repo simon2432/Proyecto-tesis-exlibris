@@ -22,7 +22,7 @@ export default function HeaderMarketplace({
     <View style={styles.header}>
       <View style={styles.headerLeft}>
         <Image
-          source={require("../assets/images/Lechuza.png")}
+          source={require("../assets/images/lechuza.png")}
           style={styles.logo}
           resizeMode="contain"
         />

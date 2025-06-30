@@ -12,6 +12,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import axios from "axios";
+import { useUser } from "../contexts/UserContext";
 
 const API_BASE_URL =
   Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
@@ -20,6 +21,7 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const router = useRouter();
+  const { setUser } = useUser();
 
   const handleLogin = async () => {
     try {
@@ -28,6 +30,8 @@ export default function Login() {
         password,
       });
       await AsyncStorage.setItem("token", res.data.token);
+      // Guardar los datos del usuario en el contexto
+      setUser(res.data.user);
       router.replace("/home"); // redirige a la pantalla principal
     } catch (error: any) {
       Alert.alert("Error", error?.response?.data?.error || "Falló el login");

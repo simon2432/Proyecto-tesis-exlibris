@@ -11,6 +11,8 @@ import {
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
 import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useUser } from "../contexts/UserContext";
 
 const API_BASE_URL =
   Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
@@ -25,6 +27,7 @@ export default function Register() {
   const [repeatPassword, setRepeatPassword] = useState("");
   const [ubicacion, setUbicacion] = useState(ubicaciones[0]);
   const router = useRouter();
+  const { setUser } = useUser();
 
   const handleRegister = async () => {
     if (password !== repeatPassword) {
@@ -32,13 +35,18 @@ export default function Register() {
       return;
     }
     try {
-      await axios.post(`${API_BASE_URL}/auth/register`, {
+      const res = await axios.post(`${API_BASE_URL}/auth/register`, {
         nombre: nombre.trim(),
         email,
         password,
         ubicacion,
         documento: dni,
       });
+
+      // Guardar token y datos del usuario
+      await AsyncStorage.setItem("token", res.data.token);
+      setUser(res.data.user);
+
       router.replace("/home");
     } catch (error: any) {
       Alert.alert("Error", error?.response?.data?.error || "Falló el registro");
