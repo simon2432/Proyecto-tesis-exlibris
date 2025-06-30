@@ -1,0 +1,79 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                   Int       @id @default(autoincrement())
+  nombre               String
+  email                String    @unique
+  password             String
+  fotoPerfil           String?
+  librosFavoritos      String[]  @default([]) // IDs de libros desde la API de Google
+  logros               String[]  @default([])
+  librosVendidos       Int       @default(0)
+  librosComprados      Int       @default(0)
+  puntuacionVendedor   Float     @default(0.0)
+  cantidadValoraciones Int       @default(0)
+  fechaRegistro        DateTime  @default(now())
+  ubicacion            String?
+  documento            Int?
+  lecturas             Lectura[] // relación uno-a-muchos
+  publicaciones Publicacion[] // relación inversa obligatoria
+  compras Compra[] // relación inversa para el campo comprador en Compra
+}
+
+model Lectura {
+  id           Int      @id @default(autoincrement())
+  userId       Int
+  libroId      String   // ID de Google Books
+  fechaInicio  DateTime
+  fechaFin     DateTime?
+  resenaTexto  String?
+  valoracion   Int?     // de 1 a 5
+  user         User     @relation(fields: [userId], references: [id])
+}
+
+enum EstadoPublicacion {
+  activa
+  en_venta
+}
+
+model Publicacion {
+  id               Int                @id @default(autoincrement())
+  titulo           String
+  autor            String
+  genero           String
+  editorial        String
+  paginas          Int
+  idioma           String
+  estadoLibro      String
+  precio           Float
+  imagenUrl        String
+  fechaPublicacion DateTime          @default(now())
+  vendedorId       Int
+  vendedor         User              @relation(fields: [vendedorId], references: [id])
+  estado           EstadoPublicacion @default(activa)
+  compras Compra[]  // relación inversa requerida por Prisma
+}
+
+enum EstadoCompra {
+  pendiente_pago
+  pendiente_envio
+  en_camino
+  completado
+}
+
+model Compra {
+  id             Int          @id @default(autoincrement())
+  compradorId    Int
+  publicacionId  Int
+  estado         EstadoCompra @default(pendiente_pago)
+  fechaCompra    DateTime     @default(now())
+  comprador      User         @relation(fields: [compradorId], references: [id])
+  publicacion    Publicacion @relation(fields: [publicacionId], references: [id])
+}
