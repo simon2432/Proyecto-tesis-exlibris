@@ -1,5 +1,7 @@
 # Proyecto Tesis - Exlibris
 
+![logoLechuza](https://github.com/user-attachments/assets/d6776236-f336-4b82-bd28-698af4b7ff47)
+
 Este repositorio contiene una aplicación móvil desarrollada con **Expo/React Native** y un backend en **Node.js** con **Express** y **Prisma**. La app permite registrarse, iniciar sesión, buscar libros, gestionar un historial de lectura, comprar y vender libros mediante un módulo dedicado, y conversar con un asistente literario potenciado por OpenAI.
 
 ## Requisitos previos
