@@ -66,7 +66,11 @@ export default function HeaderHome({
   const handleBookSelect = (book: any) => {
     setShowDropdown(false);
     setSearchText("");
-    onBookSelect?.(book);
+    const bookWithFlag = {
+      ...book,
+      descriptionGenerated: book.descriptionGenerated || false,
+    };
+    onBookSelect?.(bookWithFlag);
   };
 
   return (

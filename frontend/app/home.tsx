@@ -101,6 +101,7 @@ export default function HomeScreen() {
           : book.categories || "",
         language: book.language || "",
         image: book.image || "",
+        descriptionGenerated: book.descriptionGenerated || false,
       },
     });
   };

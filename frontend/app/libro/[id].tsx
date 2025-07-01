@@ -22,6 +22,9 @@ export default function LibroDetalleScreen() {
   const libro: any = params;
 
   const [descripcion, setDescripcion] = useState(libro.description || "");
+  const [descripcionGenerada, setDescripcionGenerada] = useState(
+    libro.descriptionGenerated === "true" || libro.descriptionGenerated === true
+  );
 
   useEffect(() => {
     if (!libro.description || libro.description.trim() === "") {
@@ -42,6 +45,7 @@ export default function LibroDetalleScreen() {
             res.data.description !== "Descripción no encontrada"
           ) {
             setDescripcion(res.data.description.trim());
+            setDescripcionGenerada(true);
           }
         })
         .catch(() => {});
@@ -99,6 +103,11 @@ export default function LibroDetalleScreen() {
           <>
             <Text style={styles.sectionTitle}>Descripción:</Text>
             <Text style={styles.description}>{descripcion}</Text>
+            {descripcionGenerada && (
+              <Text style={styles.generatedMessage}>
+                📚 Descripción generada por asistente conversacional
+              </Text>
+            )}
           </>
         )}
 
@@ -199,6 +208,14 @@ const styles = StyleSheet.create({
     marginHorizontal: 18,
     marginBottom: 10,
     textAlign: "justify",
+  },
+  generatedMessage: {
+    fontSize: 12,
+    color: "#a08b7d",
+    fontStyle: "italic",
+    marginHorizontal: 18,
+    marginBottom: 10,
+    textAlign: "center",
   },
   reviewsPlaceholder: {
     minHeight: 80,
