@@ -29,7 +29,7 @@ export default function LibroDetalleScreen() {
   useEffect(() => {
     if (!libro.description || libro.description.trim() === "") {
       axios
-        .post(`${API_BASE_URL}/chat/describe`, {
+        .post(`${API_BASE_URL}/books/generate-description`, {
           title: libro.title,
           authors: libro.authors,
           publisher: libro.publisher,

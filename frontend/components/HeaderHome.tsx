@@ -41,7 +41,7 @@ export default function HeaderHome({
   });
   const [searchText, setSearchText] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
-  const { results, loading, searchBooks } = useGoogleBooksSearch();
+  const { results, loading, searchBooks, searchInfo } = useGoogleBooksSearch();
 
   const toggleCheck = (key: "libro" | "autor" | "genero") => {
     const newChecked = { ...checked, [key]: !checked[key] };
@@ -55,7 +55,7 @@ export default function HeaderHome({
   };
 
   const handleSearchPress = () => {
-    if (searchText.length > 2) {
+    if (searchText.length >= 2) {
       searchBooks(searchText);
       setShowDropdown(true);
     } else {
@@ -73,6 +73,21 @@ export default function HeaderHome({
     onBookSelect?.(bookWithFlag);
   };
 
+  const getResultsText = () => {
+    if (!searchInfo)
+      return `${results.length} libro${
+        results.length !== 1 ? "s" : ""
+      } encontrado${results.length !== 1 ? "s" : ""}`;
+
+    if (searchInfo.totalFound === searchInfo.totalReturned) {
+      return `${searchInfo.totalFound} libro${
+        searchInfo.totalFound !== 1 ? "s" : ""
+      } encontrado${searchInfo.totalFound !== 1 ? "s" : ""}`;
+    } else {
+      return `${searchInfo.totalReturned} de ${searchInfo.totalFound} libros encontrados`;
+    }
+  };
+
   return (
     <View style={styles.header}>
       {/* Logo principal */}
@@ -85,19 +100,29 @@ export default function HeaderHome({
       </View>
       <View style={styles.searchContainer}>
         <TouchableOpacity onPress={handleSearchPress}>
-          <Ionicons
-            name="search"
-            size={20}
-            color="#4b2e1e"
-            style={{ marginLeft: 8 }}
-          />
+          {loading ? (
+            <ActivityIndicator
+              size="small"
+              color="#7c4a2d"
+              style={{ marginLeft: 8 }}
+            />
+          ) : (
+            <Ionicons
+              name="search"
+              size={20}
+              color="#4b2e1e"
+              style={{ marginLeft: 8 }}
+            />
+          )}
         </TouchableOpacity>
         <TextInput
           style={styles.searchInput}
-          placeholder="Buscar"
+          placeholder="Buscar libros..."
           placeholderTextColor="#a08b7d"
           value={searchText}
           onChangeText={handleSearchChange}
+          returnKeyType="search"
+          onSubmitEditing={handleSearchPress}
         />
         <TouchableOpacity
           style={styles.filterButton}
@@ -129,25 +154,40 @@ export default function HeaderHome({
                 No se encontraron libros
               </Text>
             ) : (
-              <FlatList
-                data={results}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                  <TouchableOpacity
-                    style={styles.dropdownItem}
-                    onPress={() => handleBookSelect(item)}
-                  >
-                    {item.image && (
-                      <Image
-                        source={{ uri: item.image }}
-                        style={styles.dropdownImage}
-                      />
-                    )}
-                    <Text style={styles.dropdownTitle}>{item.title}</Text>
-                  </TouchableOpacity>
-                )}
-                style={{ maxHeight: 260 }}
-              />
+              <>
+                <Text style={styles.resultsCount}>{getResultsText()}</Text>
+                <FlatList
+                  data={results}
+                  keyExtractor={(item) => item.id}
+                  renderItem={({ item }) => (
+                    <TouchableOpacity
+                      style={styles.dropdownItem}
+                      onPress={() => handleBookSelect(item)}
+                    >
+                      {item.image && (
+                        <Image
+                          source={{ uri: item.image }}
+                          style={styles.dropdownImage}
+                        />
+                      )}
+                      <View style={styles.dropdownTextContainer}>
+                        <Text style={styles.dropdownTitle} numberOfLines={2}>
+                          {item.title}
+                        </Text>
+                        {item.authors && item.authors.length > 0 && (
+                          <Text style={styles.dropdownAuthor} numberOfLines={1}>
+                            {Array.isArray(item.authors)
+                              ? item.authors.join(", ")
+                              : item.authors}
+                          </Text>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  )}
+                  style={{ maxHeight: 300 }}
+                  showsVerticalScrollIndicator={true}
+                />
+              </>
             )}
           </View>
         </Pressable>
@@ -314,29 +354,48 @@ const styles = StyleSheet.create({
     shadowRadius: 6,
     elevation: 8,
     zIndex: 200,
-    maxHeight: 260,
-    width: "80%",
+    maxHeight: 400,
+    width: "85%",
     alignSelf: "center",
+    padding: 12,
   },
   dropdownItem: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 8,
-    paddingHorizontal: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
     borderBottomWidth: 1,
     borderBottomColor: "#e0d3c2",
   },
   dropdownImage: {
-    width: 38,
-    height: 54,
+    width: 40,
+    height: 56,
     borderRadius: 6,
     marginRight: 12,
     backgroundColor: "#FFF4E4",
   },
   dropdownTitle: {
     fontSize: 15,
+    fontWeight: "500",
     color: "#3B2412",
     flex: 1,
     flexWrap: "wrap",
+  },
+  resultsCount: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#7c4a2d",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  dropdownTextContainer: {
+    flex: 1,
+    marginRight: 8,
+  },
+  dropdownAuthor: {
+    fontSize: 13,
+    color: "#a08b7d",
+    marginTop: 2,
+    fontStyle: "italic",
   },
 });
