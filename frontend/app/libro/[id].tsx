@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -7,15 +7,55 @@ import {
   ScrollView,
   TouchableOpacity,
   Dimensions,
+  Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import axios from "axios";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const API_BASE_URL =
+  Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
 
 export default function LibroDetalleScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const libro: any = params;
+
+  const [descripcion, setDescripcion] = useState(libro.description || "");
+
+  useEffect(() => {
+    if (!libro.description || libro.description.trim() === "") {
+      axios
+        .post(`${API_BASE_URL}/chat/describe`, {
+          title: libro.title,
+          authors: libro.authors,
+          publisher: libro.publisher,
+          publishedDate: libro.publishedDate,
+          categories: libro.categories,
+          language: libro.language,
+          pageCount: libro.pageCount,
+        })
+        .then((res) => {
+          if (
+            res.data &&
+            res.data.description &&
+            res.data.description !== "Descripción no encontrada"
+          ) {
+            setDescripcion(res.data.description.trim());
+          }
+        })
+        .catch(() => {});
+    }
+  }, [
+    libro.title,
+    libro.authors,
+    libro.description,
+    libro.publisher,
+    libro.publishedDate,
+    libro.categories,
+    libro.language,
+    libro.pageCount,
+  ]);
 
   const renderField = (label: string, value: string | undefined) => {
     if (!value || value.trim() === "") return null;
@@ -55,10 +95,10 @@ export default function LibroDetalleScreen() {
           </View>
         </View>
 
-        {libro.description && (
+        {descripcion && (
           <>
             <Text style={styles.sectionTitle}>Descripción:</Text>
-            <Text style={styles.description}>{libro.description}</Text>
+            <Text style={styles.description}>{descripcion}</Text>
           </>
         )}
 

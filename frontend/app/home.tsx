@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   StyleSheet,
   View,
@@ -12,11 +12,63 @@ import {
 import CustomTabBar from "../components/CustomTabBar";
 import HeaderHome from "../components/HeaderHome";
 import { useRouter } from "expo-router";
+import axios from "axios";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
+const API_BASE_URL =
+  Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
+
 export default function HomeScreen() {
   const router = useRouter();
+
+  // Estados para los libros de cada sección
+  const [recommendedBooks, setRecommendedBooks] = useState<any[]>([]);
+  const [exploreBooks, setExploreBooks] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Palabras random para buscar
+  const randomWords = [
+    "amor",
+    "historia",
+    "aventura",
+    "vida",
+    "misterio",
+    "fantasía",
+    "clásico",
+    "familia",
+    "viaje",
+    "secreto",
+  ];
+
+  useEffect(() => {
+    // Elegir dos palabras random distintas
+    const getTwoRandomWords = () => {
+      const shuffled = randomWords.sort(() => 0.5 - Math.random());
+      return [shuffled[0], shuffled[1]];
+    };
+    const [word1, word2] = getTwoRandomWords();
+
+    const fetchBooks = async (word: string) => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/books/search`, {
+          params: { q: word },
+        });
+        return res.data.books || [];
+      } catch {
+        return [];
+      }
+    };
+
+    setLoading(true);
+    Promise.all([fetchBooks(word1), fetchBooks(word2)]).then(
+      ([books1, books2]) => {
+        setRecommendedBooks(books1.slice(0, 10));
+        setExploreBooks(books2.slice(0, 10));
+        setLoading(false);
+      }
+    );
+  }, []);
 
   const handleSearch = (text: string) => {
     // Aquí puedes implementar la lógica de búsqueda
@@ -71,11 +123,85 @@ export default function HomeScreen() {
         >
           <View style={styles.sectionBox}>
             <Text style={styles.sectionTitle}>Te podría gustar</Text>
-            <View style={styles.booksRow}>{/* Aquí irán los libros */}</View>
+            <View style={styles.booksRow}>
+              {loading ? (
+                <Text>Cargando...</Text>
+              ) : (
+                recommendedBooks.map((book) => (
+                  <TouchableOpacity
+                    key={book.id}
+                    onPress={() => handleBookSelect(book)}
+                    style={{ marginRight: 8, marginBottom: 8 }}
+                  >
+                    <View
+                      style={{
+                        width: 90,
+                        height: 130,
+                        borderRadius: 10,
+                        overflow: "hidden",
+                        backgroundColor: "#f3e8da",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.08,
+                        shadowRadius: 4,
+                        elevation: 2,
+                      }}
+                    >
+                      <img
+                        src={book.image}
+                        alt={book.title}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
           </View>
           <View style={styles.sectionBox}>
             <Text style={styles.sectionTitle}>Explora nuevas lecturas</Text>
-            <View style={styles.booksRow}>{/* Aquí irán los libros */}</View>
+            <View style={styles.booksRow}>
+              {loading ? (
+                <Text>Cargando...</Text>
+              ) : (
+                exploreBooks.map((book) => (
+                  <TouchableOpacity
+                    key={book.id}
+                    onPress={() => handleBookSelect(book)}
+                    style={{ marginRight: 8, marginBottom: 8 }}
+                  >
+                    <View
+                      style={{
+                        width: 90,
+                        height: 130,
+                        borderRadius: 10,
+                        overflow: "hidden",
+                        backgroundColor: "#f3e8da",
+                        shadowColor: "#000",
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.08,
+                        shadowRadius: 4,
+                        elevation: 2,
+                      }}
+                    >
+                      <img
+                        src={book.image}
+                        alt={book.title}
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          objectFit: "cover",
+                        }}
+                      />
+                    </View>
+                  </TouchableOpacity>
+                ))
+              )}
+            </View>
           </View>
           <View style={styles.sectionBox}>
             <Text style={styles.sectionTitle}>En venta cerca tuyo</Text>

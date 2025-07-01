@@ -67,3 +67,60 @@ exports.chatWithAssistant = async (req, res) => {
     res.status(500).json({ error: "Error al comunicarse con OpenAI" });
   }
 };
+
+exports.describeBook = async (req, res) => {
+  const {
+    title,
+    authors,
+    publisher,
+    publishedDate,
+    categories,
+    language,
+    pageCount,
+  } = req.body;
+  if (!title)
+    return res.status(400).json({ error: "Falta el título del libro" });
+
+  let bookInfo = `Título: ${title}`;
+  if (authors) bookInfo += `\nAutor(es): ${authors}`;
+  if (publisher) bookInfo += `\nEditorial: ${publisher}`;
+  if (publishedDate) bookInfo += `\nAño de publicación: ${publishedDate}`;
+  if (categories) bookInfo += `\nGénero(s): ${categories}`;
+  if (language) bookInfo += `\nIdioma: ${language}`;
+  if (pageCount) bookInfo += `\nCantidad de páginas: ${pageCount}`;
+
+  const prompt = `Redactá una descripción extendida, informativa y atractiva para la ficha de una app de libros sobre el siguiente libro. Utilizá toda la información proporcionada. Si conocés el libro o tenés idea de qué trata, generá una descripción similar en extensión, tono y profundidad al ejemplo de referencia que sigue, sin spoilers y sin preguntas. Si no tenés información suficiente o no lo conocés, respondé solo: 'Descripción no encontrada'.\n\n${bookInfo}\n\nEjemplo de referencia:\nEn este libro el autor nos comparte cómo se puede alcanzar un estado de iluminación aquí y ahora; y que es posible vivir libre del sufrimiento, de la ansiedad y de la neurosis. Más de 4,000,000 ejemplares vendidos. El Bestseller #1 del New York Times. El clásico que consagró a Eckhart Tolle como uno de los gurús más importantes del mundo. El poder del ahora es un libro único. Tiene la capacidad de crear una experiencia en los lectores y de cambiar su vida. Hoy ya es considerado una obra maestra. "Uno de los mejores libros de los últimos años. Cada frase evoca verdad y poder." Deepak Chopra Para lograr la iluminación aquí y ahora sólo tenemos que comprender nuestro papel de creadores de nuestro dolor. Es nuestra propia mente la que causa nuestros problemas con su corriente constante de pensamientos, aferrándose al pasado, preocupándose por el futuro. Cometemos el error de identificarnos con ella, de pensar que eso es lo que somos, cuando de hecho somos seres mucho más grandes. Escrito en un formato de preguntas y respuestas que lo hace muy accesible, El poder del ahora es una invitación a la reflexión, que le abrirá las puertas a la plenitud espiritual y le permitirá ver la vida con nuevos ojos y empezar a disfrutar del verdadero poder del ahora.`;
+
+  try {
+    const messages = [
+      {
+        role: "system",
+        content:
+          "Sos un asistente que responde únicamente con descripciones extendidas, informativas y atractivas de libros para una app. Nunca incluyas preguntas ni spoilers. Si no conocés el libro o no tenés información suficiente, respondé solo: 'Descripción no encontrada'.",
+      },
+      { role: "user", content: prompt },
+    ];
+
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-3.5-turbo",
+        messages,
+        max_tokens: 200,
+        temperature: 0.7,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+      }
+    );
+
+    const reply = response.data.choices[0].message.content;
+    res.json({ description: reply.trim() });
+  } catch (error) {
+    console.error(error.response?.data || error);
+    res.status(500).json({ error: "Error al comunicarse con OpenAI" });
+  }
+};
