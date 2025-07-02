@@ -13,9 +13,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
 import axios from "axios";
 import { useUser } from "../contexts/UserContext";
-
-const API_BASE_URL =
-  Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
+import { API_BASE_URL } from "../constants/ApiConfig";
 
 export default function Login() {
   const [email, setEmail] = useState("");

@@ -6,15 +6,112 @@ import {
   Image,
   TouchableOpacity,
   ScrollView,
+  ActivityIndicator,
+  Alert,
+  Platform,
 } from "react-native";
 import HeaderPerfil from "../components/HeaderPerfil";
 import CustomTabBar from "../components/CustomTabBar";
 import { useRouter } from "expo-router";
 import { useUser } from "../contexts/UserContext";
+import * as ImagePicker from "expo-image-picker";
+import axios from "axios";
+import { API_BASE_URL } from "../constants/ApiConfig";
 
 export default function PerfilScreen() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user, setUser } = useUser();
+  const [uploading, setUploading] = React.useState(false);
+
+  const handlePickImage = async () => {
+    if (uploading) return;
+    // Pedir permisos
+    const permissionResult =
+      await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permissionResult.granted) {
+      alert("Se requieren permisos para acceder a tus fotos.");
+      return;
+    }
+    // Seleccionar imagen
+    const pickerResult = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.7,
+    });
+    if (pickerResult.canceled) return;
+    const localUri = pickerResult.assets[0].uri;
+    const filename = localUri.split("/").pop();
+    const ext = (filename && filename.split(".").pop()) || "jpg";
+    let mimeType = "";
+    if (ext === "jpg" || ext === "jpeg") mimeType = "image/jpeg";
+    else if (ext === "png") mimeType = "image/png";
+    else mimeType = "image/jpeg"; // default
+
+    // Subir imagen al backend
+    const formData = new FormData();
+    if (Platform.OS === "web") {
+      // En web, fetch la imagen como blob
+      const response = await fetch(localUri);
+      const blob = await response.blob();
+      const fileNameWithExt =
+        filename && filename.includes(".") ? filename : `profile.${ext}`;
+      const file = new File([blob], fileNameWithExt, { type: mimeType });
+      formData.append("foto", file);
+    } else {
+      formData.append("foto", {
+        uri: localUri,
+        name: filename,
+        type: mimeType,
+      } as any);
+    }
+
+    try {
+      setUploading(true);
+      // Obtener token de autenticación si es necesario
+      const token = await (window && window.localStorage
+        ? window.localStorage.getItem("token")
+        : null);
+      let res;
+      if (Platform.OS === "web") {
+        res = await fetch(`${API_BASE_URL}/usuarios/foto-perfil`, {
+          method: "POST",
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: formData,
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.user) {
+            setUser(data.user);
+            Alert.alert("¡Éxito!", "Foto de perfil actualizada.");
+          }
+        } else {
+          Alert.alert("Error", "Error al subir la foto de perfil.");
+        }
+      } else {
+        res = await axios.post(
+          `${API_BASE_URL}/usuarios/foto-perfil`,
+          formData,
+          {
+            headers: {
+              "Content-Type": "multipart/form-data",
+              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+            },
+          }
+        );
+        if (res.data && res.data.user) {
+          setUser(res.data.user);
+          Alert.alert("¡Éxito!", "Foto de perfil actualizada.");
+        }
+      }
+    } catch (err) {
+      Alert.alert("Error", "Error al subir la foto de perfil.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFF" }}>
@@ -29,10 +126,33 @@ export default function PerfilScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.profileSection}>
-          <Image
-            source={{ uri: "https://placehold.co/100x100" }}
-            style={styles.profileImage}
-          />
+          <TouchableOpacity onPress={handlePickImage} disabled={uploading}>
+            <Image
+              source={{
+                uri: user?.fotoPerfil
+                  ? `${API_BASE_URL}${user.fotoPerfil}?t=${Date.now()}`
+                  : "https://placehold.co/100x100",
+              }}
+              style={styles.profileImage}
+            />
+            {uploading && (
+              <View
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  top: 0,
+                  bottom: 0,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: "rgba(255,255,255,0.6)",
+                  borderRadius: 45,
+                }}
+              >
+                <ActivityIndicator size="large" color="#7c4a2d" />
+              </View>
+            )}
+          </TouchableOpacity>
           <Text style={styles.profileName}>{user?.nombre || "Usuario"}</Text>
           <Text style={styles.profileGenre}>
             Género más leído:{" "}

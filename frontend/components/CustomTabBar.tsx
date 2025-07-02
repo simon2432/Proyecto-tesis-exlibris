@@ -1,5 +1,6 @@
 import React from "react";
 import { View, TouchableOpacity, Image, StyleSheet } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 interface CustomTabBarProps {
   activeTab: "home" | "market" | "perfil";
@@ -10,8 +11,9 @@ export default function CustomTabBar({
   activeTab,
   onTabPress,
 }: CustomTabBarProps) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.tabBar}>
+    <View style={[styles.tabBar, { paddingBottom: insets.bottom }]}>
       <TouchableOpacity
         style={styles.tabItem}
         onPress={() => onTabPress("home")}

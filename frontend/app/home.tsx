@@ -8,19 +8,20 @@ import {
   ScrollView,
   Dimensions,
   SafeAreaView,
+  Image,
 } from "react-native";
 import CustomTabBar from "../components/CustomTabBar";
 import HeaderHome from "../components/HeaderHome";
 import { useRouter } from "expo-router";
 import axios from "axios";
+import { API_BASE_URL } from "../constants/ApiConfig";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
-const API_BASE_URL =
-  Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
-
 export default function HomeScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   // Estados para los libros de cada sección
   const [recommendedBooks, setRecommendedBooks] = useState<any[]>([]);
@@ -107,19 +108,25 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+    <SafeAreaView
+      style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: 0 }]}
+    >
+      <View style={[styles.container, { paddingBottom: insets.bottom }]}>
         {/* Header */}
-        <HeaderHome
-          onSearch={handleSearch}
-          onFilterChange={handleFilterChange}
-          onBookSelect={handleBookSelect}
-        />
+        <View style={{ paddingTop: Platform.OS === "ios" ? insets.top : 0 }}>
+          <HeaderHome
+            onSearch={handleSearch}
+            onFilterChange={handleFilterChange}
+            onBookSelect={handleBookSelect}
+          />
+        </View>
 
         {/* Contenido principal */}
         <ScrollView
           style={styles.scroll}
-          contentContainerStyle={{ paddingBottom: SCREEN_HEIGHT * 0.18 }}
+          contentContainerStyle={{
+            paddingBottom: SCREEN_HEIGHT * 0.18 + insets.bottom,
+          }}
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.sectionBox}>
@@ -148,13 +155,13 @@ export default function HomeScreen() {
                         elevation: 2,
                       }}
                     >
-                      <img
-                        src={book.image}
-                        alt={book.title}
+                      <Image
+                        source={{ uri: book.image }}
+                        accessibilityLabel={book.title}
                         style={{
                           width: "100%",
                           height: "100%",
-                          objectFit: "cover",
+                          resizeMode: "cover",
                         }}
                       />
                     </View>
@@ -189,13 +196,13 @@ export default function HomeScreen() {
                         elevation: 2,
                       }}
                     >
-                      <img
-                        src={book.image}
-                        alt={book.title}
+                      <Image
+                        source={{ uri: book.image }}
+                        accessibilityLabel={book.title}
                         style={{
                           width: "100%",
                           height: "100%",
-                          objectFit: "cover",
+                          resizeMode: "cover",
                         }}
                       />
                     </View>
@@ -211,18 +218,20 @@ export default function HomeScreen() {
         </ScrollView>
 
         {/* TabBar */}
-        <CustomTabBar
-          activeTab="home"
-          onTabPress={(tab) => {
-            if (tab === "home") return;
-            if (tab === "market") router.replace("/market");
-            if (tab === "perfil") router.replace("/perfil");
-          }}
-        />
+        <View style={{ paddingBottom: insets.bottom }}>
+          <CustomTabBar
+            activeTab="home"
+            onTabPress={(tab) => {
+              if (tab === "home") return;
+              if (tab === "market") router.replace("/market");
+              if (tab === "perfil") router.replace("/perfil");
+            }}
+          />
+        </View>
 
         {/* Botón flotante de recomendaciones */}
         <TouchableOpacity
-          style={styles.fab}
+          style={[styles.fab, { bottom: 80 + insets.bottom }]}
           activeOpacity={0.8}
           onPress={() => router.replace("/chat" as any)}
         >

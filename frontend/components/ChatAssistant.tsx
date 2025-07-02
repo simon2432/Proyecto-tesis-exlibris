@@ -14,9 +14,9 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import { API_BASE_URL } from "../constants/ApiConfig";
 
-const BACKEND_URL =
-  Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
+const BACKEND_URL = API_BASE_URL;
 
 const lechuzaImg = require("../assets/images/lechuza.png");
 

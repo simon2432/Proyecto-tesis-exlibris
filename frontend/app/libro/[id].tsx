@@ -11,10 +11,9 @@ import {
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import axios from "axios";
+import { API_BASE_URL } from "../../constants/ApiConfig";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const API_BASE_URL =
-  Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
 
 export default function LibroDetalleScreen() {
   const router = useRouter();

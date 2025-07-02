@@ -13,6 +13,7 @@ interface User {
   email: string;
   documento?: number;
   ubicacion?: string;
+  fotoPerfil?: string;
 }
 
 interface UserContextType {

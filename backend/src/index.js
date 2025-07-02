@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
+const path = require("path");
 
 dotenv.config();
 
@@ -33,6 +34,13 @@ app.use("/books", bookRoutes);
 
 const chatRoutes = require("./routes/chatRoutes");
 app.use(chatRoutes);
+
+const userRoutes = require("./routes/userRoutes");
+app.use("/usuarios", userRoutes);
+app.use(
+  "/assets/fotosPerfil",
+  express.static(path.join(__dirname, "../assets/fotosPerfil"))
+);
 
 // Iniciar el servidor
 const PORT = process.env.PORT || 3001;
