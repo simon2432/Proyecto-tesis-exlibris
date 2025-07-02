@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
 } from "react-native";
+import { Image as ExpoImage } from "expo-image";
 import HeaderPerfil from "../components/HeaderPerfil";
 import CustomTabBar from "../components/CustomTabBar";
 import { useRouter } from "expo-router";
@@ -18,10 +19,45 @@ import * as ImagePicker from "expo-image-picker";
 import axios from "axios";
 import { API_BASE_URL } from "../constants/ApiConfig";
 
+// Precargar imágenes comunes
+const preloadImages = () => {
+  ExpoImage.prefetch("https://placehold.co/100x100");
+  ExpoImage.prefetch("https://placehold.co/90x120");
+};
+
 export default function PerfilScreen() {
   const router = useRouter();
   const { user, setUser } = useUser();
   const [uploading, setUploading] = React.useState(false);
+  const [lecturas, setLecturas] = useState<any[]>([]);
+  const [portadas, setPortadas] = useState<{ [key: string]: string }>({});
+
+  useEffect(() => {
+    // Precargar imágenes comunes
+    preloadImages();
+
+    // Obtener lecturas del usuario
+    const fetchLecturas = async () => {
+      try {
+        const token = await (window && window.localStorage
+          ? window.localStorage.getItem("token")
+          : null);
+        const res = await axios.get(`${API_BASE_URL}/lecturas/mias`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        setLecturas(res.data);
+
+        // Las portadas ya vienen del backend
+        const portadasObj: { [key: string]: string } = {};
+        res.data.forEach((lectura: any) => {
+          portadasObj[lectura.id] =
+            lectura.portada || "https://placehold.co/90x120";
+        });
+        setPortadas(portadasObj);
+      } catch {}
+    };
+    fetchLecturas();
+  }, []);
 
   const handlePickImage = async () => {
     if (uploading) return;
@@ -127,13 +163,16 @@ export default function PerfilScreen() {
         </View>
         <View style={styles.profileSection}>
           <TouchableOpacity onPress={handlePickImage} disabled={uploading}>
-            <Image
+            <ExpoImage
               source={{
                 uri: user?.fotoPerfil
                   ? `${API_BASE_URL}${user.fotoPerfil}?t=${Date.now()}`
                   : "https://placehold.co/100x100",
               }}
               style={styles.profileImage}
+              placeholder="https://placehold.co/100x100"
+              contentFit="cover"
+              transition={200}
             />
             {uploading && (
               <View
@@ -179,10 +218,37 @@ export default function PerfilScreen() {
             <Text style={styles.sectionButtonText}>Ver historial</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.booksRowCentered}>
-          <View style={styles.bookCoverPlaceholder} />
-          <View style={styles.bookCoverPlaceholder} />
-          <View style={styles.bookCoverPlaceholder} />
+        <View style={styles.booksRowLeft}>
+          {lecturas.length === 0 ? (
+            <Text
+              style={{ color: "#a08b7d", fontStyle: "italic", marginLeft: 8 }}
+            >
+              No tienes lecturas aún.
+            </Text>
+          ) : (
+            lecturas.map((lectura) => (
+              <TouchableOpacity
+                key={lectura.id}
+                onPress={() =>
+                  router.push({
+                    pathname: "/lectura-historial/[id]" as any,
+                    params: { id: lectura.id },
+                  })
+                }
+                style={{ marginRight: 10 }}
+              >
+                <ExpoImage
+                  source={{
+                    uri: portadas[lectura.id] || "https://placehold.co/90x120",
+                  }}
+                  style={styles.bookCoverPlaceholder}
+                  placeholder="https://placehold.co/90x120"
+                  contentFit="cover"
+                  transition={200}
+                />
+              </TouchableOpacity>
+            ))
+          )}
         </View>
         <View style={styles.sellerSection}>
           <Text style={styles.sellerTitle}>Perfil vendedor</Text>
@@ -308,6 +374,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
+  },
+  booksRowLeft: {
+    flexDirection: "row",
+    justifyContent: "flex-start",
+    gap: 14,
+    marginHorizontal: 18,
+    marginBottom: 10,
+    marginTop: 6,
   },
   sellerSection: {
     backgroundColor: "#FFF4E4",

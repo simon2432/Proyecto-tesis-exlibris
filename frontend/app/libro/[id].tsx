@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Dimensions,
   Platform,
+  Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import axios from "axios";
@@ -60,6 +61,31 @@ export default function LibroDetalleScreen() {
     libro.pageCount,
   ]);
 
+  const handleAgregarLectura = async () => {
+    try {
+      const token = await (window && window.localStorage
+        ? window.localStorage.getItem("token")
+        : null);
+      const res = await axios.post(
+        `${API_BASE_URL}/lecturas`,
+        {
+          libroId: libro.id,
+          fechaInicio: new Date(),
+        },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        }
+      );
+      if (res.data && res.data.id) {
+        router.push("/perfil");
+      } else {
+        Alert.alert("Error", "No se pudo agregar la lectura.");
+      }
+    } catch (err) {
+      Alert.alert("Error", "No se pudo agregar la lectura.");
+    }
+  };
+
   const renderField = (label: string, value: string | undefined) => {
     if (!value || value.trim() === "") return null;
     return (
@@ -78,7 +104,10 @@ export default function LibroDetalleScreen() {
         >
           <Text style={styles.backButtonText}>Volver</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.addButton}>
+        <TouchableOpacity
+          style={styles.addButton}
+          onPress={handleAgregarLectura}
+        >
           <Text style={styles.addButtonText}>Agregar al historial lector</Text>
         </TouchableOpacity>
       </View>
