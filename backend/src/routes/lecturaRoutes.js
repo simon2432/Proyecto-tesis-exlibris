@@ -3,6 +3,12 @@ const router = express.Router();
 const lecturaController = require("../controllers/lecturaController");
 const authMiddleware = require("../middleware/authMiddleware");
 
+console.log(
+  "Cargando rutas de lectura. Ruta de limpiar caché de portada activa"
+);
+// Limpiar caché de portada de un libro específico
+router.delete("/portada-cache/:libroId", lecturaController.limpiarCachePortada);
+
 // Obtener lecturas del usuario autenticado
 router.get("/mias", authMiddleware, lecturaController.getMisLecturas);
 // Crear una nueva lectura

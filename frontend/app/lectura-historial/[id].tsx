@@ -7,12 +7,16 @@ import {
   TouchableOpacity,
   ScrollView,
   Platform,
+  Modal,
+  Pressable,
+  Alert,
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import axios from "axios";
 import { API_BASE_URL } from "../../constants/ApiConfig";
 import DateTimePicker from "@react-native-community/datetimepicker";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Precargar imagen placeholder
 const preloadPlaceholder = () => {
@@ -27,15 +31,15 @@ export default function LecturaHistorialDetalle() {
   const [libro, setLibro] = useState<any>(null);
   const [descripcion, setDescripcion] = useState<string>("");
   const [descripcionGenerada, setDescripcionGenerada] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     // Precargar imagen placeholder
     preloadPlaceholder();
 
     const fetchLectura = async () => {
-      const token = await (window && window.localStorage
-        ? window.localStorage.getItem("token")
-        : null);
+      const token = await AsyncStorage.getItem("token");
       const res = await axios.get(`${API_BASE_URL}/lecturas/${id}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
@@ -106,6 +110,33 @@ export default function LecturaHistorialDetalle() {
     }
   };
 
+  const handleDeleteLectura = async () => {
+    setIsDeleting(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      await axios.delete(`${API_BASE_URL}/lecturas/${id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+
+      // Cerrar modal y navegar directamente al perfil
+      setShowDeleteModal(false);
+      setIsDeleting(false);
+
+      // Pequeño delay para asegurar que el modal se cierre antes de navegar
+      setTimeout(() => {
+        router.replace("/perfil");
+      }, 100);
+    } catch (error) {
+      console.error("Error al eliminar lectura:", error);
+      Alert.alert(
+        "Error",
+        "No se pudo eliminar el libro del historial. Inténtalo de nuevo.",
+        [{ text: "OK" }]
+      );
+      setIsDeleting(false);
+    }
+  };
+
   if (!lectura) return <Text>Cargando...</Text>;
 
   return (
@@ -117,7 +148,10 @@ export default function LecturaHistorialDetalle() {
         >
           <Text style={styles.headerBtnText}>Volver</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.headerBtnDanger}>
+        <TouchableOpacity
+          style={styles.headerBtnDanger}
+          onPress={() => setShowDeleteModal(true)}
+        >
           <Text style={styles.headerBtnText}>Eliminar libro del historial</Text>
         </TouchableOpacity>
       </View>
@@ -223,6 +257,48 @@ export default function LecturaHistorialDetalle() {
           Ver reseñas de otros usuarios
         </Text>
       </TouchableOpacity>
+
+      {/* Modal de confirmación para eliminar */}
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowDeleteModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirmar eliminación</Text>
+            <Text style={styles.modalMessage}>
+              ¿Estás seguro de que quieres eliminar{" "}
+              {libro?.title || "este libro"} de tu historial de lectura?
+            </Text>
+            <Text style={styles.modalWarning}>
+              Esta acción no se puede deshacer.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowDeleteModal(false)}
+                disabled={isDeleting}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonDelete]}
+                onPress={handleDeleteLectura}
+                disabled={isDeleting}
+              >
+                <Text style={styles.modalButtonDeleteText}>
+                  {isDeleting ? "Eliminando..." : "Eliminar"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </ScrollView>
   );
 }
@@ -360,5 +436,75 @@ const styles = StyleSheet.create({
     color: "#fff4e4",
     fontWeight: "bold",
     fontSize: 17,
+  },
+  // Estilos del modal de confirmación
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: 20,
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#3B2412",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: "#3B2412",
+    marginBottom: 8,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  modalWarning: {
+    fontSize: 14,
+    color: "#d32f2f",
+    marginBottom: 20,
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  modalButtonCancel: {
+    backgroundColor: "#f5f5f5",
+    borderWidth: 1,
+    borderColor: "#ddd",
+  },
+  modalButtonDelete: {
+    backgroundColor: "#d32f2f",
+  },
+  modalButtonCancelText: {
+    color: "#3B2412",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  modalButtonDeleteText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
   },
 });

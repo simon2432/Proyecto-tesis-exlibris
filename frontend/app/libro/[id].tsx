@@ -13,6 +13,7 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import axios from "axios";
 import { API_BASE_URL } from "../../constants/ApiConfig";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -63,9 +64,7 @@ export default function LibroDetalleScreen() {
 
   const handleAgregarLectura = async () => {
     try {
-      const token = await (window && window.localStorage
-        ? window.localStorage.getItem("token")
-        : null);
+      const token = await AsyncStorage.getItem("token");
       const res = await axios.post(
         `${API_BASE_URL}/lecturas`,
         {

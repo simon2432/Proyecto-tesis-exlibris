@@ -41,7 +41,8 @@ export default function HeaderHome({
   });
   const [searchText, setSearchText] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
-  const { results, loading, searchBooks, searchInfo } = useGoogleBooksSearch();
+  const { results, loading, searchBooks, searchInfo, clearResults } =
+    useGoogleBooksSearch();
 
   const toggleCheck = (key: "libro" | "autor" | "genero") => {
     const newChecked = { ...checked, [key]: !checked[key] };
@@ -50,11 +51,18 @@ export default function HeaderHome({
   };
 
   const handleSearchChange = (text: string) => {
+    console.log("[HeaderHome] handleSearchChange:", text);
     setSearchText(text);
     onSearch?.(text);
   };
 
   const handleSearchPress = () => {
+    console.log("[HeaderHome] handleSearchPress:", searchText);
+    console.log(
+      "[HeaderHome] searchBooks es:",
+      typeof searchBooks,
+      searchBooks
+    );
     if (searchText.length >= 2) {
       searchBooks(searchText);
       setShowDropdown(true);
@@ -64,8 +72,13 @@ export default function HeaderHome({
   };
 
   const handleBookSelect = (book: any) => {
+    // Cerrar modal inmediatamente
     setShowDropdown(false);
     setSearchText("");
+
+    // Limpiar resultados inmediatamente
+    clearResults();
+
     const bookWithFlag = {
       ...book,
       descriptionGenerated: book.descriptionGenerated || false,
@@ -132,66 +145,79 @@ export default function HeaderHome({
         </TouchableOpacity>
       </View>
       {/* Modal de resultados de búsqueda */}
-      <Modal
-        visible={showDropdown}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowDropdown(false)}
-      >
-        <Pressable
-          style={styles.modalOverlayBg}
-          onPress={() => setShowDropdown(false)}
+      {showDropdown && (
+        <Modal
+          visible={true}
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            setShowDropdown(false);
+            setSearchText("");
+            clearResults();
+          }}
         >
-          <View style={styles.dropdownModalContent}>
-            {loading ? (
-              <ActivityIndicator
-                size="small"
-                color="#7c4a2d"
-                style={{ margin: 10 }}
-              />
-            ) : results.length === 0 ? (
-              <Text style={{ color: "#7c4a2d", padding: 10 }}>
-                No se encontraron libros
-              </Text>
-            ) : (
-              <>
-                <Text style={styles.resultsCount}>{getResultsText()}</Text>
-                <FlatList
-                  data={results}
-                  keyExtractor={(item) => item.id}
-                  renderItem={({ item }) => (
-                    <TouchableOpacity
-                      style={styles.dropdownItem}
-                      onPress={() => handleBookSelect(item)}
-                    >
-                      {item.image && (
-                        <Image
-                          source={{ uri: item.image }}
-                          style={styles.dropdownImage}
-                        />
-                      )}
-                      <View style={styles.dropdownTextContainer}>
-                        <Text style={styles.dropdownTitle} numberOfLines={2}>
-                          {item.title}
-                        </Text>
-                        {item.authors && item.authors.length > 0 && (
-                          <Text style={styles.dropdownAuthor} numberOfLines={1}>
-                            {Array.isArray(item.authors)
-                              ? item.authors.join(", ")
-                              : item.authors}
-                          </Text>
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                  )}
-                  style={{ maxHeight: 300 }}
-                  showsVerticalScrollIndicator={true}
+          <Pressable
+            style={styles.modalOverlayBg}
+            onPress={() => {
+              setShowDropdown(false);
+              setSearchText("");
+              clearResults();
+            }}
+          >
+            <View style={styles.dropdownModalContent}>
+              {loading ? (
+                <ActivityIndicator
+                  size="small"
+                  color="#7c4a2d"
+                  style={{ margin: 10 }}
                 />
-              </>
-            )}
-          </View>
-        </Pressable>
-      </Modal>
+              ) : results.length === 0 ? (
+                <Text style={{ color: "#7c4a2d", padding: 10 }}>
+                  No se encontraron libros
+                </Text>
+              ) : (
+                <React.Fragment>
+                  <Text style={styles.resultsCount}>{getResultsText()}</Text>
+                  <FlatList
+                    data={results}
+                    keyExtractor={(item) => item.id}
+                    renderItem={({ item }) => (
+                      <TouchableOpacity
+                        style={styles.dropdownItem}
+                        onPress={() => handleBookSelect(item)}
+                      >
+                        {item.image && (
+                          <Image
+                            source={{ uri: item.image }}
+                            style={styles.dropdownImage}
+                          />
+                        )}
+                        <View style={styles.dropdownTextContainer}>
+                          <Text style={styles.dropdownTitle} numberOfLines={2}>
+                            {item.title}
+                          </Text>
+                          {item.authors && item.authors.length > 0 && (
+                            <Text
+                              style={styles.dropdownAuthor}
+                              numberOfLines={1}
+                            >
+                              {Array.isArray(item.authors)
+                                ? item.authors.join(", ")
+                                : item.authors}
+                            </Text>
+                          )}
+                        </View>
+                      </TouchableOpacity>
+                    )}
+                    style={{ maxHeight: 300 }}
+                    showsVerticalScrollIndicator={true}
+                  />
+                </React.Fragment>
+              )}
+            </View>
+          </Pressable>
+        </Modal>
+      )}
       {/* Modal de filtros */}
       <Modal
         visible={filtrosVisible}
@@ -234,29 +260,37 @@ export default function HeaderHome({
 const styles = StyleSheet.create({
   header: {
     backgroundColor: "#FFF4E4",
-    paddingTop: Platform.OS === "android" ? 50 : 50,
-    paddingBottom: 10,
+    paddingTop: Platform.OS === "android" ? 80 : 28,
+    paddingBottom: 20,
     paddingHorizontal: "4%",
     borderBottomWidth: 1,
-    borderBottomColor: "#FFF4E4",
+    borderBottomColor: "#e0d3c2",
     width: "100%",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    zIndex: 10,
+    height: 70,
   },
   logoContainer: {
-    position: "absolute",
-    left: 0,
-    top: Platform.OS === "android" ? 40 : 50,
-    width: 60,
-    height: 60,
-    justifyContent: "center",
+    flexDirection: "row",
     alignItems: "center",
+    marginBottom: 0,
+    paddingLeft: 0,
+    position: "relative",
+    left: 0,
+    top: 0,
+    width: "auto",
+    height: 44,
   },
   logo: {
-    width: 65,
-    height: 65,
+    width: 44,
+    height: 44,
     resizeMode: "contain",
-    marginTop: 4,
-    marginBottom: 15,
-    marginLeft: 30,
+    marginTop: 0,
+    marginBottom: 25,
+    marginLeft: 0,
+    marginRight: 10,
   },
   headerTitle: {
     fontSize: SCREEN_WIDTH < 350 ? 18 : 24,
@@ -269,19 +303,21 @@ const styles = StyleSheet.create({
     fontFamily: Platform.OS === "android" ? "serif" : undefined,
   },
   searchContainer: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
     borderRadius: 16,
     paddingHorizontal: 12,
-    paddingVertical: 6,
-    marginBottom: 4,
-    marginLeft: 50,
+    paddingVertical: 0,
+    marginBottom: 25,
+    marginLeft: 0,
     elevation: 2,
-    width: "70%",
     minHeight: 38,
     maxHeight: 44,
     alignSelf: "center",
+    marginTop: 0,
+    height: 44,
   },
   searchInput: {
     flex: 1,

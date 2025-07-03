@@ -54,7 +54,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: 60,
+    height: 70,
     backgroundColor: "#FFF4E4",
     flexDirection: "row",
     justifyContent: "space-around",
@@ -64,6 +64,8 @@ const styles = StyleSheet.create({
     elevation: 10,
     zIndex: 10,
     width: "100%",
+    paddingBottom: 0,
+    paddingTop: 25,
   },
   tabItem: {
     flex: 1,
@@ -71,8 +73,8 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   icon: {
-    width: 40,
-    height: 40,
+    width: 32,
+    height: 32,
     opacity: 0.6,
   },
   activeIcon: {

@@ -13,11 +13,12 @@ import {
 import { Image as ExpoImage } from "expo-image";
 import HeaderPerfil from "../components/HeaderPerfil";
 import CustomTabBar from "../components/CustomTabBar";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { useUser } from "../contexts/UserContext";
 import * as ImagePicker from "expo-image-picker";
 import axios from "axios";
 import { API_BASE_URL } from "../constants/ApiConfig";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // Precargar imágenes comunes
 const preloadImages = () => {
@@ -31,33 +32,59 @@ export default function PerfilScreen() {
   const [uploading, setUploading] = React.useState(false);
   const [lecturas, setLecturas] = useState<any[]>([]);
   const [portadas, setPortadas] = useState<{ [key: string]: string }>({});
+  const [loadingLecturas, setLoadingLecturas] = useState(true);
+
+  // Función para obtener lecturas
+  const fetchLecturas = async () => {
+    try {
+      setLoadingLecturas(true);
+      const token = await AsyncStorage.getItem("token");
+      const res = await axios.get(`${API_BASE_URL}/lecturas/mias`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        timeout: 5000, // Timeout de 5 segundos
+      });
+
+      setLecturas(res.data);
+
+      // Las portadas ya vienen optimizadas del backend
+      const portadasObj: { [key: string]: string } = { ...portadas }; // Mantén las portadas previas
+      res.data.forEach((lectura: any) => {
+        // Si ya hay una portada real, no la sobrescribas por el placeholder
+        if (
+          portadasObj[lectura.id] &&
+          portadasObj[lectura.id] !== "https://placehold.co/90x120" &&
+          (lectura.portada === "https://placehold.co/90x120" ||
+            !lectura.portada)
+        ) {
+          // No sobrescribas la real por el placeholder
+          return;
+        }
+        portadasObj[lectura.id] =
+          lectura.portada || "https://placehold.co/90x120";
+      });
+      setPortadas(portadasObj);
+    } catch (error) {
+      console.error("Error al cargar lecturas:", error);
+      // En caso de error, mostrar lecturas vacías
+      setLecturas([]);
+      setPortadas({});
+    } finally {
+      setLoadingLecturas(false);
+    }
+  };
 
   useEffect(() => {
     // Precargar imágenes comunes
     preloadImages();
-
-    // Obtener lecturas del usuario
-    const fetchLecturas = async () => {
-      try {
-        const token = await (window && window.localStorage
-          ? window.localStorage.getItem("token")
-          : null);
-        const res = await axios.get(`${API_BASE_URL}/lecturas/mias`, {
-          headers: token ? { Authorization: `Bearer ${token}` } : {},
-        });
-        setLecturas(res.data);
-
-        // Las portadas ya vienen del backend
-        const portadasObj: { [key: string]: string } = {};
-        res.data.forEach((lectura: any) => {
-          portadasObj[lectura.id] =
-            lectura.portada || "https://placehold.co/90x120";
-        });
-        setPortadas(portadasObj);
-      } catch {}
-    };
     fetchLecturas();
   }, []);
+
+  // Refrescar lecturas cuando se regrese al perfil
+  useFocusEffect(
+    React.useCallback(() => {
+      fetchLecturas();
+    }, [])
+  );
 
   const handlePickImage = async () => {
     if (uploading) return;
@@ -105,9 +132,7 @@ export default function PerfilScreen() {
     try {
       setUploading(true);
       // Obtener token de autenticación si es necesario
-      const token = await (window && window.localStorage
-        ? window.localStorage.getItem("token")
-        : null);
+      const token = await AsyncStorage.getItem("token");
       let res;
       if (Platform.OS === "web") {
         res = await fetch(`${API_BASE_URL}/usuarios/foto-perfil`, {
@@ -218,8 +243,26 @@ export default function PerfilScreen() {
             <Text style={styles.sectionButtonText}>Ver historial</Text>
           </TouchableOpacity>
         </View>
-        <View style={styles.booksRowLeft}>
-          {lecturas.length === 0 ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingLeft: 18, paddingRight: 18 }}
+          style={{ marginBottom: 10, marginTop: 6 }}
+        >
+          {loadingLecturas ? (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                paddingLeft: 8,
+              }}
+            >
+              <ActivityIndicator size="small" color="#7c4a2d" />
+              <Text style={{ color: "#a08b7d", marginLeft: 8 }}>
+                Cargando historial...
+              </Text>
+            </View>
+          ) : lecturas.length === 0 ? (
             <Text
               style={{ color: "#a08b7d", fontStyle: "italic", marginLeft: 8 }}
             >
@@ -229,12 +272,23 @@ export default function PerfilScreen() {
             lecturas.map((lectura) => (
               <TouchableOpacity
                 key={lectura.id}
-                onPress={() =>
-                  router.push({
-                    pathname: "/lectura-historial/[id]" as any,
-                    params: { id: lectura.id },
-                  })
-                }
+                onPress={() => {
+                  if (portadas[lectura.id] === "https://placehold.co/90x120") {
+                    // Fuerza recarga solo de esta portada
+                    setPortadas((prev) => ({
+                      ...prev,
+                      [lectura.id]:
+                        (lectura.portada || "https://placehold.co/90x120") +
+                        "?t=" +
+                        Date.now(),
+                    }));
+                  } else {
+                    router.push({
+                      pathname: "/lectura-historial/[id]" as any,
+                      params: { id: lectura.id },
+                    });
+                  }
+                }}
                 style={{ marginRight: 10 }}
               >
                 <ExpoImage
@@ -244,12 +298,46 @@ export default function PerfilScreen() {
                   style={styles.bookCoverPlaceholder}
                   placeholder="https://placehold.co/90x120"
                   contentFit="cover"
-                  transition={200}
+                  transition={100}
+                  priority="low"
+                  onError={() => {
+                    setPortadas((prev) => {
+                      if (
+                        prev[lectura.id] &&
+                        prev[lectura.id] !== "https://placehold.co/90x120"
+                      ) {
+                        return prev;
+                      }
+                      return {
+                        ...prev,
+                        [lectura.id]: "https://placehold.co/90x120",
+                      };
+                    });
+                  }}
                 />
+                {portadas[lectura.id] === "https://placehold.co/90x120" && (
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: "rgba(255,255,255,0.7)",
+                      borderRadius: 12,
+                    }}
+                  >
+                    <Text style={{ color: "#7c4a2d", fontWeight: "bold" }}>
+                      Reintentar
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             ))
           )}
-        </View>
+        </ScrollView>
         <View style={styles.sellerSection}>
           <Text style={styles.sellerTitle}>Perfil vendedor</Text>
           <Text style={styles.sellerStat}>

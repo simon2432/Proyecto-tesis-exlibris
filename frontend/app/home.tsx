@@ -108,24 +108,18 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView
-      style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: 0 }]}
-    >
+    <SafeAreaView style={[styles.safeArea, { paddingBottom: 0 }]}>
+      <HeaderHome
+        onSearch={handleSearch}
+        onFilterChange={handleFilterChange}
+        onBookSelect={handleBookSelect}
+      />
       <View style={[styles.container, { paddingBottom: insets.bottom }]}>
-        {/* Header */}
-        <View style={{ paddingTop: Platform.OS === "ios" ? insets.top : 0 }}>
-          <HeaderHome
-            onSearch={handleSearch}
-            onFilterChange={handleFilterChange}
-            onBookSelect={handleBookSelect}
-          />
-        </View>
-
         {/* Contenido principal */}
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={{
-            paddingBottom: SCREEN_HEIGHT * 0.18 + insets.bottom,
+            paddingBottom: 100, // Espacio suficiente para el TabBar
           }}
           showsVerticalScrollIndicator={false}
         >
@@ -216,28 +210,23 @@ export default function HomeScreen() {
             <View style={styles.booksRow}>{/* Aquí irán los libros */}</View>
           </View>
         </ScrollView>
-
-        {/* TabBar */}
-        <View style={{ paddingBottom: insets.bottom }}>
-          <CustomTabBar
-            activeTab="home"
-            onTabPress={(tab) => {
-              if (tab === "home") return;
-              if (tab === "market") router.replace("/market");
-              if (tab === "perfil") router.replace("/perfil");
-            }}
-          />
-        </View>
-
-        {/* Botón flotante de recomendaciones */}
-        <TouchableOpacity
-          style={[styles.fab, { bottom: 80 + insets.bottom }]}
-          activeOpacity={0.8}
-          onPress={() => router.replace("/chat" as any)}
-        >
-          <Text style={styles.fabText}>Recomendaciones inteligentes 📚</Text>
-        </TouchableOpacity>
       </View>
+      {/* Botón flotante de recomendaciones */}
+      <TouchableOpacity
+        style={styles.fab}
+        activeOpacity={0.8}
+        onPress={() => router.replace("/chat" as any)}
+      >
+        <Text style={styles.fabText}>Recomendaciones inteligentes 📚</Text>
+      </TouchableOpacity>
+      <CustomTabBar
+        activeTab="home"
+        onTabPress={(tab) => {
+          if (tab === "home") return;
+          if (tab === "market") router.replace("/market");
+          if (tab === "perfil") router.replace("/perfil");
+        }}
+      />
     </SafeAreaView>
   );
 }
@@ -245,20 +234,20 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: "#f3e8da",
+    backgroundColor: "#FFF4E4",
   },
   container: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FFF",
     width: "100%",
     minHeight: "100%",
   },
   scroll: {
     flex: 1,
     paddingHorizontal: "4%",
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#FFF",
     width: "100%",
-    marginTop: 30,
+    marginTop: 0,
   },
   sectionBox: {
     backgroundColor: "#FFF4E4",
@@ -266,6 +255,7 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     paddingHorizontal: 12,
     marginBottom: 18,
+    marginTop: 18,
     width: "100%",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
@@ -293,7 +283,7 @@ const styles = StyleSheet.create({
   fab: {
     position: "absolute",
     right: 16,
-    bottom: 80,
+    bottom: 90,
     backgroundColor: "#332018",
     borderRadius: 16,
     paddingVertical: 12,

@@ -2,40 +2,86 @@ const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const axios = require("axios");
 
+// Cache simple para portadas de libros
+const portadasCache = new Map();
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
+
+// Función para obtener portada con caché
+const getPortadaConCache = async (libroId) => {
+  const cached = portadasCache.get(libroId);
+  if (
+    cached &&
+    cached.portada !== "https://placehold.co/90x120" &&
+    Date.now() - cached.timestamp < CACHE_DURATION
+  ) {
+    console.log(`[Portada] libroId: ${libroId} => (cache) ${cached.portada}`);
+    return cached.portada;
+  }
+
+  try {
+    const libroRes = await axios.get(
+      `https://www.googleapis.com/books/v1/volumes/${libroId}`,
+      { timeout: 5000 }
+    );
+    const imageUrl =
+      libroRes.data.volumeInfo?.imageLinks?.thumbnail ||
+      libroRes.data.volumeInfo?.imageLinks?.smallThumbnail ||
+      "https://placehold.co/90x120";
+
+    if (imageUrl !== "https://placehold.co/90x120") {
+      portadasCache.set(libroId, {
+        portada: imageUrl,
+        timestamp: Date.now(),
+      });
+    }
+    console.log(`[Portada] libroId: ${libroId} => (api) ${imageUrl}`);
+    return imageUrl;
+  } catch {
+    console.log(
+      `[Portada] libroId: ${libroId} => (error) https://placehold.co/90x120`
+    );
+    return "https://placehold.co/90x120";
+  }
+};
+
+const getPortadaGoogleBooks = async (libroId) => {
+  try {
+    const libroRes = await axios.get(
+      `https://www.googleapis.com/books/v1/volumes/${libroId}`,
+      { timeout: 5000 }
+    );
+    return (
+      libroRes.data.volumeInfo?.imageLinks?.thumbnail ||
+      libroRes.data.volumeInfo?.imageLinks?.smallThumbnail ||
+      "https://placehold.co/90x120"
+    );
+  } catch {
+    return "https://placehold.co/90x120";
+  }
+};
+
 // Obtener lecturas del usuario autenticado con portadas
 exports.getMisLecturas = async (req, res) => {
   try {
     if (!req.userId) return res.status(401).json({ error: "No autenticado" });
+
     const lecturas = await prisma.lectura.findMany({
       where: { userId: req.userId },
       orderBy: { fechaInicio: "desc" },
+      take: 20, // Limitar a 20 lecturas para mejor rendimiento
     });
 
-    // Obtener portadas de Google Books en paralelo
+    // Obtener portadas de Google Books en paralelo (sin caché)
     const lecturasConPortadas = await Promise.all(
       lecturas.map(async (lectura) => {
-        if (lectura.libroId) {
-          try {
-            const libroRes = await axios.get(
-              `https://www.googleapis.com/books/v1/volumes/${lectura.libroId}`,
-              { timeout: 3000 }
-            );
-            const imageUrl =
-              libroRes.data.volumeInfo?.imageLinks?.thumbnail ||
-              libroRes.data.volumeInfo?.imageLinks?.smallThumbnail ||
-              "https://placehold.co/90x120";
-            return { ...lectura, portada: imageUrl };
-          } catch {
-            return { ...lectura, portada: "https://placehold.co/90x120" };
-          }
-        } else {
-          return { ...lectura, portada: "https://placehold.co/90x120" };
-        }
+        const portada = await getPortadaGoogleBooks(lectura.libroId);
+        return { ...lectura, portada };
       })
     );
 
     res.json(lecturasConPortadas);
   } catch (err) {
+    console.error("Error en getMisLecturas:", err);
     res.status(500).json({ error: "Error al obtener lecturas" });
   }
 };
@@ -103,4 +149,10 @@ exports.eliminarLectura = async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: "Error al eliminar lectura" });
   }
+};
+
+exports.limpiarCachePortada = (req, res) => {
+  const { libroId } = req.params;
+  portadasCache.delete(libroId);
+  res.json({ ok: true });
 };

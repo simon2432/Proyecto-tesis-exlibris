@@ -63,6 +63,7 @@ exports.searchGoogleBooks = async (req, res) => {
     return res.status(400).json({ error: "Falta el término de búsqueda" });
 
   try {
+    console.log("[GoogleBooks] Buscando:", q);
     // Búsqueda más amplia para obtener más opciones
     const response = await axios.get(
       "https://www.googleapis.com/books/v1/volumes",
@@ -75,6 +76,10 @@ exports.searchGoogleBooks = async (req, res) => {
           orderBy: "relevance", // Ordenar por relevancia
         },
       }
+    );
+    console.log(
+      "[GoogleBooks] Respuesta recibida, items:",
+      response.data.items?.length || 0
     );
 
     const allBooks = (response.data.items || [])
@@ -152,6 +157,13 @@ exports.searchGoogleBooks = async (req, res) => {
     });
   } catch (error) {
     console.error("Error en búsqueda:", error);
+    if (error.response) {
+      console.error("[GoogleBooks] Error response data:", error.response.data);
+      console.error(
+        "[GoogleBooks] Error response status:",
+        error.response.status
+      );
+    }
     res.status(500).json({ error: "Error buscando en Google Books" });
   }
 };
