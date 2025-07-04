@@ -1,5 +1,7 @@
 const axios = require("axios");
 
+const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY;
+
 // Función auxiliar para generar descripción con OpenAI
 const generateDescription = async (bookInfo) => {
   try {
@@ -66,7 +68,7 @@ exports.searchGoogleBooks = async (req, res) => {
     console.log("[GoogleBooks] Buscando:", q);
     // Búsqueda más amplia para obtener más opciones
     const response = await axios.get(
-      "https://www.googleapis.com/books/v1/volumes",
+      `https://www.googleapis.com/books/v1/volumes?key=${GOOGLE_BOOKS_API_KEY}`,
       {
         params: {
           q: q, // Búsqueda general para obtener más resultados

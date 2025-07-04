@@ -2,7 +2,26 @@ const express = require("express");
 const router = express.Router();
 const authController = require("../controllers/authController");
 
-router.post("/register", authController.register);
-router.post("/login", authController.login);
+console.log("Cargando rutas de autenticación...");
+
+router.post(
+  "/register",
+  (req, res, next) => {
+    console.log("Ruta /register accedida");
+    next();
+  },
+  authController.register
+);
+
+router.post(
+  "/login",
+  (req, res, next) => {
+    console.log("Ruta /login accedida");
+    next();
+  },
+  authController.login
+);
+
+console.log("Rutas de autenticación cargadas");
 
 module.exports = router;

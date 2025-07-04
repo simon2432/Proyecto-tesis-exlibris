@@ -6,6 +6,8 @@ const axios = require("axios");
 const portadasCache = new Map();
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 
+const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY;
+
 // Función para obtener portada con caché
 const getPortadaConCache = async (libroId) => {
   const cached = portadasCache.get(libroId);
@@ -20,7 +22,7 @@ const getPortadaConCache = async (libroId) => {
 
   try {
     const libroRes = await axios.get(
-      `https://www.googleapis.com/books/v1/volumes/${libroId}`,
+      `https://www.googleapis.com/books/v1/volumes/${libroId}?key=${GOOGLE_BOOKS_API_KEY}`,
       { timeout: 5000 }
     );
     const imageUrl =
@@ -47,7 +49,7 @@ const getPortadaConCache = async (libroId) => {
 const getPortadaGoogleBooks = async (libroId) => {
   try {
     const libroRes = await axios.get(
-      `https://www.googleapis.com/books/v1/volumes/${libroId}`,
+      `https://www.googleapis.com/books/v1/volumes/${libroId}?key=${GOOGLE_BOOKS_API_KEY}`,
       { timeout: 5000 }
     );
     return (
@@ -71,15 +73,7 @@ exports.getMisLecturas = async (req, res) => {
       take: 20, // Limitar a 20 lecturas para mejor rendimiento
     });
 
-    // Obtener portadas de Google Books en paralelo (sin caché)
-    const lecturasConPortadas = await Promise.all(
-      lecturas.map(async (lectura) => {
-        const portada = await getPortadaGoogleBooks(lectura.libroId);
-        return { ...lectura, portada };
-      })
-    );
-
-    res.json(lecturasConPortadas);
+    res.json(lecturas); // Ya tienen la portada guardada
   } catch (err) {
     console.error("Error en getMisLecturas:", err);
     res.status(500).json({ error: "Error al obtener lecturas" });
@@ -92,12 +86,17 @@ exports.crearLectura = async (req, res) => {
     if (!req.userId) return res.status(401).json({ error: "No autenticado" });
     const { libroId, fechaInicio, fechaFin } = req.body;
     if (!libroId) return res.status(400).json({ error: "Falta libroId" });
+
+    // Buscar portada al crear la lectura
+    const portada = await getPortadaGoogleBooks(libroId);
+
     const lectura = await prisma.lectura.create({
       data: {
         userId: req.userId,
         libroId,
         fechaInicio: fechaInicio ? new Date(fechaInicio) : new Date(),
         fechaFin: fechaFin ? new Date(fechaFin) : null,
+        portada, // Guardar la portada
       },
     });
     res.json(lectura);

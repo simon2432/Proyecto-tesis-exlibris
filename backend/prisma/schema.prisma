@@ -36,6 +36,7 @@ model Lectura {
   resenaTexto  String?
   valoracion   Int?     // de 1 a 5
   user         User     @relation(fields: [userId], references: [id])
+  portada      String?  // URL de la portada
 }
 
 enum EstadoPublicacion {

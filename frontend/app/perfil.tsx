@@ -255,8 +255,11 @@ export default function PerfilScreen() {
         </View>
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Historial lector</Text>
-          <TouchableOpacity style={styles.sectionButton}>
-            <Text style={styles.sectionButtonText}>Ver historial</Text>
+          <TouchableOpacity
+            style={styles.sectionButton}
+            onPress={() => router.push("/lectura-historial")}
+          >
+            <Text style={styles.sectionButtonText}>Ver historial completo</Text>
           </TouchableOpacity>
         </View>
         <ScrollView
@@ -285,18 +288,15 @@ export default function PerfilScreen() {
               No tienes lecturas aún.
             </Text>
           ) : (
-            lecturasOrdenadas.map((lectura) => (
+            lecturasOrdenadas.slice(0, 10).map((lectura) => (
               <TouchableOpacity
                 key={lectura.id}
                 onPress={() => {
                   if (portadas[lectura.id] === "https://placehold.co/90x120") {
-                    // Fuerza recarga solo de esta portada
                     setPortadas((prev) => ({
                       ...prev,
                       [lectura.id]:
-                        (lectura.portada || "https://placehold.co/90x120") +
-                        "?t=" +
-                        Date.now(),
+                        lectura.portada || "https://placehold.co/90x120",
                     }));
                   } else {
                     router.push({
@@ -310,8 +310,7 @@ export default function PerfilScreen() {
                 <View style={{ position: "relative" }}>
                   <ExpoImage
                     source={{
-                      uri:
-                        portadas[lectura.id] || "https://placehold.co/90x120",
+                      uri: lectura.portada || "https://placehold.co/90x120",
                     }}
                     style={styles.bookCoverPlaceholder}
                     placeholder="https://placehold.co/90x120"
@@ -341,7 +340,7 @@ export default function PerfilScreen() {
                       </Text>
                     </View>
                   )}
-                  {portadas[lectura.id] === "https://placehold.co/90x120" && (
+                  {lectura.portada === "https://placehold.co/90x120" && (
                     <View
                       style={{
                         position: "absolute",
