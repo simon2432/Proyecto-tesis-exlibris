@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -33,6 +33,23 @@ export default function LecturaHistorialDetalle() {
   const [descripcionGenerada, setDescripcionGenerada] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [editandoFechas, setEditandoFechas] = useState(false);
+  const [fechaInicioEdit, setFechaInicioEdit] = useState<Date | null>(null);
+  const [fechaFinEdit, setFechaFinEdit] = useState<Date | null>(null);
+  const [pickerEditType, setPickerEditType] = useState<"inicio" | "fin" | null>(
+    null
+  );
+  const [errorFechas, setErrorFechas] = useState<string | null>(null);
+  const [editandoSoloInicio, setEditandoSoloInicio] = useState(false);
+  const [fechaInicioSoloEdit, setFechaInicioSoloEdit] = useState<Date | null>(
+    null
+  );
+  const inicioBtnRef = useRef<any>(null);
+  const finBtnRef = useRef<any>(null);
+  const [pickerPosition, setPickerPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
 
   useEffect(() => {
     // Precargar imagen placeholder
@@ -93,6 +110,21 @@ export default function LecturaHistorialDetalle() {
     fetchLectura();
   }, [id]);
 
+  useEffect(() => {
+    if (Platform.OS === "web" && pickerEditType) {
+      let ref = pickerEditType === "inicio" ? inicioBtnRef : finBtnRef;
+      if (ref.current) {
+        const rect = ref.current.getBoundingClientRect();
+        setPickerPosition({
+          top: rect.top + window.scrollY - 8,
+          left: rect.left + window.scrollX,
+        });
+      }
+    } else {
+      setPickerPosition(null);
+    }
+  }, [pickerEditType]);
+
   const handleChangeInicio = (event: any, date?: Date) => {
     setShowInicio(false);
     if (date) {
@@ -140,11 +172,22 @@ export default function LecturaHistorialDetalle() {
   if (!lectura) return <Text>Cargando...</Text>;
 
   return (
-    <ScrollView style={{ backgroundColor: "#FFF" }}>
+    <ScrollView
+      style={{
+        backgroundColor: "#FFF",
+        paddingTop: Platform.OS === "android" ? 40 : 0,
+      }}
+    >
       <View style={styles.headerRow}>
         <TouchableOpacity
           style={styles.headerBtn}
-          onPress={() => router.back()}
+          onPress={() => {
+            if (Platform.OS === "web") {
+              router.replace("/perfil");
+            } else {
+              router.back();
+            }
+          }}
         >
           <Text style={styles.headerBtnText}>Volver</Text>
         </TouchableOpacity>
@@ -189,50 +232,533 @@ export default function LecturaHistorialDetalle() {
           <Text style={styles.meta}>
             <Text style={styles.bold}>Idioma:</Text> {libro?.language || "-"}
           </Text>
-          <View style={styles.dateRow}>
+        </View>
+      </View>
+      <View
+        style={[
+          styles.dateRow,
+          Platform.OS !== "web" && {
+            flexWrap: "wrap",
+            alignItems: "flex-start",
+          },
+        ]}
+      >
+        <View
+          style={{
+            flexDirection: "row",
+            flex: Platform.OS === "web" ? undefined : 1,
+          }}
+        >
+          {Platform.OS === "web" ? (
+            <button
+              ref={inicioBtnRef}
+              style={{
+                ...styles.dateBtn,
+                cursor: editandoFechas ? "pointer" : "not-allowed",
+                background: "none",
+                border: "none",
+                padding: 0,
+                marginRight: 8,
+              }}
+              onClick={() => {
+                if (editandoFechas) setPickerEditType("inicio");
+              }}
+              disabled={!editandoFechas}
+            >
+              <span style={{ ...styles.dateBtnText }}>
+                {"Fecha de inicio: " +
+                  (editandoFechas
+                    ? fechaInicioEdit
+                      ? new Date(fechaInicioEdit).toLocaleDateString()
+                      : "-"
+                    : lectura.fechaInicio
+                    ? new Date(lectura.fechaInicio).toLocaleDateString()
+                    : "-")}
+              </span>
+            </button>
+          ) : (
             <TouchableOpacity
               style={styles.dateBtn}
-              onPress={() => setShowInicio(true)}
+              onPress={() => {
+                if (editandoFechas) setPickerEditType("inicio");
+              }}
+              disabled={!editandoFechas}
             >
               <Text style={styles.dateBtnText}>
                 Fecha de inicio:{" "}
-                {lectura.fechaInicio
+                {editandoFechas
+                  ? fechaInicioEdit
+                    ? new Date(fechaInicioEdit).toLocaleDateString()
+                    : "-"
+                  : lectura.fechaInicio
                   ? new Date(lectura.fechaInicio).toLocaleDateString()
                   : "-"}
               </Text>
             </TouchableOpacity>
+          )}
+          {Platform.OS === "web" ? (
+            <button
+              ref={finBtnRef}
+              style={{
+                ...styles.dateBtn,
+                cursor: editandoFechas ? "pointer" : "not-allowed",
+                background: "none",
+                border: "none",
+                padding: 0,
+              }}
+              onClick={() => {
+                if (editandoFechas) setPickerEditType("fin");
+              }}
+              disabled={!editandoFechas}
+            >
+              <span style={{ ...styles.dateBtnText }}>
+                {"Fecha de fin: " +
+                  (editandoFechas
+                    ? fechaFinEdit
+                      ? new Date(fechaFinEdit).toLocaleDateString()
+                      : "-"
+                    : lectura.fechaFin
+                    ? new Date(lectura.fechaFin).toLocaleDateString()
+                    : "-")}
+              </span>
+            </button>
+          ) : (
             <TouchableOpacity
               style={styles.dateBtn}
-              onPress={() => setShowFin(true)}
+              onPress={() => {
+                if (editandoFechas) setPickerEditType("fin");
+              }}
+              disabled={!editandoFechas}
             >
               <Text style={styles.dateBtnText}>
                 Fecha de fin:{" "}
-                {lectura.fechaFin
+                {editandoFechas
+                  ? fechaFinEdit
+                    ? new Date(fechaFinEdit).toLocaleDateString()
+                    : "-"
+                  : lectura.fechaFin
                   ? new Date(lectura.fechaFin).toLocaleDateString()
                   : "-"}
               </Text>
             </TouchableOpacity>
-          </View>
-          {showInicio && (
-            <DateTimePicker
-              value={
-                lectura.fechaInicio ? new Date(lectura.fechaInicio) : new Date()
-              }
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={handleChangeInicio}
-            />
-          )}
-          {showFin && (
-            <DateTimePicker
-              value={lectura.fechaFin ? new Date(lectura.fechaFin) : new Date()}
-              mode="date"
-              display={Platform.OS === "ios" ? "spinner" : "default"}
-              onChange={handleChangeFin}
-            />
           )}
         </View>
+        {/* Botones de acción: en web a la derecha, en mobile abajo */}
+        {Platform.OS === "web" ? (
+          <View style={{ flexDirection: "row", marginLeft: 8 }}>
+            {!lectura.fechaFin && !editandoSoloInicio && !editandoFechas && (
+              <TouchableOpacity
+                style={[styles.dateBtn, { backgroundColor: "#3B2412" }]}
+                onPress={() => {
+                  setEditandoSoloInicio(true);
+                  setFechaInicioSoloEdit(
+                    lectura.fechaInicio ? new Date(lectura.fechaInicio) : null
+                  );
+                  setErrorFechas(null);
+                  setPickerEditType("inicio");
+                }}
+              >
+                <Text style={[styles.dateBtnText, { color: "#fff4e4" }]}>
+                  Modificar fecha de inicio
+                </Text>
+              </TouchableOpacity>
+            )}
+            {!lectura.fechaFin && editandoSoloInicio && (
+              <TouchableOpacity
+                style={[styles.dateBtn, { backgroundColor: "#388e3c" }]}
+                onPress={async () => {
+                  if (!fechaInicioSoloEdit) return;
+                  const hoy = new Date();
+                  if (fechaInicioSoloEdit > hoy) {
+                    setErrorFechas(
+                      "La fecha de inicio no puede ser mayor a hoy."
+                    );
+                    return;
+                  }
+                  const token = await AsyncStorage.getItem("token");
+                  await axios.put(
+                    `${API_BASE_URL}/lecturas/${id}`,
+                    { fechaInicio: fechaInicioSoloEdit },
+                    {
+                      headers: token
+                        ? { Authorization: `Bearer ${token}` }
+                        : {},
+                    }
+                  );
+                  setLectura((prev: any) => ({
+                    ...prev,
+                    fechaInicio: fechaInicioSoloEdit
+                      ? fechaInicioSoloEdit.toISOString()
+                      : prev.fechaInicio,
+                  }));
+                  setEditandoSoloInicio(false);
+                  setErrorFechas(null);
+                }}
+              >
+                <Text style={[styles.dateBtnText, { color: "#fff4e4" }]}>
+                  Guardar
+                </Text>
+              </TouchableOpacity>
+            )}
+            {!lectura.fechaFin && !editandoFechas && !editandoSoloInicio && (
+              <TouchableOpacity
+                style={[styles.dateBtn, { backgroundColor: "#3B2412" }]}
+                onPress={async () => {
+                  const today = new Date();
+                  const token = await AsyncStorage.getItem("token");
+                  await axios.put(
+                    `${API_BASE_URL}/lecturas/${id}`,
+                    { fechaFin: today },
+                    {
+                      headers: token
+                        ? { Authorization: `Bearer ${token}` }
+                        : {},
+                    }
+                  );
+                  setLectura((prev: any) => ({
+                    ...prev,
+                    fechaFin: today.toISOString(),
+                  }));
+                }}
+              >
+                <Text style={[styles.dateBtnText, { color: "#fff4e4" }]}>
+                  Finalizar lectura
+                </Text>
+              </TouchableOpacity>
+            )}
+            {lectura.fechaFin && (
+              <TouchableOpacity
+                style={[
+                  styles.dateBtn,
+                  { backgroundColor: editandoFechas ? "#388e3c" : "#3B2412" },
+                ]}
+                onPress={async () => {
+                  if (!editandoFechas) {
+                    setEditandoFechas(true);
+                    setFechaInicioEdit(
+                      lectura.fechaInicio ? new Date(lectura.fechaInicio) : null
+                    );
+                    setFechaFinEdit(
+                      lectura.fechaFin ? new Date(lectura.fechaFin) : null
+                    );
+                    setErrorFechas(null);
+                  } else {
+                    if (
+                      fechaInicioEdit &&
+                      fechaFinEdit &&
+                      fechaInicioEdit > fechaFinEdit
+                    ) {
+                      setErrorFechas(
+                        "La fecha de inicio debe ser anterior o igual a la de finalización."
+                      );
+                      return;
+                    }
+                    const token = await AsyncStorage.getItem("token");
+                    await axios.put(
+                      `${API_BASE_URL}/lecturas/${id}`,
+                      { fechaInicio: fechaInicioEdit, fechaFin: fechaFinEdit },
+                      {
+                        headers: token
+                          ? { Authorization: `Bearer ${token}` }
+                          : {},
+                      }
+                    );
+                    setLectura((prev: any) => ({
+                      ...prev,
+                      fechaInicio: fechaInicioEdit
+                        ? fechaInicioEdit.toISOString()
+                        : prev.fechaInicio,
+                      fechaFin: fechaFinEdit
+                        ? fechaFinEdit.toISOString()
+                        : prev.fechaFin,
+                    }));
+                    setEditandoFechas(false);
+                    setErrorFechas(null);
+                  }
+                }}
+              >
+                <Text style={[styles.dateBtnText, { color: "#fff4e4" }]}>
+                  {editandoFechas ? "Guardar" : "Modificar"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          <View
+            style={{
+              width: "100%",
+              flexDirection: "row",
+              flexWrap: "wrap",
+              marginTop: 8,
+            }}
+          >
+            {!lectura.fechaFin && !editandoSoloInicio && !editandoFechas && (
+              <TouchableOpacity
+                style={[
+                  styles.dateBtn,
+                  { backgroundColor: "#3B2412", marginTop: 8 },
+                ]}
+                onPress={() => {
+                  setEditandoSoloInicio(true);
+                  setFechaInicioSoloEdit(
+                    lectura.fechaInicio ? new Date(lectura.fechaInicio) : null
+                  );
+                  setErrorFechas(null);
+                  setPickerEditType("inicio");
+                }}
+              >
+                <Text style={[styles.dateBtnText, { color: "#fff4e4" }]}>
+                  Modificar fecha de inicio
+                </Text>
+              </TouchableOpacity>
+            )}
+            {!lectura.fechaFin && editandoSoloInicio && (
+              <TouchableOpacity
+                style={[
+                  styles.dateBtn,
+                  { backgroundColor: "#388e3c", marginTop: 8 },
+                ]}
+                onPress={async () => {
+                  if (!fechaInicioSoloEdit) return;
+                  const hoy = new Date();
+                  if (fechaInicioSoloEdit > hoy) {
+                    setErrorFechas(
+                      "La fecha de inicio no puede ser mayor a hoy."
+                    );
+                    return;
+                  }
+                  const token = await AsyncStorage.getItem("token");
+                  await axios.put(
+                    `${API_BASE_URL}/lecturas/${id}`,
+                    { fechaInicio: fechaInicioSoloEdit },
+                    {
+                      headers: token
+                        ? { Authorization: `Bearer ${token}` }
+                        : {},
+                    }
+                  );
+                  setLectura((prev: any) => ({
+                    ...prev,
+                    fechaInicio: fechaInicioSoloEdit
+                      ? fechaInicioSoloEdit.toISOString()
+                      : prev.fechaInicio,
+                  }));
+                  setEditandoSoloInicio(false);
+                  setErrorFechas(null);
+                }}
+              >
+                <Text style={[styles.dateBtnText, { color: "#fff4e4" }]}>
+                  Guardar
+                </Text>
+              </TouchableOpacity>
+            )}
+            {!lectura.fechaFin && !editandoFechas && !editandoSoloInicio && (
+              <TouchableOpacity
+                style={[
+                  styles.dateBtn,
+                  { backgroundColor: "#3B2412", marginTop: 8 },
+                ]}
+                onPress={async () => {
+                  const today = new Date();
+                  const token = await AsyncStorage.getItem("token");
+                  await axios.put(
+                    `${API_BASE_URL}/lecturas/${id}`,
+                    { fechaFin: today },
+                    {
+                      headers: token
+                        ? { Authorization: `Bearer ${token}` }
+                        : {},
+                    }
+                  );
+                  setLectura((prev: any) => ({
+                    ...prev,
+                    fechaFin: today.toISOString(),
+                  }));
+                }}
+              >
+                <Text style={[styles.dateBtnText, { color: "#fff4e4" }]}>
+                  Finalizar lectura
+                </Text>
+              </TouchableOpacity>
+            )}
+            {lectura.fechaFin && (
+              <TouchableOpacity
+                style={[
+                  styles.dateBtn,
+                  {
+                    backgroundColor: editandoFechas ? "#388e3c" : "#3B2412",
+                    marginTop: 8,
+                  },
+                ]}
+                onPress={async () => {
+                  if (!editandoFechas) {
+                    setEditandoFechas(true);
+                    setFechaInicioEdit(
+                      lectura.fechaInicio ? new Date(lectura.fechaInicio) : null
+                    );
+                    setFechaFinEdit(
+                      lectura.fechaFin ? new Date(lectura.fechaFin) : null
+                    );
+                    setErrorFechas(null);
+                  } else {
+                    if (
+                      fechaInicioEdit &&
+                      fechaFinEdit &&
+                      fechaInicioEdit > fechaFinEdit
+                    ) {
+                      setErrorFechas(
+                        "La fecha de inicio debe ser anterior o igual a la de finalización."
+                      );
+                      return;
+                    }
+                    const token = await AsyncStorage.getItem("token");
+                    await axios.put(
+                      `${API_BASE_URL}/lecturas/${id}`,
+                      { fechaInicio: fechaInicioEdit, fechaFin: fechaFinEdit },
+                      {
+                        headers: token
+                          ? { Authorization: `Bearer ${token}` }
+                          : {},
+                      }
+                    );
+                    setLectura((prev: any) => ({
+                      ...prev,
+                      fechaInicio: fechaInicioEdit
+                        ? fechaInicioEdit.toISOString()
+                        : prev.fechaInicio,
+                      fechaFin: fechaFinEdit
+                        ? fechaFinEdit.toISOString()
+                        : prev.fechaFin,
+                    }));
+                    setEditandoFechas(false);
+                    setErrorFechas(null);
+                  }
+                }}
+              >
+                <Text style={[styles.dateBtnText, { color: "#fff4e4" }]}>
+                  {editandoFechas ? "Guardar" : "Modificar"}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
       </View>
+      {errorFechas && (
+        <Text
+          style={{
+            color: "red",
+            marginLeft: 18,
+            marginTop: 4,
+            fontWeight: "bold",
+          }}
+        >
+          {errorFechas}
+        </Text>
+      )}
+      {pickerEditType &&
+        (Platform.OS === "web" ? (
+          <input
+            type="date"
+            autoFocus
+            max={new Date().toISOString().slice(0, 10)}
+            style={{
+              position: "fixed",
+              top: pickerPosition ? pickerPosition.top : "50%",
+              left: pickerPosition ? pickerPosition.left : "50%",
+              transform: pickerPosition ? "none" : "translate(-50%, -50%)",
+              zIndex: 9999,
+              background: "#fff",
+              border: "1px solid #ccc",
+              borderRadius: 8,
+              fontSize: 18,
+              padding: 8,
+            }}
+            value={
+              pickerEditType === "inicio"
+                ? editandoSoloInicio
+                  ? fechaInicioSoloEdit
+                    ? new Date(fechaInicioSoloEdit).toISOString().slice(0, 10)
+                    : ""
+                  : fechaInicioEdit
+                  ? new Date(fechaInicioEdit).toISOString().slice(0, 10)
+                  : ""
+                : fechaFinEdit
+                ? new Date(fechaFinEdit).toISOString().slice(0, 10)
+                : ""
+            }
+            onChange={(e) => {
+              const [year, month, day] = e.target.value.split("-");
+              const date = new Date(
+                Number(year),
+                Number(month) - 1,
+                Number(day)
+              );
+              if (pickerEditType === "inicio") {
+                if (editandoSoloInicio) setFechaInicioSoloEdit(date);
+                else setFechaInicioEdit(date);
+              }
+              if (pickerEditType === "fin") setFechaFinEdit(date);
+            }}
+            onBlur={() => setPickerEditType(null)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === "Escape")
+                setPickerEditType(null);
+            }}
+          />
+        ) : (
+          <DateTimePicker
+            value={
+              pickerEditType === "inicio"
+                ? editandoSoloInicio
+                  ? fechaInicioSoloEdit instanceof Date
+                    ? fechaInicioSoloEdit
+                    : fechaInicioSoloEdit
+                    ? new Date(fechaInicioSoloEdit)
+                    : new Date()
+                  : fechaInicioEdit instanceof Date
+                  ? fechaInicioEdit
+                  : fechaInicioEdit
+                  ? new Date(fechaInicioEdit)
+                  : new Date()
+                : fechaFinEdit instanceof Date
+                ? fechaFinEdit
+                : fechaFinEdit
+                ? new Date(fechaFinEdit)
+                : new Date()
+            }
+            mode="date"
+            display={Platform.OS === "ios" ? "spinner" : "default"}
+            maximumDate={new Date()}
+            onChange={(event, date) => {
+              if (date) {
+                if (pickerEditType === "inicio") {
+                  if (editandoSoloInicio) setFechaInicioSoloEdit(date);
+                  else setFechaInicioEdit(date);
+                }
+                if (pickerEditType === "fin") setFechaFinEdit(date);
+              }
+              setPickerEditType(null);
+            }}
+          />
+        ))}
+      {showInicio && !editandoFechas && (
+        <DateTimePicker
+          value={
+            lectura.fechaInicio ? new Date(lectura.fechaInicio) : new Date()
+          }
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={handleChangeInicio}
+        />
+      )}
+      {showFin && !editandoFechas && (
+        <DateTimePicker
+          value={lectura.fechaFin ? new Date(lectura.fechaFin) : new Date()}
+          mode="date"
+          display={Platform.OS === "ios" ? "spinner" : "default"}
+          onChange={handleChangeFin}
+        />
+      )}
       <View style={styles.sectionBox}>
         <Text style={styles.sectionLabel}>Descripción:</Text>
         <Text style={styles.description}>
@@ -362,6 +888,7 @@ const styles = StyleSheet.create({
   dateRow: {
     flexDirection: "row",
     marginTop: 10,
+    marginLeft: 18,
     gap: 8,
   },
   dateBtn: {

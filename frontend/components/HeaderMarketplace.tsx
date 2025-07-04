@@ -2,120 +2,124 @@ import React from "react";
 import {
   View,
   Text,
-  StyleSheet,
-  Image,
   TextInput,
   TouchableOpacity,
+  Image,
+  StyleSheet,
+  Platform,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-interface HeaderMarketplaceProps {
-  onSearch?: (text: string) => void;
-  onFilterPress?: () => void;
-}
-
-export default function HeaderMarketplace({
-  onSearch,
-  onFilterPress,
-}: HeaderMarketplaceProps) {
+const HeaderMarketplace = () => {
   return (
     <View style={styles.header}>
-      <View style={styles.headerLeft}>
+      {/* Logo principal */}
+      <View style={styles.logoContainer}>
         <Image
-          source={require("../assets/images/lechuza.png")}
+          source={require("../assets/images/logoLechuza.png")}
           style={styles.logo}
           resizeMode="contain"
         />
-        <Text style={styles.headerTitle}>EXLIBRIS</Text>
       </View>
-      <View style={styles.searchRow}>
-        <View style={styles.searchBox}>
+      <View style={styles.searchContainer}>
+        <TouchableOpacity>
           <Ionicons
             name="search"
-            size={18}
-            color="#7c4a2d"
-            style={{ marginLeft: 8, marginRight: 4 }}
+            size={20}
+            color="#4b2e1e"
+            style={{ marginLeft: 8 }}
           />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search"
-            placeholderTextColor="#7c4a2d"
-            onChangeText={onSearch}
-          />
-        </View>
-        <TouchableOpacity style={styles.filterButton} onPress={onFilterPress}>
+        </TouchableOpacity>
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Buscar libros en venta..."
+          placeholderTextColor="#a08b7d"
+          editable={false}
+        />
+        <TouchableOpacity style={styles.filterButton}>
           <Text style={styles.filterButtonText}>Filtros</Text>
         </TouchableOpacity>
       </View>
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   header: {
     backgroundColor: "#FFF4E4",
-    paddingTop: 50,
-    paddingBottom: 10,
+    paddingTop:
+      Platform.OS === "android" ? 80 : Platform.OS === "web" ? 40 : 28,
+    paddingBottom: 20,
     paddingHorizontal: "4%",
     borderBottomWidth: 1,
     borderBottomColor: "#e0d3c2",
     width: "100%",
-    zIndex: 10,
-  },
-  headerLeft: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    justifyContent: "space-between",
+    zIndex: 10,
+    height: 70,
+  },
+  logoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 0,
+    paddingLeft: 0,
+    position: "relative",
+    left: 0,
+    top: 0,
+    width: "auto",
+    height: 44,
   },
   logo: {
     width: 44,
     height: 44,
-    marginTop: 4,
+    resizeMode: "contain",
+    marginTop: 0,
+    marginBottom: 25,
+    marginLeft: 0,
     marginRight: 10,
   },
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "bold",
-    color: "#3B2412",
-    letterSpacing: 1.5,
-  },
-  searchRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    width: "100%",
-    marginTop: 2,
-  },
-  searchBox: {
+  searchContainer: {
+    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
     borderRadius: 16,
-    paddingHorizontal: 6,
-    marginRight: 10,
-    flex: 1,
-    height: 38,
-    borderWidth: 1,
-    borderColor: "#e0d3c2",
+    paddingHorizontal: 12,
+    paddingVertical: 0,
+    marginBottom: 25,
+    marginLeft: 0,
+    elevation: 2,
+    minHeight: 38,
+    maxHeight: 44,
+    alignSelf: "center",
+    marginTop: 0,
+    height: 44,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
-    color: "#3B2412",
-    paddingVertical: 0,
-    paddingHorizontal: 6,
+    fontSize: 15,
+    color: "#4b2e1e",
+    marginLeft: 6,
+    backgroundColor: "transparent",
+    paddingVertical: 2,
+    borderWidth: 0,
+    ...(Platform.OS === "web" ? { outlineStyle: "none" as any } : {}),
   },
   filterButton: {
-    backgroundColor: "#3B2412",
+    backgroundColor: "#332018",
     borderRadius: 12,
-    paddingHorizontal: 18,
-    paddingVertical: 7,
-    alignItems: "center",
-    justifyContent: "center",
-    height: 38,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    marginLeft: 8,
   },
   filterButtonText: {
-    color: "#fff",
+    color: "#f3e8da",
     fontWeight: "bold",
     fontSize: 15,
   },
 });
+
+export default HeaderMarketplace;

@@ -174,6 +174,22 @@ export default function PerfilScreen() {
     }
   };
 
+  // Ordenar lecturas: primero en lectura (sin fecha de fin, por fechaInicio desc), luego finalizadas (por fechaFin desc)
+  const lecturasOrdenadas = [...lecturas].sort((a, b) => {
+    const aEnLectura = !a.fechaFin;
+    const bEnLectura = !b.fechaFin;
+    if (aEnLectura && !bEnLectura) return -1;
+    if (!aEnLectura && bEnLectura) return 1;
+    if (aEnLectura && bEnLectura) {
+      // Ambas en lectura: más reciente primero
+      return (
+        new Date(b.fechaInicio).getTime() - new Date(a.fechaInicio).getTime()
+      );
+    }
+    // Ambas finalizadas: más reciente primero
+    return new Date(b.fechaFin).getTime() - new Date(a.fechaFin).getTime();
+  });
+
   return (
     <View style={{ flex: 1, backgroundColor: "#FFF" }}>
       <HeaderPerfil />
@@ -269,7 +285,7 @@ export default function PerfilScreen() {
               No tienes lecturas aún.
             </Text>
           ) : (
-            lecturas.map((lectura) => (
+            lecturasOrdenadas.map((lectura) => (
               <TouchableOpacity
                 key={lectura.id}
                 onPress={() => {
@@ -291,49 +307,60 @@ export default function PerfilScreen() {
                 }}
                 style={{ marginRight: 10 }}
               >
-                <ExpoImage
-                  source={{
-                    uri: portadas[lectura.id] || "https://placehold.co/90x120",
-                  }}
-                  style={styles.bookCoverPlaceholder}
-                  placeholder="https://placehold.co/90x120"
-                  contentFit="cover"
-                  transition={100}
-                  priority="low"
-                  onError={() => {
-                    setPortadas((prev) => {
-                      if (
-                        prev[lectura.id] &&
-                        prev[lectura.id] !== "https://placehold.co/90x120"
-                      ) {
-                        return prev;
-                      }
-                      return {
-                        ...prev,
-                        [lectura.id]: "https://placehold.co/90x120",
-                      };
-                    });
-                  }}
-                />
-                {portadas[lectura.id] === "https://placehold.co/90x120" && (
-                  <View
-                    style={{
-                      position: "absolute",
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      alignItems: "center",
-                      justifyContent: "center",
-                      backgroundColor: "rgba(255,255,255,0.7)",
-                      borderRadius: 12,
+                <View style={{ position: "relative" }}>
+                  <ExpoImage
+                    source={{
+                      uri:
+                        portadas[lectura.id] || "https://placehold.co/90x120",
                     }}
-                  >
-                    <Text style={{ color: "#7c4a2d", fontWeight: "bold" }}>
-                      Reintentar
-                    </Text>
-                  </View>
-                )}
+                    style={styles.bookCoverPlaceholder}
+                    placeholder="https://placehold.co/90x120"
+                    contentFit="cover"
+                    transition={100}
+                    priority="low"
+                    onError={() => {
+                      setPortadas((prev) => {
+                        if (
+                          prev[lectura.id] &&
+                          prev[lectura.id] !== "https://placehold.co/90x120"
+                        ) {
+                          return prev;
+                        }
+                        return {
+                          ...prev,
+                          [lectura.id]: "https://placehold.co/90x120",
+                        };
+                      });
+                    }}
+                  />
+                  {/* Chip de estado 'En lectura' */}
+                  {!lectura.fechaFin && (
+                    <View style={styles.chipLecturaPerfil}>
+                      <Text style={styles.chipLecturaPerfilText}>
+                        En lectura
+                      </Text>
+                    </View>
+                  )}
+                  {portadas[lectura.id] === "https://placehold.co/90x120" && (
+                    <View
+                      style={{
+                        position: "absolute",
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: "rgba(255,255,255,0.7)",
+                        borderRadius: 12,
+                      }}
+                    >
+                      <Text style={{ color: "#7c4a2d", fontWeight: "bold" }}>
+                        Reintentar
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </TouchableOpacity>
             ))
           )}
@@ -493,5 +520,30 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: "#3B2412",
     marginBottom: 2,
+  },
+  chipLecturaPerfil: {
+    position: "absolute",
+    bottom: 8,
+    left: "50%",
+    transform: [{ translateX: -45 }],
+    backgroundColor: "#3B2412",
+    borderRadius: 18,
+    paddingVertical: 4,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    minWidth: 90,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  chipLecturaPerfilText: {
+    color: "#fff4e4",
+    fontWeight: "bold",
+    fontSize: 12,
+    textAlign: "center",
   },
 });

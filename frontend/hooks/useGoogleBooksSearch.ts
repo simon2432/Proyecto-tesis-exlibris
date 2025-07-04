@@ -59,7 +59,6 @@ export function useGoogleBooksSearch() {
         let books = data.books || data.items || [];
         if (!Array.isArray(books)) books = [];
         console.log("[Busqueda] Respuesta backend:", data);
-        console.log("[Busqueda] Libros recibidos:", books.length, books);
         const searchInfo = {
           totalFound: data.totalFound || books.length,
           totalReturned: data.totalReturned || books.length,

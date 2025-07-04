@@ -260,7 +260,8 @@ export default function HeaderHome({
 const styles = StyleSheet.create({
   header: {
     backgroundColor: "#FFF4E4",
-    paddingTop: Platform.OS === "android" ? 80 : 28,
+    paddingTop:
+      Platform.OS === "android" ? 80 : Platform.OS === "web" ? 40 : 28,
     paddingBottom: 20,
     paddingHorizontal: "4%",
     borderBottomWidth: 1,
