@@ -195,7 +195,10 @@ export default function PerfilScreen() {
       <HeaderPerfil />
       <ScrollView contentContainerStyle={{ paddingBottom: 90 }}>
         <View style={styles.topButtonsRow}>
-          <TouchableOpacity style={styles.topButton}>
+          <TouchableOpacity
+            style={styles.topButton}
+            onPress={() => router.push("/agregar-lectura-buscar" as any)}
+          >
             <Text style={styles.topButtonText}>Agregar lectura</Text>
           </TouchableOpacity>
           <TouchableOpacity style={styles.topButton}>
