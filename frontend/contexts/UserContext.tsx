@@ -6,24 +6,28 @@ import React, {
   ReactNode,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import axios from "axios";
+import { API_BASE_URL } from "../constants/ApiConfig";
 
-interface User {
+export type LibroFavorito = { id: string; portada: string; title: string };
+
+export interface User {
   id: number;
   nombre: string;
   email: string;
   documento?: number;
   ubicacion?: string;
   fotoPerfil?: string;
+  librosFavoritos?: LibroFavorito[];
 }
 
-interface UserContextType {
+export const UserContext = createContext<{
   user: User | null;
   setUser: (user: User | null) => void;
   logout: () => void;
   isLoading: boolean;
-}
-
-const UserContext = createContext<UserContextType | undefined>(undefined);
+  setLibroFavorito?: (slot: number, libro: LibroFavorito) => void;
+}>(null as any);
 
 export const useUser = () => {
   const context = useContext(UserContext);
@@ -44,6 +48,22 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   useEffect(() => {
     loadUserFromStorage();
   }, []);
+
+  useEffect(() => {
+    const fetchFavoritos = async () => {
+      if (!user) return;
+      try {
+        const token = await AsyncStorage.getItem("token");
+        const res = await axios.get(`${API_BASE_URL}/usuarios/favoritos`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        setUser((prev) =>
+          prev ? { ...prev, librosFavoritos: res.data.librosFavoritos } : prev
+        );
+      } catch {}
+    };
+    fetchFavoritos();
+  }, [user?.id]);
 
   const loadUserFromStorage = async () => {
     try {
@@ -73,9 +93,41 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     setUser(null);
   };
 
+  const setLibroFavorito = async (slot: number, libro: LibroFavorito) => {
+    let nuevosFavoritos: LibroFavorito[] = [];
+    setUser((prev) => {
+      if (!prev) return prev;
+      nuevosFavoritos = [
+        ...((prev as any).librosFavoritos ?? [null, null, null]),
+      ];
+      nuevosFavoritos[slot] = libro;
+      return { ...prev, librosFavoritos: nuevosFavoritos };
+    });
+    setTimeout(async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        await axios.put(
+          `${API_BASE_URL}/usuarios/favoritos`,
+          {
+            librosFavoritos: nuevosFavoritos,
+          },
+          {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          }
+        );
+      } catch {}
+    }, 0);
+  };
+
   return (
     <UserContext.Provider
-      value={{ user, setUser: setUserAndStore, logout, isLoading }}
+      value={{
+        user,
+        setUser: setUserAndStore,
+        logout,
+        isLoading,
+        setLibroFavorito,
+      }}
     >
       {children}
     </UserContext.Provider>

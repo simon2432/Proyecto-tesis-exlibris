@@ -244,14 +244,29 @@ export default function PerfilScreen() {
         </View>
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Tus 3 libros favoritos</Text>
-          <TouchableOpacity style={styles.sectionButton}>
+          <TouchableOpacity
+            style={styles.sectionButton}
+            onPress={() => router.push("/favoritos-editar" as any)}
+          >
             <Text style={styles.sectionButtonText}>Editar</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.booksRowCentered}>
-          <View style={styles.bookCoverPlaceholder} />
-          <View style={styles.bookCoverPlaceholder} />
-          <View style={styles.bookCoverPlaceholder} />
+          {[0, 1, 2].map((idx) => {
+            const libro = (user as any)?.librosFavoritos?.[idx] ?? null;
+            return libro && libro.portada ? (
+              <ExpoImage
+                key={libro.id}
+                source={{ uri: libro.portada || "https://placehold.co/90x120" }}
+                style={styles.bookCoverPlaceholder}
+                placeholder="https://placehold.co/90x120"
+                contentFit="cover"
+                transition={100}
+              />
+            ) : (
+              <View key={idx} style={styles.bookCoverPlaceholder} />
+            );
+          })}
         </View>
         <View style={styles.sectionRow}>
           <Text style={styles.sectionTitle}>Historial lector</Text>

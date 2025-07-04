@@ -26,4 +26,7 @@ router.post(
   userController.uploadProfilePhoto
 );
 
+router.get("/favoritos", authMiddleware, userController.getFavoritos);
+router.put("/favoritos", authMiddleware, userController.updateFavoritos);
+
 module.exports = router;

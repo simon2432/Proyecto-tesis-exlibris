@@ -8,6 +8,8 @@ import {
   Animated,
   Pressable,
   Alert,
+  Platform,
+  Modal,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useUser } from "../contexts/UserContext";
@@ -22,6 +24,7 @@ const MENU_OPTIONS = [
 
 export default function HeaderPerfil() {
   const [menuVisible, setMenuVisible] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const { logout } = useUser();
   const router = useRouter();
@@ -36,24 +39,17 @@ export default function HeaderPerfil() {
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      "Cerrar sesión",
-      "¿Estás seguro de que quieres cerrar sesión?",
-      [
-        {
-          text: "Cancelar",
-          style: "cancel",
-        },
-        {
-          text: "Cerrar sesión",
-          style: "destructive",
-          onPress: () => {
-            logout();
-            router.replace("/");
-          },
-        },
-      ]
-    );
+    setShowLogoutModal(true);
+  };
+
+  const confirmLogout = () => {
+    setShowLogoutModal(false);
+    logout();
+    router.replace("/login");
+  };
+
+  const cancelLogout = () => {
+    setShowLogoutModal(false);
   };
 
   const MENU_OPTIONS = [
@@ -88,8 +84,8 @@ export default function HeaderPerfil() {
                     idx === MENU_OPTIONS.length - 1 && { borderBottomWidth: 0 },
                   ]}
                   onPress={() => {
-                    option.onPress();
                     setMenuVisible(false);
+                    setTimeout(() => option.onPress(), 100);
                   }}
                 >
                   <Text style={styles.menuItemText}>{option.label}</Text>
@@ -99,6 +95,36 @@ export default function HeaderPerfil() {
           </Pressable>
         )}
       </View>
+      {/* Modal de logout */}
+      <Modal
+        visible={showLogoutModal}
+        transparent
+        animationType="fade"
+        onRequestClose={cancelLogout}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>¿Cerrar sesión?</Text>
+            <Text style={styles.modalMessage}>
+              Se cerrará tu sesión en Exlibris.
+            </Text>
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={cancelLogout}
+              >
+                <Text style={styles.modalCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalDeleteBtn}
+                onPress={confirmLogout}
+              >
+                <Text style={styles.modalDeleteText}>Cerrar sesión</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -172,5 +198,65 @@ const styles = StyleSheet.create({
     color: "#3B2412",
     fontWeight: "bold",
     textAlign: "left",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.25)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 18,
+    padding: 28,
+    minWidth: 270,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#3B2412",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: "#3B2412",
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  modalButtonsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 18,
+  },
+  modalCancelBtn: {
+    backgroundColor: "#e0d3c2",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    marginRight: 6,
+  },
+  modalCancelText: {
+    color: "#3B2412",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  modalDeleteBtn: {
+    backgroundColor: "#c0392b",
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 22,
+    marginLeft: 6,
+  },
+  modalDeleteText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
   },
 });

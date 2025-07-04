@@ -28,3 +28,29 @@ exports.uploadProfilePhoto = async (req, res) => {
     res.status(500).json({ error: "Error al subir la foto de perfil." });
   }
 };
+
+// Obtener favoritos del usuario autenticado
+exports.getFavoritos = async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: "No autenticado" });
+    const user = await prisma.user.findUnique({ where: { id: req.userId } });
+    res.json({ librosFavoritos: user?.librosFavoritos ?? [] });
+  } catch (err) {
+    res.status(500).json({ error: "Error al obtener favoritos" });
+  }
+};
+
+// Actualizar favoritos del usuario autenticado
+exports.updateFavoritos = async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: "No autenticado" });
+    const { librosFavoritos } = req.body;
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data: { librosFavoritos },
+    });
+    res.json({ librosFavoritos: user.librosFavoritos });
+  } catch (err) {
+    res.status(500).json({ error: "Error al actualizar favoritos" });
+  }
+};
