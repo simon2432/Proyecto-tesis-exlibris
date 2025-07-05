@@ -10,6 +10,7 @@ import {
   Modal,
   Pressable,
   Alert,
+  TextInput,
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -50,6 +51,13 @@ export default function LecturaHistorialDetalle() {
     top: number;
     left: number;
   } | null>(null);
+  const [editandoResena, setEditandoResena] = useState(false);
+  const [reviewRating, setReviewRating] = useState<number | null>(null);
+  const [reviewComment, setReviewComment] = useState<string>("");
+  const [reviewError, setReviewError] = useState<string>("");
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewCharCount, setReviewCharCount] = useState(0);
+  const [showDeleteReviewModal, setShowDeleteReviewModal] = useState(false);
 
   useEffect(() => {
     // Precargar imagen placeholder
@@ -125,6 +133,13 @@ export default function LecturaHistorialDetalle() {
     }
   }, [pickerEditType]);
 
+  useEffect(() => {
+    setReviewRating(lectura?.reviewRating ?? null);
+    setReviewComment(lectura?.reviewComment ?? "");
+    setReviewCharCount(lectura?.reviewComment?.length || 0);
+    setEditandoResena(false);
+  }, [lectura]);
+
   const handleChangeInicio = (event: any, date?: Date) => {
     setShowInicio(false);
     if (date) {
@@ -166,6 +181,51 @@ export default function LecturaHistorialDetalle() {
         [{ text: "OK" }]
       );
       setIsDeleting(false);
+    }
+  };
+
+  const handleGuardarResena = async () => {
+    setReviewError("");
+    if (!reviewRating || reviewRating < 1 || reviewRating > 5) {
+      setReviewError("Selecciona una valoración de 1 a 5 estrellas.");
+      return;
+    }
+    if (!reviewComment || reviewComment.length > 300) {
+      setReviewError(
+        "El comentario es obligatorio y debe tener máximo 300 caracteres."
+      );
+      return;
+    }
+    setReviewLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const res = await axios.put(
+        `${API_BASE_URL}/lecturas/${id}/review`,
+        { reviewRating, reviewComment },
+        { headers: token ? { Authorization: `Bearer ${token}` } : {} }
+      );
+      setLectura(res.data);
+      setEditandoResena(false);
+    } catch (err: any) {
+      setReviewError(err?.response?.data?.error || "Error al guardar reseña");
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleEliminarResena = async () => {
+    setReviewLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const res = await axios.delete(`${API_BASE_URL}/lecturas/${id}/review`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      setLectura(res.data);
+      setEditandoResena(false);
+    } catch (err: any) {
+      setReviewError(err?.response?.data?.error || "Error al eliminar reseña");
+    } finally {
+      setReviewLoading(false);
     }
   };
 
@@ -770,13 +830,206 @@ export default function LecturaHistorialDetalle() {
           </Text>
         )}
       </View>
-      <TouchableOpacity style={styles.modifyBtn}>
-        <Text style={styles.modifyBtnText}>Modificar reseña</Text>
-      </TouchableOpacity>
-      <View style={styles.sectionBox}>
-        <Text style={styles.sectionLabel}>Reseña:</Text>
-        {/* Espacio vacío por ahora */}
-        <View style={styles.reviewPlaceholder} />
+      <View style={{ marginTop: 16 }}>
+        <Text style={styles.sectionTitle}>Reseña:</Text>
+        {/* Si no finalizó el libro */}
+        {!lectura.fechaFin && (
+          <View style={styles.reviewBox}>
+            <Text style={{ color: "#888" }}>
+              Debes finalizar el libro para hacer una reseña
+            </Text>
+          </View>
+        )}
+        {/* Si puede reseñar */}
+        {lectura.fechaFin && !lectura.reviewRating && !editandoResena && (
+          <View style={styles.reviewBox}>
+            <Text style={{ color: "#888", marginBottom: 8 }}>
+              ¡Cuéntanos qué te pareció este libro!
+            </Text>
+            {/* Estrellas */}
+            <View style={{ flexDirection: "row", marginBottom: 8 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setReviewRating(star)}
+                >
+                  <Text
+                    style={{
+                      fontSize: 28,
+                      color:
+                        reviewRating && reviewRating >= star
+                          ? "#FFD700"
+                          : "#CCC",
+                    }}
+                  >
+                    ★
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            {/* Textarea */}
+            <TextInput
+              style={{
+                minHeight: 60,
+                padding: 8,
+                backgroundColor: "#FFF",
+                borderRadius: 8,
+              }}
+              multiline
+              maxLength={300}
+              onChangeText={(text) => {
+                setReviewComment(text);
+                setReviewCharCount(text.length);
+              }}
+              value={reviewComment}
+              placeholder="Escribe tu reseña..."
+            />
+            <Text
+              style={{ alignSelf: "flex-end", color: "#888", fontSize: 12 }}
+            >
+              {reviewCharCount}/300
+            </Text>
+            {reviewError ? (
+              <Text style={{ color: "red", marginTop: 4 }}>{reviewError}</Text>
+            ) : null}
+            <TouchableOpacity
+              style={[
+                styles.saveBtn,
+                (!reviewRating ||
+                  !reviewComment ||
+                  reviewComment.length > 300) && { opacity: 0.5 },
+              ]}
+              onPress={handleGuardarResena}
+              disabled={
+                !reviewRating ||
+                !reviewComment ||
+                reviewComment.length > 300 ||
+                reviewLoading
+              }
+            >
+              <Text style={styles.saveBtnText}>
+                {reviewLoading ? "Guardando..." : "Guardar reseña"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+        {/* Si ya hay reseña y no está editando */}
+        {lectura.fechaFin && lectura.reviewRating && !editandoResena && (
+          <View style={styles.reviewBox}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 4,
+              }}
+            >
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Text
+                  key={star}
+                  style={{
+                    fontSize: 22,
+                    color: lectura.reviewRating >= star ? "#FFD700" : "#CCC",
+                  }}
+                >
+                  ★
+                </Text>
+              ))}
+            </View>
+            <Text style={{ fontWeight: "bold", marginBottom: 4 }}>
+              {lectura.reviewComment}
+            </Text>
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => {
+                  setEditandoResena(true);
+                  setReviewRating(lectura.reviewRating);
+                  setReviewComment(lectura.reviewComment);
+                }}
+              >
+                <Text style={styles.editBtnText}>Modificar reseña</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.deleteBtn}
+                onPress={() => setShowDeleteReviewModal(true)}
+              >
+                <Text style={styles.deleteBtnText}>Eliminar</Text>
+              </TouchableOpacity>
+            </View>
+            {reviewError ? (
+              <Text style={{ color: "red", marginTop: 4 }}>{reviewError}</Text>
+            ) : null}
+          </View>
+        )}
+        {/* Si está editando reseña */}
+        {lectura.fechaFin && editandoResena && (
+          <View style={styles.reviewBox}>
+            <Text style={{ color: "#888", marginBottom: 8 }}>
+              Edita tu reseña
+            </Text>
+            <View style={{ flexDirection: "row", marginBottom: 8 }}>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <TouchableOpacity
+                  key={star}
+                  onPress={() => setReviewRating(star)}
+                >
+                  <Text
+                    style={{
+                      fontSize: 28,
+                      color:
+                        reviewRating && reviewRating >= star
+                          ? "#FFD700"
+                          : "#CCC",
+                    }}
+                  >
+                    ★
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TextInput
+              style={{
+                minHeight: 60,
+                padding: 8,
+                backgroundColor: "#FFF",
+                borderRadius: 8,
+              }}
+              multiline
+              maxLength={300}
+              onChangeText={(text) => {
+                setReviewComment(text);
+                setReviewCharCount(text.length);
+              }}
+              value={reviewComment}
+              placeholder="Escribe tu reseña..."
+            />
+            <Text
+              style={{ alignSelf: "flex-end", color: "#888", fontSize: 12 }}
+            >
+              {reviewCharCount}/300
+            </Text>
+            {reviewError ? (
+              <Text style={{ color: "red", marginTop: 4 }}>{reviewError}</Text>
+            ) : null}
+            <View style={{ flexDirection: "row", gap: 8 }}>
+              <TouchableOpacity
+                style={styles.saveBtn}
+                onPress={handleGuardarResena}
+                disabled={reviewLoading}
+              >
+                <Text style={styles.saveBtnText}>
+                  {reviewLoading ? "Guardando..." : "Guardar cambios"}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.cancelBtn}
+                onPress={() => setEditandoResena(false)}
+              >
+                <Text style={styles.cancelBtnText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
       <TouchableOpacity style={styles.otherReviewsBtn}>
         <Text style={styles.otherReviewsBtnText}>
@@ -819,6 +1072,50 @@ export default function LecturaHistorialDetalle() {
               >
                 <Text style={styles.modalButtonDeleteText}>
                   {isDeleting ? "Eliminando..." : "Eliminar"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de confirmación para eliminar reseña */}
+      <Modal
+        visible={showDeleteReviewModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteReviewModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowDeleteReviewModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Eliminar reseña</Text>
+            <Text style={styles.modalMessage}>
+              ¿Estás seguro de que quieres eliminar tu reseña de este libro?
+            </Text>
+            <Text style={styles.modalWarning}>
+              Esta acción no se puede deshacer.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowDeleteReviewModal(false)}
+                disabled={reviewLoading}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonDelete]}
+                onPress={async () => {
+                  setShowDeleteReviewModal(false);
+                  await handleEliminarResena();
+                }}
+                disabled={reviewLoading}
+              >
+                <Text style={styles.modalButtonDeleteText}>
+                  {reviewLoading ? "Eliminando..." : "Eliminar"}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -1033,5 +1330,66 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#3B2412",
+    marginBottom: 8,
+    marginLeft: 18,
+  },
+  reviewBox: {
+    padding: 16,
+    backgroundColor: "#FFF4E4",
+    borderRadius: 8,
+    marginBottom: 16,
+  },
+  saveBtn: {
+    backgroundColor: "#3B2412",
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  saveBtnText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  editBtn: {
+    backgroundColor: "#3B2412",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginRight: 8,
+  },
+  editBtnText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  deleteBtn: {
+    backgroundColor: "#d32f2f",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  deleteBtnText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  cancelBtn: {
+    backgroundColor: "#f5f5f5",
+    borderWidth: 1,
+    borderColor: "#ddd",
+    borderRadius: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+  },
+  cancelBtnText: {
+    color: "#3B2412",
+    fontWeight: "bold",
+    fontSize: 15,
   },
 });

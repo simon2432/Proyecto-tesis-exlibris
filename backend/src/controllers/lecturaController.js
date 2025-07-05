@@ -155,3 +155,58 @@ exports.limpiarCachePortada = (req, res) => {
   portadasCache.delete(libroId);
   res.json({ ok: true });
 };
+
+// Agregar o modificar reseña de una lectura
+exports.agregarOModificarResena = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { reviewRating, reviewComment } = req.body;
+    if (!req.userId) return res.status(401).json({ error: "No autenticado" });
+    if (!reviewRating || reviewRating < 1 || reviewRating > 5)
+      return res.status(400).json({ error: "Valoración inválida" });
+    if (!reviewComment || reviewComment.length > 300)
+      return res.status(400).json({ error: "Comentario inválido o muy largo" });
+
+    const lectura = await prisma.lectura.findUnique({
+      where: { id: Number(id) },
+    });
+    if (!lectura)
+      return res.status(404).json({ error: "Lectura no encontrada" });
+    if (lectura.userId !== req.userId)
+      return res.status(403).json({ error: "No autorizado" });
+    if (!lectura.fechaFin)
+      return res
+        .status(400)
+        .json({ error: "Solo puedes reseñar lecturas finalizadas" });
+
+    const updated = await prisma.lectura.update({
+      where: { id: Number(id) },
+      data: { reviewRating, reviewComment },
+    });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: "Error al guardar reseña" });
+  }
+};
+
+// Eliminar reseña de una lectura
+exports.eliminarResena = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!req.userId) return res.status(401).json({ error: "No autenticado" });
+    const lectura = await prisma.lectura.findUnique({
+      where: { id: Number(id) },
+    });
+    if (!lectura)
+      return res.status(404).json({ error: "Lectura no encontrada" });
+    if (lectura.userId !== req.userId)
+      return res.status(403).json({ error: "No autorizado" });
+    const updated = await prisma.lectura.update({
+      where: { id: Number(id) },
+      data: { reviewRating: null, reviewComment: null },
+    });
+    res.json(updated);
+  } catch (err) {
+    res.status(500).json({ error: "Error al eliminar reseña" });
+  }
+};

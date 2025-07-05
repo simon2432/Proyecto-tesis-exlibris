@@ -27,6 +27,7 @@ export const UserContext = createContext<{
   logout: () => void;
   isLoading: boolean;
   setLibroFavorito?: (slot: number, libro: LibroFavorito) => void;
+  removeFavorite?: (slot: number) => void;
 }>(null as any);
 
 export const useUser = () => {
@@ -119,6 +120,32 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     }, 0);
   };
 
+  const removeFavorite = async (slot: number) => {
+    let nuevosFavoritos: LibroFavorito[] = [];
+    setUser((prev) => {
+      if (!prev) return prev;
+      nuevosFavoritos = [
+        ...((prev as any).librosFavoritos ?? [null, null, null]),
+      ];
+      nuevosFavoritos[slot] = null as any;
+      return { ...prev, librosFavoritos: nuevosFavoritos };
+    });
+    setTimeout(async () => {
+      try {
+        const token = await AsyncStorage.getItem("token");
+        await axios.put(
+          `${API_BASE_URL}/usuarios/favoritos`,
+          {
+            librosFavoritos: nuevosFavoritos,
+          },
+          {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+          }
+        );
+      } catch {}
+    }, 0);
+  };
+
   return (
     <UserContext.Provider
       value={{
@@ -127,6 +154,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
         logout,
         isLoading,
         setLibroFavorito,
+        removeFavorite,
       }}
     >
       {children}

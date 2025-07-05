@@ -20,4 +20,12 @@ router.put("/:id", authMiddleware, lecturaController.actualizarLectura);
 // Eliminar una lectura
 router.delete("/:id", authMiddleware, lecturaController.eliminarLectura);
 
+// Reseñas de lecturas
+router.put(
+  "/:id/review",
+  authMiddleware,
+  lecturaController.agregarOModificarResena
+);
+router.delete("/:id/review", authMiddleware, lecturaController.eliminarResena);
+
 module.exports = router;

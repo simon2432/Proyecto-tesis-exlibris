@@ -5,6 +5,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   Platform,
+  Alert,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { useUser } from "../contexts/UserContext";
@@ -15,7 +16,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function FavoritosEditar() {
   const router = useRouter();
-  const { user } = useUser();
+  const { user, removeFavorite } = useUser();
   const [lecturas, setLecturas] = useState<any[]>([]);
 
   useEffect(() => {
@@ -28,6 +29,34 @@ export default function FavoritosEditar() {
     };
     fetchLecturas();
   }, []);
+
+  const handleDeleteFavorite = (index: number) => {
+    const libro = (user as any)?.librosFavoritos?.[index];
+    if (!libro || !removeFavorite) return;
+
+    const confirmDelete = () => {
+      removeFavorite(index);
+    };
+
+    if (Platform.OS === "web") {
+      if (
+        window.confirm(
+          `¿Estás seguro de que quieres eliminar "${libro.titulo}" de tus favoritos?`
+        )
+      ) {
+        confirmDelete();
+      }
+    } else {
+      Alert.alert(
+        "Eliminar favorito",
+        `¿Estás seguro de que quieres eliminar "${libro.titulo}" de tus favoritos?`,
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Eliminar", style: "destructive", onPress: confirmDelete },
+        ]
+      );
+    }
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFF" }}>
@@ -44,29 +73,41 @@ export default function FavoritosEditar() {
         {[0, 1, 2].map((idx) => {
           const libro = (user as any)?.librosFavoritos?.[idx] ?? null;
           return (
-            <TouchableOpacity
-              key={idx}
-              onPress={() =>
-                router.push({
-                  pathname: "/favoritos-buscar",
-                  params: { slot: idx },
-                } as any)
-              }
-            >
-              {libro && libro.portada ? (
-                <ExpoImage
-                  source={{
-                    uri: libro.portada || "https://placehold.co/90x120",
-                  }}
-                  style={styles.bookCover}
-                  placeholder="https://placehold.co/90x120"
-                  contentFit="cover"
-                  transition={100}
-                />
-              ) : (
-                <View style={styles.bookCover} />
+            <View key={idx} style={styles.bookContainer}>
+              <TouchableOpacity
+                onPress={() =>
+                  router.push({
+                    pathname: "/favoritos-buscar",
+                    params: { slot: idx },
+                  } as any)
+                }
+              >
+                {libro && libro.portada ? (
+                  <ExpoImage
+                    source={{
+                      uri: libro.portada || "https://placehold.co/90x120",
+                    }}
+                    style={styles.bookCover}
+                    placeholder="https://placehold.co/90x120"
+                    contentFit="cover"
+                    transition={100}
+                  />
+                ) : (
+                  <View style={styles.bookCover} />
+                )}
+              </TouchableOpacity>
+              {libro && (
+                <TouchableOpacity
+                  style={styles.deleteButton}
+                  onPress={() => handleDeleteFavorite(idx)}
+                >
+                  <View style={styles.deleteIconContainer}>
+                    <View style={styles.deleteIconTop} />
+                    <View style={styles.deleteIconBody} />
+                  </View>
+                </TouchableOpacity>
               )}
-            </TouchableOpacity>
+            </View>
           );
         })}
       </View>
@@ -112,6 +153,9 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     gap: 18,
   },
+  bookContainer: {
+    position: "relative",
+  },
   bookCover: {
     width: 90,
     height: 130,
@@ -123,6 +167,43 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 6,
     elevation: 4,
+  },
+  deleteButton: {
+    position: "absolute",
+    top: -8,
+    right: 0,
+    backgroundColor: "#666666",
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
+    elevation: 3,
+  },
+  deleteIconContainer: {
+    width: 12,
+    height: 12,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  deleteIconTop: {
+    width: 8,
+    height: 1,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 0.5,
+    marginBottom: 1,
+  },
+  deleteIconBody: {
+    width: 10,
+    height: 8,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 1,
+    borderWidth: 1,
+    borderColor: "#FFFFFF",
   },
   subtitulo: {
     color: "#888",
