@@ -35,6 +35,7 @@ model Lectura {
   fechaFin     DateTime?
   reviewComment  String?   // Máx 300 caracteres
   reviewRating   Int?      // de 1 a 5
+  esSpoiler      Boolean?  // Indica si la reseña contiene spoilers
   user         User     @relation(fields: [userId], references: [id])
   portada      String?  // URL de la portada
 }

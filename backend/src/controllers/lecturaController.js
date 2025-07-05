@@ -156,6 +156,44 @@ exports.limpiarCachePortada = (req, res) => {
   res.json({ ok: true });
 };
 
+// Función auxiliar para detectar spoilers en reseñas usando OpenAI
+const detectarSpoilerEnResena = async (reviewComment, bookInfo) => {
+  try {
+    const response = await axios.post(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        model: "gpt-3.5-turbo",
+        messages: [
+          {
+            role: "system",
+            content:
+              "Eres un experto en literatura. Dada la siguiente reseña y la información del libro, responde solo con 'spoiler' o 'no spoiler' según si la reseña revela detalles importantes de la trama. No expliques tu respuesta.",
+          },
+          {
+            role: "user",
+            content: `Libro: ${bookInfo}\nReseña: ${reviewComment}`,
+          },
+        ],
+        max_tokens: 10,
+        temperature: 0,
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+        },
+      }
+    );
+    const respuesta = response.data.choices[0].message.content
+      .trim()
+      .toLowerCase();
+    return respuesta.includes("spoiler") && !respuesta.includes("no spoiler");
+  } catch (error) {
+    console.error("Error detectando spoiler en reseña:", error);
+    return null; // No se pudo determinar
+  }
+};
+
 // Agregar o modificar reseña de una lectura
 exports.agregarOModificarResena = async (req, res) => {
   try {
@@ -179,10 +217,23 @@ exports.agregarOModificarResena = async (req, res) => {
         .status(400)
         .json({ error: "Solo puedes reseñar lecturas finalizadas" });
 
-    const updated = await prisma.lectura.update({
+    // Guardar la reseña primero
+    let updated = await prisma.lectura.update({
       where: { id: Number(id) },
       data: { reviewRating, reviewComment },
     });
+
+    // Preparar info del libro para el prompt
+    const bookInfo = `Título: ${updated.libroId}`; // Puedes enriquecer con más datos si los tienes
+    // Detectar spoiler
+    const esSpoiler = await detectarSpoilerEnResena(reviewComment, bookInfo);
+    // Actualizar el campo esSpoiler si se pudo determinar
+    if (esSpoiler !== null) {
+      updated = await prisma.lectura.update({
+        where: { id: Number(id) },
+        data: { esSpoiler },
+      });
+    }
     res.json(updated);
   } catch (err) {
     res.status(500).json({ error: "Error al guardar reseña" });
