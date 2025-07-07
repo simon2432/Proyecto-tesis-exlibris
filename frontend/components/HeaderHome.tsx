@@ -20,11 +20,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 interface HeaderHomeProps {
   onSearch?: (text: string) => void;
-  onFilterChange?: (filters: {
-    libro: boolean;
-    autor: boolean;
-    genero: boolean;
-  }) => void;
+  onFilterChange?: (filter: string | null) => void;
   onBookSelect?: (book: any) => void;
 }
 
@@ -34,20 +30,24 @@ export default function HeaderHome({
   onBookSelect,
 }: HeaderHomeProps) {
   const [filtrosVisible, setFiltrosVisible] = useState(false);
-  const [checked, setChecked] = useState({
-    libro: false,
-    autor: false,
-    genero: false,
-  });
+  const [selectedFilter, setSelectedFilter] = useState<string | null>(null);
   const [searchText, setSearchText] = useState("");
   const [showDropdown, setShowDropdown] = useState(false);
   const { results, loading, searchBooks, searchInfo, clearResults } =
     useGoogleBooksSearch();
 
-  const toggleCheck = (key: "libro" | "autor" | "genero") => {
-    const newChecked = { ...checked, [key]: !checked[key] };
-    setChecked(newChecked);
-    onFilterChange?.(newChecked);
+  const toggleFilter = (filter: "libro" | "autor" | "genero") => {
+    const newFilter = selectedFilter === filter ? null : filter;
+    setSelectedFilter(newFilter);
+    onFilterChange?.(newFilter);
+    // Cerrar el modal después de seleccionar
+    setFiltrosVisible(false);
+
+    // Si hay texto de búsqueda, ejecutar búsqueda con el nuevo filtro
+    if (searchText.length >= 2) {
+      searchBooks(searchText, newFilter);
+      setShowDropdown(true);
+    }
   };
 
   const handleSearchChange = (text: string) => {
@@ -57,14 +57,19 @@ export default function HeaderHome({
   };
 
   const handleSearchPress = () => {
-    console.log("[HeaderHome] handleSearchPress:", searchText);
+    console.log(
+      "[HeaderHome] handleSearchPress:",
+      searchText,
+      "con filtro:",
+      selectedFilter
+    );
     console.log(
       "[HeaderHome] searchBooks es:",
       typeof searchBooks,
       searchBooks
     );
     if (searchText.length >= 2) {
-      searchBooks(searchText);
+      searchBooks(searchText, selectedFilter);
       setShowDropdown(true);
     } else {
       setShowDropdown(false);
@@ -138,10 +143,25 @@ export default function HeaderHome({
           onSubmitEditing={handleSearchPress}
         />
         <TouchableOpacity
-          style={styles.filterButton}
+          style={[
+            styles.filterButton,
+            selectedFilter && styles.filterButtonActive,
+          ]}
           onPress={() => setFiltrosVisible(true)}
         >
-          <Text style={styles.filterButtonText}>Filtros</Text>
+          <Text style={styles.filterButtonText}>
+            {selectedFilter
+              ? selectedFilter.charAt(0).toUpperCase() + selectedFilter.slice(1)
+              : "Filtros"}
+          </Text>
+          {selectedFilter && (
+            <Ionicons
+              name="checkmark-circle"
+              size={12}
+              color="#f3e8da"
+              style={{ marginLeft: 4 }}
+            />
+          )}
         </TouchableOpacity>
       </View>
       {/* Modal de resultados de búsqueda */}
@@ -231,24 +251,52 @@ export default function HeaderHome({
             onPress={() => setFiltrosVisible(false)}
           >
             <View style={styles.filtrosModal}>
-              <Text style={styles.filtrosTitle}>Filtrar por:</Text>
-              {(["libro", "autor", "genero"] as const).map((key) => (
+              <Text style={styles.filtrosTitle}>Selecciona un filtro:</Text>
+              {(["libro", "autor", "genero"] as const).map((filter) => (
                 <TouchableOpacity
-                  key={key}
-                  style={styles.checkRow}
-                  onPress={() => toggleCheck(key)}
+                  key={filter}
+                  style={[
+                    styles.checkRow,
+                    selectedFilter === filter && styles.selectedRow,
+                  ]}
+                  onPress={() => toggleFilter(filter)}
                   activeOpacity={0.7}
                 >
                   <Ionicons
-                    name={checked[key] ? "checkbox" : "square-outline"}
+                    name={
+                      selectedFilter === filter
+                        ? "radio-button-on"
+                        : "radio-button-off"
+                    }
                     size={22}
-                    color="#4b2e1e"
+                    color={selectedFilter === filter ? "#7c4a2d" : "#4b2e1e"}
                   />
-                  <Text style={styles.checkLabel}>
-                    {key.charAt(0).toUpperCase() + key.slice(1)}
+                  <Text
+                    style={[
+                      styles.checkLabel,
+                      selectedFilter === filter && styles.selectedLabel,
+                    ]}
+                  >
+                    {filter.charAt(0).toUpperCase() + filter.slice(1)}
                   </Text>
                 </TouchableOpacity>
               ))}
+              {selectedFilter && (
+                <TouchableOpacity
+                  style={[styles.checkRow, { marginTop: 10 }]}
+                  onPress={() => {
+                    setSelectedFilter(null);
+                    onFilterChange?.(null);
+                    setFiltrosVisible(false);
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle" size={22} color="#e74c3c" />
+                  <Text style={[styles.checkLabel, { color: "#e74c3c" }]}>
+                    Limpiar filtro
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
           </Pressable>
         </View>
@@ -337,6 +385,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginLeft: 8,
   },
+  filterButtonActive: {
+    backgroundColor: "#7c4a2d",
+  },
   filterButtonText: {
     color: "#f3e8da",
     fontWeight: "bold",
@@ -381,6 +432,16 @@ const styles = StyleSheet.create({
     marginLeft: 10,
     fontSize: 16,
     color: "#4b2e1e",
+  },
+  selectedRow: {
+    backgroundColor: "#f3e8da",
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  selectedLabel: {
+    color: "#7c4a2d",
+    fontWeight: "bold",
   },
   dropdownModalContent: {
     backgroundColor: "#fff",

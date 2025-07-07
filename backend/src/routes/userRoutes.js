@@ -28,5 +28,6 @@ router.post(
 
 router.get("/favoritos", authMiddleware, userController.getFavoritos);
 router.put("/favoritos", authMiddleware, userController.updateFavoritos);
+router.put("/editar", authMiddleware, userController.editarPerfil);
 
 module.exports = router;

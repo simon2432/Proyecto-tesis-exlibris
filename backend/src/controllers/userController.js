@@ -1,6 +1,7 @@
 const path = require("path");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const bcrypt = require("bcryptjs");
 
 // POST /api/usuario/foto-perfil
 exports.uploadProfilePhoto = async (req, res) => {
@@ -52,5 +53,38 @@ exports.updateFavoritos = async (req, res) => {
     res.json({ librosFavoritos: user.librosFavoritos });
   } catch (err) {
     res.status(500).json({ error: "Error al actualizar favoritos" });
+  }
+};
+
+// PUT /api/usuarios/editar
+exports.editarPerfil = async (req, res) => {
+  try {
+    if (!req.userId) return res.status(401).json({ error: "No autenticado" });
+    const { nombre, email, fotoPerfil, passwordActual, passwordNueva } =
+      req.body;
+    const data = {};
+    if (nombre) data.nombre = nombre;
+    if (email) data.email = email;
+    if (fotoPerfil) data.fotoPerfil = fotoPerfil;
+    // Si se quiere cambiar la contraseña
+    if (passwordActual && passwordNueva) {
+      const user = await prisma.user.findUnique({ where: { id: req.userId } });
+      if (!user)
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      const valid = await bcrypt.compare(passwordActual, user.password);
+      if (!valid)
+        return res.status(400).json({ error: "Contraseña actual incorrecta" });
+      data.password = await bcrypt.hash(passwordNueva, 10);
+    }
+    // Actualizar usuario
+    const user = await prisma.user.update({
+      where: { id: req.userId },
+      data,
+    });
+    // No enviar password al frontend
+    const { password, ...userData } = user;
+    res.json({ user: userData });
+  } catch (err) {
+    res.status(500).json({ error: "Error al editar perfil" });
   }
 };

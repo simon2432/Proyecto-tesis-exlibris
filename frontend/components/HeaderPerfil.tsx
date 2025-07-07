@@ -53,9 +53,9 @@ export default function HeaderPerfil() {
   };
 
   const MENU_OPTIONS = [
-    { label: "Editar perfil", onPress: () => {} },
-    { label: "Soporte", onPress: () => {} },
-    { label: "Políticas", onPress: () => {} },
+    { label: "Editar perfil", onPress: () => router.push("/editar-perfil") },
+    { label: "Soporte", onPress: () => router.push("/soporte") },
+    { label: "Políticas", onPress: () => router.push("/politicas") },
     { label: "Cerrar sesión", onPress: handleLogout },
   ];
 

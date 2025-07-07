@@ -76,12 +76,9 @@ export default function HomeScreen() {
     // (ya no es necesario para Google Books, pero se deja para filtros futuros)
   };
 
-  const handleFilterChange = (filters: {
-    libro: boolean;
-    autor: boolean;
-    genero: boolean;
-  }) => {
-    // Aquí puedes implementar la lógica de filtros
+  const handleFilterChange = (filter: string | null) => {
+    // El filtro se maneja en el HeaderHome
+    console.log("Filtro seleccionado:", filter);
   };
 
   const handleBookSelect = (book: any) => {

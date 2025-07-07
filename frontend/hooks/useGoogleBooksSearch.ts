@@ -17,76 +17,90 @@ export function useGoogleBooksSearch() {
   } | null>(null);
   const debounceTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const searchBooks = useCallback(async (query: string) => {
-    console.log("[Busqueda] searchBooks ejecutado con query:", query);
-    try {
-      if (!query || query.trim().length < 2) {
-        setResults([]);
-        setSearchInfo(null);
-        return;
-      }
-
-      const trimmedQuery = query.trim().toLowerCase();
-
-      // Verificar cache primero
-      if (searchCache.has(trimmedQuery)) {
-        const cachedData = searchCache.get(trimmedQuery);
-        setResults(cachedData.books || []);
-        setSearchInfo(cachedData.searchInfo || null);
-        return;
-      }
-
-      setLoading(true);
+  const searchBooks = useCallback(
+    async (query: string, filter?: string | null) => {
+      console.log(
+        "[Busqueda] searchBooks ejecutado con query:",
+        query,
+        "y filtro:",
+        filter
+      );
       try {
-        const res = await axios.get(`${API_BASE_URL}/books/search`, {
-          params: { q: trimmedQuery },
-        });
+        if (!query || query.trim().length < 2) {
+          setResults([]);
+          setSearchInfo(null);
+          return;
+        }
 
-        let data = res.data;
-        // Si la respuesta es string, intenta parsear como JSON
-        if (typeof data === "string") {
-          try {
-            data = JSON.parse(data);
-          } catch (e) {
-            console.log(
-              "[Busqueda] Error parseando respuesta como JSON:",
-              e,
-              data
-            );
-          }
+        const trimmedQuery = query.trim().toLowerCase();
+        const cacheKey = `${trimmedQuery}-${filter || "general"}`;
+
+        // Verificar cache primero
+        if (searchCache.has(cacheKey)) {
+          const cachedData = searchCache.get(cacheKey);
+          setResults(cachedData.books || []);
+          setSearchInfo(cachedData.searchInfo || null);
+          return;
         }
-        // Si no tiene books pero tiene items, úsalo igual
-        let books = data.books || data.items || [];
-        if (!Array.isArray(books)) books = [];
-        console.log("[Busqueda] Respuesta backend:", data);
-        const searchInfo = {
-          totalFound: data.totalFound || books.length,
-          totalReturned: data.totalReturned || books.length,
-        };
-        setResults(books);
-        setSearchInfo(searchInfo);
-        // Guardar en cache (máximo 50 búsquedas)
-        if (searchCache.size > 50) {
-          const firstKey = searchCache.keys().next().value;
-          if (firstKey) {
-            searchCache.delete(firstKey);
+
+        setLoading(true);
+        try {
+          const params: any = { q: trimmedQuery };
+          if (filter) {
+            params.filter = filter;
           }
+
+          const res = await axios.get(`${API_BASE_URL}/books/search`, {
+            params,
+          });
+
+          let data = res.data;
+          // Si la respuesta es string, intenta parsear como JSON
+          if (typeof data === "string") {
+            try {
+              data = JSON.parse(data);
+            } catch (e) {
+              console.log(
+                "[Busqueda] Error parseando respuesta como JSON:",
+                e,
+                data
+              );
+            }
+          }
+          // Si no tiene books pero tiene items, úsalo igual
+          let books = data.books || data.items || [];
+          if (!Array.isArray(books)) books = [];
+          console.log("[Busqueda] Respuesta backend:", data);
+          const searchInfo = {
+            totalFound: data.totalFound || books.length,
+            totalReturned: data.totalReturned || books.length,
+          };
+          setResults(books);
+          setSearchInfo(searchInfo);
+          // Guardar en cache (máximo 50 búsquedas)
+          if (searchCache.size > 50) {
+            const firstKey = searchCache.keys().next().value;
+            if (firstKey) {
+              searchCache.delete(firstKey);
+            }
+          }
+          searchCache.set(cacheKey, { books, searchInfo });
+        } catch (e) {
+          setResults([]);
+          setSearchInfo(null);
+          console.log("[Busqueda] Error en llamada axios:", e);
         }
-        searchCache.set(trimmedQuery, { books, searchInfo });
-      } catch (e) {
-        setResults([]);
-        setSearchInfo(null);
-        console.log("[Busqueda] Error en llamada axios:", e);
+        setLoading(false);
+      } catch (err) {
+        console.log("[Busqueda] Error inesperado en searchBooks:", err);
       }
-      setLoading(false);
-    } catch (err) {
-      console.log("[Busqueda] Error inesperado en searchBooks:", err);
-    }
-  }, []);
+    },
+    []
+  );
 
   // Función con debouncing para búsqueda automática
   const searchBooksDebounced = useCallback(
-    (query: string) => {
+    (query: string, filter?: string | null) => {
       // Cancelar búsqueda anterior si existe
       if (debounceTimeoutRef.current) {
         clearTimeout(debounceTimeoutRef.current);
@@ -94,7 +108,7 @@ export function useGoogleBooksSearch() {
 
       // Nueva búsqueda con delay de 300ms
       debounceTimeoutRef.current = setTimeout(() => {
-        searchBooks(query);
+        searchBooks(query, filter);
       }, 300);
     },
     [searchBooks]

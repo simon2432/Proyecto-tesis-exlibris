@@ -28,4 +28,7 @@ router.put(
 );
 router.delete("/:id/review", authMiddleware, lecturaController.eliminarResena);
 
+// Obtener todas las reseñas de un libro
+router.get("/reviews/:libroId", lecturaController.getResenasPorLibro);
+
 module.exports = router;

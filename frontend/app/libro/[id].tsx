@@ -14,6 +14,8 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import axios from "axios";
 import { API_BASE_URL } from "../../constants/ApiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { Image as ExpoImage } from "expo-image";
+import { BlurView } from "expo-blur";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -26,6 +28,14 @@ export default function LibroDetalleScreen() {
   const [descripcionGenerada, setDescripcionGenerada] = useState(
     libro.descriptionGenerated === "true" || libro.descriptionGenerated === true
   );
+  const [resenas, setResenas] = useState<any[]>([]);
+  const [spoilerVisible, setSpoilerVisible] = useState<{
+    [id: number]: boolean;
+  }>({});
+  const [promedio, setPromedio] = useState<number>(0);
+  const [total, setTotal] = useState<number>(0);
+  const [userId, setUserId] = useState<number | null>(null);
+  const [avatarError, setAvatarError] = useState<{ [id: number]: boolean }>({});
 
   useEffect(() => {
     if (!libro.description || libro.description.trim() === "") {
@@ -51,6 +61,30 @@ export default function LibroDetalleScreen() {
         })
         .catch(() => {});
     }
+    // Obtener userId actual
+    AsyncStorage.getItem("user").then((user) => {
+      if (user) {
+        try {
+          const parsed = JSON.parse(user);
+          setUserId(parsed.id);
+        } catch {}
+      }
+    });
+    // Fetch reseñas
+    axios.get(`${API_BASE_URL}/lecturas/reviews/${libro.id}`).then((res) => {
+      setResenas(res.data.resenas || []);
+      if (res.data.resenas && res.data.resenas.length > 0) {
+        const sum = res.data.resenas.reduce(
+          (acc: number, r: any) => acc + (r.reviewRating || 0),
+          0
+        );
+        setPromedio(sum / res.data.resenas.length);
+        setTotal(res.data.resenas.length);
+      } else {
+        setPromedio(0);
+        setTotal(0);
+      }
+    });
   }, [
     libro.title,
     libro.authors,
@@ -60,6 +94,7 @@ export default function LibroDetalleScreen() {
     libro.categories,
     libro.language,
     libro.pageCount,
+    libro.id,
   ]);
 
   const handleAgregarLectura = async () => {
@@ -92,6 +127,19 @@ export default function LibroDetalleScreen() {
         <Text style={styles.bold}>{label}:</Text> {value}
       </Text>
     );
+  };
+
+  // Función para obtener la URL absoluta de la foto de perfil
+  const getFotoPerfilUrl = (fotoPerfil: string | null | undefined) => {
+    if (!fotoPerfil) return require("../../assets/images/perfil.png");
+    if (fotoPerfil.startsWith("http")) return { uri: fotoPerfil };
+    // Si es relativa, prepende el dominio del backend
+    return {
+      uri: `${API_BASE_URL.replace(/\/$/, "")}/${fotoPerfil.replace(
+        /^\//,
+        ""
+      )}`,
+    };
   };
 
   return (
@@ -138,12 +186,155 @@ export default function LibroDetalleScreen() {
           </>
         )}
 
-        <Text style={styles.sectionTitle}>Reseñas</Text>
-        <View style={styles.reviewsPlaceholder}>
-          <Text style={{ color: "#a08b7d", fontStyle: "italic" }}>
-            Aquí aparecerán las reseñas de los usuarios.
-          </Text>
-        </View>
+        <Text style={styles.sectionTitle}>
+          Reseñas {total > 0 ? total : null}
+        </Text>
+        {total === 0 && (
+          <View style={styles.reviewsPlaceholder}>
+            <Text style={{ color: "#a08b7d", fontStyle: "italic" }}>
+              Aquí aparecerán las reseñas de los usuarios.
+            </Text>
+          </View>
+        )}
+        {total > 0 && (
+          <View style={{ marginHorizontal: 18, marginBottom: 24 }}>
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                marginBottom: 8,
+              }}
+            >
+              <Text
+                style={{
+                  fontWeight: "bold",
+                  color: "#3B2412",
+                  fontSize: 16,
+                  marginRight: 8,
+                }}
+              >
+                Valoración promedio:
+              </Text>
+              {[1, 2, 3, 4, 5].map((star) => (
+                <Text
+                  key={star}
+                  style={{
+                    fontSize: 18,
+                    color: promedio >= star ? "#FFD700" : "#CCC",
+                  }}
+                >
+                  ★
+                </Text>
+              ))}
+              <Text style={{ marginLeft: 8, color: "#3B2412", fontSize: 15 }}>
+                {promedio.toFixed(1)}
+              </Text>
+            </View>
+            <ScrollView style={{ maxHeight: 350 }}>
+              {resenas.map((r) => (
+                <View
+                  key={r.id}
+                  style={[
+                    styles.reviewCard,
+                    userId === r.userId && styles.reviewCardOwn,
+                  ]}
+                >
+                  <View
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      marginBottom: 4,
+                    }}
+                  >
+                    <ExpoImage
+                      source={
+                        avatarError[r.id] || !r.fotoPerfil
+                          ? require("../../assets/images/perfil.png")
+                          : getFotoPerfilUrl(r.fotoPerfil)
+                      }
+                      style={styles.reviewAvatar}
+                      contentFit="cover"
+                      onError={() =>
+                        setAvatarError((e) => ({ ...e, [r.id]: true }))
+                      }
+                    />
+                    <Text style={styles.reviewUser}>
+                      {r.nombre || "Usuario"}
+                    </Text>
+                    <View style={{ flexDirection: "row", marginLeft: 8 }}>
+                      {[1, 2, 3, 4, 5].map((star) => (
+                        <Text
+                          key={star}
+                          style={{
+                            fontSize: 15,
+                            color: r.reviewRating >= star ? "#FFD700" : "#CCC",
+                          }}
+                        >
+                          ★
+                        </Text>
+                      ))}
+                    </View>
+                  </View>
+                  <View style={{ position: "relative" }}>
+                    {r.esSpoiler ? (
+                      <TouchableOpacity
+                        activeOpacity={1}
+                        onPress={() =>
+                          setSpoilerVisible((s) => ({ ...s, [r.id]: !s[r.id] }))
+                        }
+                        style={{ minHeight: 36 }}
+                      >
+                        <Text
+                          style={[
+                            styles.reviewText,
+                            {
+                              color: "#3B2412",
+                              opacity: spoilerVisible[r.id] ? 1 : 0.3,
+                            },
+                          ]}
+                        >
+                          {r.reviewComment}
+                        </Text>
+                        {!spoilerVisible[r.id] && (
+                          <BlurView
+                            intensity={100}
+                            tint="dark"
+                            style={[
+                              StyleSheet.absoluteFill,
+                              {
+                                borderRadius: 8,
+                                overflow: "hidden",
+                                justifyContent: "center",
+                                alignItems: "center",
+                                backgroundColor: "rgba(60,60,60,0.85)",
+                              },
+                            ]}
+                            pointerEvents="none"
+                          >
+                            <Text
+                              style={{
+                                color: "#F8F2E9",
+                                fontWeight: "bold",
+                                fontSize: 22,
+                                textShadowColor: "rgba(0,0,0,0.4)",
+                                textShadowOffset: { width: 0, height: 2 },
+                                textShadowRadius: 4,
+                              }}
+                            >
+                              Alerta de espoiler
+                            </Text>
+                          </BlurView>
+                        )}
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={styles.reviewText}>{r.reviewComment}</Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -253,5 +444,32 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     padding: 18,
+  },
+  reviewCard: {
+    backgroundColor: "#FFF4E4",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  reviewCardOwn: {
+    backgroundColor: "#FFF4E4",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  reviewAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  reviewUser: {
+    fontSize: 15,
+    fontWeight: "bold",
+    color: "#3B2412",
+  },
+  reviewText: {
+    fontSize: 15,
+    color: "#3B2412",
   },
 });

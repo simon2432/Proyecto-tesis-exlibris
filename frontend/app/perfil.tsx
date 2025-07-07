@@ -206,43 +206,27 @@ export default function PerfilScreen() {
           </TouchableOpacity>
         </View>
         <View style={styles.profileSection}>
-          <TouchableOpacity onPress={handlePickImage} disabled={uploading}>
-            <ExpoImage
-              source={{
-                uri: user?.fotoPerfil
-                  ? `${API_BASE_URL}${user.fotoPerfil}?t=${Date.now()}`
-                  : "https://placehold.co/100x100",
-              }}
-              style={styles.profileImage}
-              placeholder="https://placehold.co/100x100"
-              contentFit="cover"
-              transition={200}
-            />
-            {uploading && (
-              <View
-                style={{
-                  position: "absolute",
-                  left: 0,
-                  right: 0,
-                  top: 0,
-                  bottom: 0,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: "rgba(255,255,255,0.6)",
-                  borderRadius: 45,
-                }}
-              >
-                <ActivityIndicator size="large" color="#7c4a2d" />
-              </View>
-            )}
-          </TouchableOpacity>
+          <ExpoImage
+            source={{
+              uri: user?.fotoPerfil
+                ? `${API_BASE_URL}${user.fotoPerfil}?t=${Date.now()}`
+                : "https://placehold.co/100x100",
+            }}
+            style={styles.profileImage}
+            placeholder="https://placehold.co/100x100"
+            contentFit="cover"
+            transition={200}
+          />
           <Text style={styles.profileName}>{user?.nombre || "Usuario"}</Text>
           <Text style={styles.profileGenre}>
             Género más leído:{" "}
             <Text style={{ fontWeight: "bold" }}>Ciencia ficción</Text>
           </Text>
           <Text style={styles.profileBooks}>
-            Libros leídos: <Text style={{ fontWeight: "bold" }}>244</Text>
+            Libros leídos:{" "}
+            <Text style={{ fontWeight: "bold" }}>
+              {lecturas.filter((l) => l.fechaFin).length}
+            </Text>
           </Text>
         </View>
         <View style={styles.sectionRow}>

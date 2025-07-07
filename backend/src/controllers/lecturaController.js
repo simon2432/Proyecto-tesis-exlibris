@@ -261,3 +261,44 @@ exports.eliminarResena = async (req, res) => {
     res.status(500).json({ error: "Error al eliminar reseña" });
   }
 };
+
+// Obtener todas las reseñas de un libro (por libroId), incluyendo datos del usuario
+exports.getResenasPorLibro = async (req, res) => {
+  try {
+    const { libroId } = req.params;
+    console.log("[Reseñas] libroId recibido:", libroId);
+    if (!libroId) return res.status(400).json({ error: "Falta libroId" });
+    const lecturas = await prisma.lectura.findMany({
+      where: {
+        libroId: String(libroId),
+        reviewRating: { not: null },
+        reviewComment: { not: null },
+      },
+      orderBy: { fechaFin: "desc" },
+      include: {
+        user: {
+          select: {
+            nombre: true,
+            fotoPerfil: true,
+            id: true,
+          },
+        },
+      },
+    });
+    console.log("[Reseñas] lecturas encontradas:", lecturas.length);
+    // Mapear a formato de reseña
+    const resenas = lecturas.map((l) => ({
+      id: l.id,
+      userId: l.user.id,
+      nombre: l.user.nombre,
+      fotoPerfil: l.user.fotoPerfil,
+      reviewRating: l.reviewRating,
+      reviewComment: l.reviewComment,
+      esSpoiler: l.esSpoiler,
+      fecha: l.fechaFin,
+    }));
+    res.json({ resenas });
+  } catch (err) {
+    res.status(500).json({ error: "Error al obtener reseñas" });
+  }
+};

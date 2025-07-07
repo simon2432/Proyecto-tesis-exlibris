@@ -19,6 +19,7 @@ export interface User {
   ubicacion?: string;
   fotoPerfil?: string;
   librosFavoritos?: LibroFavorito[];
+  fechaRegistro?: string;
 }
 
 export const UserContext = createContext<{

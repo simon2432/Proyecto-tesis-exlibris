@@ -59,24 +59,73 @@ const titleMatchesSearch = (title, searchQuery) => {
   return searchWords.some((word) => titleLower.includes(word));
 };
 
+// Función para verificar si un autor coincide con la búsqueda
+const authorMatchesSearch = (authors, searchQuery) => {
+  if (
+    !authors ||
+    !Array.isArray(authors) ||
+    authors.length === 0 ||
+    !searchQuery
+  )
+    return false;
+
+  const searchQueryLower = searchQuery.toLowerCase().trim();
+
+  return authors.some((author) => {
+    const authorLower = author.toLowerCase();
+
+    // Búsqueda simple: si el término de búsqueda está contenido en el nombre del autor
+    return authorLower.includes(searchQueryLower);
+  });
+};
+
 exports.searchGoogleBooks = async (req, res) => {
-  const { q, generateDescriptions = "false" } = req.query;
+  const { q, generateDescriptions = "false", filter } = req.query;
   if (!q)
     return res.status(400).json({ error: "Falta el término de búsqueda" });
 
+  // Verificar que la API key esté configurada
+  if (!GOOGLE_BOOKS_API_KEY) {
+    console.error(
+      "[GoogleBooks] Error: GOOGLE_BOOKS_API_KEY no está configurada"
+    );
+    return res
+      .status(500)
+      .json({ error: "Error de configuración del servidor" });
+  }
+
   try {
-    console.log("[GoogleBooks] Buscando:", q);
+    console.log("[GoogleBooks] Buscando:", q, "con filtro:", filter);
+
+    // Construir query según el filtro seleccionado
+    let searchQuery = q;
+    if (filter === "autor") {
+      // Para autores, usar búsqueda general pero más amplia
+      // La API de Google Books a veces no funciona bien con inauthor
+      searchQuery = q;
+    } else if (filter === "genero") {
+      searchQuery = `subject:"${q}"`;
+    }
+    // Para "libro" o cualquier otro valor, usar búsqueda general
+
     // Búsqueda más amplia para obtener más opciones
+    const maxResults = 40; // Máximo permitido por la API de Google Books
+
+    console.log(
+      `[GoogleBooks] Haciendo request a API con query: "${searchQuery}"`
+    );
+
     const response = await axios.get(
       `https://www.googleapis.com/books/v1/volumes?key=${GOOGLE_BOOKS_API_KEY}`,
       {
         params: {
-          q: q, // Búsqueda general para obtener más resultados
-          maxResults: 40, // Solicitar hasta 40 para tener más opciones
+          q: searchQuery, // Búsqueda específica según filtro
+          maxResults: maxResults, // Más resultados para autores
           langRestrict: "es",
           printType: "books",
           orderBy: "relevance", // Ordenar por relevancia
         },
+        timeout: 10000, // Timeout de 10 segundos
       }
     );
     console.log(
@@ -99,10 +148,63 @@ exports.searchGoogleBooks = async (req, res) => {
         image: item.volumeInfo.imageLinks.thumbnail,
       }));
 
-    // Filtrar libros que tengan las palabras de búsqueda en el título
-    const matchingBooks = allBooks.filter((book) =>
-      titleMatchesSearch(book.title, q)
-    );
+    // Filtrar libros según el tipo de búsqueda
+    let matchingBooks = allBooks;
+    if (filter === "libro" || !filter) {
+      // Para búsqueda por libro, filtrar por título
+      matchingBooks = allBooks.filter((book) =>
+        titleMatchesSearch(book.title, q)
+      );
+      console.log(
+        `[GoogleBooks] Filtro libro: ${matchingBooks.length} libros encontrados`
+      );
+    } else if (filter === "autor") {
+      // Para búsqueda por autor, filtrar inteligentemente
+      console.log(`[GoogleBooks] Buscando autor: "${q}"`);
+      console.log(
+        `[GoogleBooks] Total de libros antes del filtro: ${allBooks.length}`
+      );
+
+      const searchQueryLower = q.toLowerCase().trim();
+
+      matchingBooks = allBooks.filter((book) => {
+        if (!book.authors || book.authors.length === 0) return false;
+
+        // Verificar si algún autor contiene el término de búsqueda
+        return book.authors.some((author) =>
+          author.toLowerCase().includes(searchQueryLower)
+        );
+      });
+
+      console.log(
+        `[GoogleBooks] Filtro autor: ${matchingBooks.length} libros encontrados`
+      );
+
+      // Si no hay resultados, mostrar algunos ejemplos para debug
+      if (matchingBooks.length === 0) {
+        console.log(
+          `[GoogleBooks] No se encontraron coincidencias para "${q}"`
+        );
+        const sampleBooks = allBooks.slice(0, 3);
+        sampleBooks.forEach((book) => {
+          console.log(
+            `[GoogleBooks] Ejemplo: "${book.title}" por ${book.authors.join(
+              ", "
+            )}`
+          );
+        });
+      }
+    } else if (filter === "genero") {
+      // Para búsqueda por género, verificar que las categorías contengan el término de búsqueda
+      matchingBooks = allBooks.filter((book) =>
+        book.categories.some((category) =>
+          category.toLowerCase().includes(q.toLowerCase())
+        )
+      );
+      console.log(
+        `[GoogleBooks] Filtro género: ${matchingBooks.length} libros encontrados`
+      );
+    }
 
     // Solo generar descripciones si se solicita explícitamente
     let processedBooks = matchingBooks;
@@ -159,13 +261,46 @@ exports.searchGoogleBooks = async (req, res) => {
     });
   } catch (error) {
     console.error("Error en búsqueda:", error);
+
+    // Manejo específico de errores de axios
     if (error.response) {
       console.error("[GoogleBooks] Error response data:", error.response.data);
       console.error(
         "[GoogleBooks] Error response status:",
         error.response.status
       );
+      console.error(
+        "[GoogleBooks] Error response headers:",
+        error.response.headers
+      );
+
+      // Si es un error de la API de Google Books
+      if (error.response.status === 403) {
+        return res
+          .status(500)
+          .json({ error: "Error de autenticación con Google Books API" });
+      } else if (error.response.status === 429) {
+        return res
+          .status(500)
+          .json({ error: "Límite de consultas excedido en Google Books API" });
+      } else if (error.response.status === 400) {
+        console.error(
+          "[GoogleBooks] Error 400 - Bad Request:",
+          error.response.data
+        );
+        return res
+          .status(500)
+          .json({ error: "Error en la consulta a Google Books API" });
+      }
+    } else if (error.request) {
+      console.error("[GoogleBooks] Error request:", error.request);
+      return res
+        .status(500)
+        .json({ error: "Error de conexión con Google Books API" });
+    } else {
+      console.error("[GoogleBooks] Error:", error.message);
     }
+
     res.status(500).json({ error: "Error buscando en Google Books" });
   }
 };
