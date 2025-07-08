@@ -1,5 +1,21 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
+const multer = require("multer");
+const path = require("path");
+
+// Configuración de multer para publicaciones
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, path.join(__dirname, "../../assets/publicaciones/"));
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(null, uniqueSuffix + path.extname(file.originalname));
+  },
+});
+const upload = multer({ storage: storage });
+
+exports.uploadPublicacionImage = upload.single("imagen");
 
 exports.crearPublicacion = async (req, res) => {
   const {
@@ -11,9 +27,13 @@ exports.crearPublicacion = async (req, res) => {
     idioma,
     estadoLibro,
     precio,
-    imagenUrl,
   } = req.body;
   const vendedorId = req.userId;
+
+  let imagenUrl = null;
+  if (req.file) {
+    imagenUrl = `/assets/publicaciones/${req.file.filename}`;
+  }
 
   try {
     const nueva = await prisma.publicacion.create({
@@ -22,12 +42,13 @@ exports.crearPublicacion = async (req, res) => {
         autor,
         genero,
         editorial,
-        paginas,
+        paginas: parseInt(paginas),
         idioma,
         estadoLibro,
         precio: parseFloat(precio),
         imagenUrl,
         vendedorId,
+        estado: "activa",
       },
     });
     res.status(201).json(nueva);

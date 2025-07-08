@@ -11,6 +11,7 @@ import {
   Platform,
   Modal,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useUser } from "../contexts/UserContext";
 import { useRouter } from "expo-router";
@@ -60,80 +61,92 @@ export default function HeaderPerfil() {
   ];
 
   return (
-    <View style={styles.header}>
-      <View style={styles.headerLeft}>
-        <Image
-          source={require("../assets/images/lechuza.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-        <Text style={styles.headerTitle}>EXLIBRIS</Text>
+    <SafeAreaView style={styles.safeArea} edges={["top"]}>
+      <View style={styles.header}>
+        <View style={styles.logoContainer}>
+          <Image
+            source={require("../assets/images/logoLechuza.png")}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+        </View>
+        <View style={{ position: "relative" }}>
+          <TouchableOpacity style={styles.menuButton} onPress={toggleMenu}>
+            <Ionicons name="menu" size={32} color="#3B2412" />
+          </TouchableOpacity>
+        </View>
       </View>
-      <View style={{ position: "relative" }}>
-        <TouchableOpacity style={styles.menuButton} onPress={toggleMenu}>
-          <Ionicons name="menu" size={32} color="#3B2412" />
-        </TouchableOpacity>
-        {menuVisible && (
-          <Pressable style={styles.menuOverlay} onPress={toggleMenu}>
-            <Animated.View style={[styles.menuDropdown, { opacity: fadeAnim }]}>
-              {MENU_OPTIONS.map((option, idx) => (
-                <TouchableOpacity
-                  key={option.label}
-                  style={[
-                    styles.menuItem,
-                    idx === MENU_OPTIONS.length - 1 && { borderBottomWidth: 0 },
-                  ]}
-                  onPress={() => {
-                    setMenuVisible(false);
-                    setTimeout(() => option.onPress(), 100);
-                  }}
-                >
-                  <Text style={styles.menuItemText}>{option.label}</Text>
-                </TouchableOpacity>
-              ))}
-            </Animated.View>
-          </Pressable>
-        )}
-      </View>
-      {/* Modal de logout */}
+      {/* Menú desplegable como Modal */}
       <Modal
-        visible={showLogoutModal}
+        visible={menuVisible}
         transparent
         animationType="fade"
-        onRequestClose={cancelLogout}
+        onRequestClose={toggleMenu}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>¿Cerrar sesión?</Text>
-            <Text style={styles.modalMessage}>
-              Se cerrará tu sesión en Exlibris.
-            </Text>
-            <View style={styles.modalButtonsRow}>
+        <Pressable style={styles.menuOverlay} onPress={toggleMenu}>
+          <Animated.View style={[styles.menuDropdown, { opacity: fadeAnim }]}>
+            {MENU_OPTIONS.map((option, idx) => (
               <TouchableOpacity
-                style={styles.modalCancelBtn}
-                onPress={cancelLogout}
+                key={option.label}
+                style={[
+                  styles.menuItem,
+                  idx === MENU_OPTIONS.length - 1 && { borderBottomWidth: 0 },
+                ]}
+                onPress={() => {
+                  setMenuVisible(false);
+                  setTimeout(() => option.onPress(), 100);
+                }}
               >
-                <Text style={styles.modalCancelText}>Cancelar</Text>
+                <Text style={styles.menuItemText}>{option.label}</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalDeleteBtn}
-                onPress={confirmLogout}
-              >
-                <Text style={styles.modalDeleteText}>Cerrar sesión</Text>
-              </TouchableOpacity>
+            ))}
+          </Animated.View>
+        </Pressable>
+      </Modal>
+      {/* Modal de logout */}
+      {showLogoutModal && (
+        <Modal
+          visible={showLogoutModal}
+          transparent
+          animationType="fade"
+          onRequestClose={cancelLogout}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>¿Cerrar sesión?</Text>
+              <Text style={styles.modalMessage}>
+                Se cerrará tu sesión en Exlibris.
+              </Text>
+              <View style={styles.modalButtonsRow}>
+                <TouchableOpacity
+                  style={styles.modalCancelBtn}
+                  onPress={cancelLogout}
+                >
+                  <Text style={styles.modalCancelText}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modalDeleteBtn}
+                  onPress={confirmLogout}
+                >
+                  <Text style={styles.modalDeleteText}>Cerrar sesión</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      </Modal>
-    </View>
+        </Modal>
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    backgroundColor: "#fff4e4",
+  },
   header: {
-    backgroundColor: "#FFF4E4",
-    paddingTop: 50,
-    paddingBottom: 10,
+    backgroundColor: "#fff4e4",
+    paddingTop: Platform.OS === "android" ? 5 : Platform.OS === "web" ? 10 : 28,
+    paddingBottom: 12,
     paddingHorizontal: "4%",
     borderBottomWidth: 1,
     borderBottomColor: "#e0d3c2",
@@ -143,6 +156,18 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     zIndex: 10,
   },
+  logoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 0,
+    paddingLeft: 0,
+    position: "relative",
+    left: 0,
+    top: 0,
+    width: "auto",
+    height: 44,
+  },
   headerLeft: {
     flexDirection: "row",
     alignItems: "center",
@@ -150,7 +175,10 @@ const styles = StyleSheet.create({
   logo: {
     width: 44,
     height: 44,
-    marginTop: 4,
+    resizeMode: "contain",
+    marginTop: 0,
+    marginBottom: 20,
+    marginLeft: 0,
     marginRight: 10,
   },
   headerTitle: {

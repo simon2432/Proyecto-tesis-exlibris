@@ -18,10 +18,15 @@ import axios from "axios";
 import { API_BASE_URL } from "../../constants/ApiConfig";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  getBestQualityImage,
+  getPlaceholderImage,
+  getOptimizedImageConfig,
+} from "../../utils/imageUtils";
 
 // Precargar imagen placeholder
 const preloadPlaceholder = () => {
-  ExpoImage.prefetch("https://placehold.co/120x170");
+  ExpoImage.prefetch(getPlaceholderImage());
 };
 export default function LecturaHistorialDetalle() {
   const router = useRouter();
@@ -261,15 +266,11 @@ export default function LecturaHistorialDetalle() {
       <View style={styles.mainRow}>
         <ExpoImage
           source={{
-            uri:
-              libro?.imageLinks?.thumbnail ||
-              libro?.imageLinks?.smallThumbnail ||
-              "https://placehold.co/120x170",
+            uri: getBestQualityImage(libro?.imageLinks),
           }}
           style={styles.cover}
-          placeholder="https://placehold.co/120x170"
-          contentFit="cover"
-          transition={200}
+          placeholder={getPlaceholderImage()}
+          {...getOptimizedImageConfig()}
         />
         <View style={styles.infoCol}>
           <Text style={styles.title}>{libro?.title || "Sin título"}</Text>
@@ -1158,11 +1159,16 @@ const styles = StyleSheet.create({
     marginHorizontal: 18,
   },
   cover: {
-    width: 120,
-    height: 170,
-    borderRadius: 10,
+    width: 140,
+    height: 200,
+    borderRadius: 12,
     marginRight: 18,
     backgroundColor: "#FFF4E4",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
   },
   infoCol: {
     flex: 1,

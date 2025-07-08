@@ -13,9 +13,13 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { API_BASE_URL } from "../../constants/ApiConfig";
 import { Image as ExpoImage } from "expo-image";
+import {
+  getPlaceholderImage,
+  getOptimizedImageConfig,
+} from "../../utils/imageUtils";
 
 const { width } = Dimensions.get("window");
-const COVER_SIZE = Platform.OS === "web" ? width / 6 - 24 : width / 3 - 24;
+const COVER_SIZE = Platform.OS === "web" ? width / 4 - 16 : width / 3 - 16;
 
 export default function HistorialLectorExtendido() {
   const router = useRouter();
@@ -36,7 +40,7 @@ export default function HistorialLectorExtendido() {
         const portadasObj: { [key: string]: string } = {};
         res.data.forEach((lectura: any) => {
           portadasObj[lectura.id] =
-            lectura.portada || "https://placehold.co/90x120";
+            lectura.portada || getPlaceholderImage(180, 250);
         });
         setPortadas(portadasObj);
       } catch (error) {
@@ -110,12 +114,25 @@ export default function HistorialLectorExtendido() {
                 >
                   <ExpoImage
                     source={{
-                      uri: lectura.portada || "https://placehold.co/90x120",
+                      uri: lectura.portada || getPlaceholderImage(180, 250),
                     }}
                     style={styles.cover}
-                    placeholder="https://placehold.co/90x120"
-                    contentFit="cover"
-                    transition={100}
+                    placeholder={getPlaceholderImage(180, 250)}
+                    {...getOptimizedImageConfig()}
+                    onError={() => {
+                      setPortadas((prev) => {
+                        if (
+                          prev[lectura.id] &&
+                          prev[lectura.id] !== getPlaceholderImage(180, 250)
+                        ) {
+                          return prev;
+                        }
+                        return {
+                          ...prev,
+                          [lectura.id]: getPlaceholderImage(180, 250),
+                        };
+                      });
+                    }}
                   />
                   {!lectura.fechaFin && (
                     <View style={styles.chipLectura}>
@@ -191,19 +208,24 @@ const styles = StyleSheet.create({
   coverWrapper: {
     width: COVER_SIZE,
     height: COVER_SIZE * 1.45,
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: "#FFF4E4",
-    marginHorizontal: Platform.OS === "web" ? 10 : 2,
+    marginHorizontal: Platform.OS === "web" ? 6 : 6,
     marginBottom: 0,
     alignItems: "center",
     justifyContent: "flex-end",
     position: "relative",
     overflow: "hidden",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 5,
   },
   cover: {
     width: "100%",
     height: "100%",
-    borderRadius: 14,
+    borderRadius: 16,
     backgroundColor: "#FFF4E4",
   },
   chipLectura: {

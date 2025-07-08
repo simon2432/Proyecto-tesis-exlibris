@@ -6,3 +6,4 @@ node_modules
 
 # Ignorar fotos de perfil subidas por usuarios
 assets/fotosPerfil/
+assets/publicaciones/

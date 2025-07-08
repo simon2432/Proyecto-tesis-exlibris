@@ -19,6 +19,10 @@ import * as ImagePicker from "expo-image-picker";
 import axios from "axios";
 import { API_BASE_URL } from "../constants/ApiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  getPlaceholderImage,
+  getOptimizedImageConfig,
+} from "../utils/imageUtils";
 
 // Precargar imágenes comunes
 const preloadImages = () => {
@@ -244,11 +248,10 @@ export default function PerfilScreen() {
             return libro && libro.portada ? (
               <ExpoImage
                 key={libro.id}
-                source={{ uri: libro.portada || "https://placehold.co/90x120" }}
+                source={{ uri: libro.portada || getPlaceholderImage(90, 120) }}
                 style={styles.bookCoverPlaceholder}
-                placeholder="https://placehold.co/90x120"
-                contentFit="cover"
-                transition={100}
+                placeholder={getPlaceholderImage(90, 120)}
+                {...getOptimizedImageConfig()}
               />
             ) : (
               <View key={idx} style={styles.bookCoverPlaceholder} />
@@ -312,24 +315,23 @@ export default function PerfilScreen() {
                 <View style={{ position: "relative" }}>
                   <ExpoImage
                     source={{
-                      uri: lectura.portada || "https://placehold.co/90x120",
+                      uri: lectura.portada || getPlaceholderImage(90, 120),
                     }}
                     style={styles.bookCoverPlaceholder}
-                    placeholder="https://placehold.co/90x120"
-                    contentFit="cover"
-                    transition={100}
+                    placeholder={getPlaceholderImage(90, 120)}
+                    {...getOptimizedImageConfig()}
                     priority="low"
                     onError={() => {
                       setPortadas((prev) => {
                         if (
                           prev[lectura.id] &&
-                          prev[lectura.id] !== "https://placehold.co/90x120"
+                          prev[lectura.id] !== getPlaceholderImage(90, 120)
                         ) {
                           return prev;
                         }
                         return {
                           ...prev,
-                          [lectura.id]: "https://placehold.co/90x120",
+                          [lectura.id]: getPlaceholderImage(90, 120),
                         };
                       });
                     }}

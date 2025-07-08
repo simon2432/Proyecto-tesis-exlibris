@@ -5,7 +5,11 @@ const publicacionController = require("../controllers/publicacionController");
 
 router.use(auth);
 
-router.post("/", publicacionController.crearPublicacion);
+router.post(
+  "/",
+  publicacionController.uploadPublicacionImage,
+  publicacionController.crearPublicacion
+);
 router.get("/", publicacionController.obtenerPublicaciones);
 router.get("/mis", publicacionController.obtenerMisPublicaciones);
 router.get("/:id", publicacionController.obtenerUnaPublicacion);

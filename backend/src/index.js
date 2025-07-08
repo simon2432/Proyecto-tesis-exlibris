@@ -85,6 +85,10 @@ app.use(
   "/assets/fotosPerfil",
   express.static(path.join(__dirname, "../assets/fotosPerfil"))
 );
+app.use(
+  "/assets/publicaciones",
+  express.static(path.join(__dirname, "../assets/publicaciones"))
+);
 
 // Middleware de manejo de errores (comentado temporalmente)
 // app.use((error, req, res, next) => {

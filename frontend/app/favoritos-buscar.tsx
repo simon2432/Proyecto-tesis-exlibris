@@ -15,9 +15,13 @@ import { useUser } from "../contexts/UserContext";
 import axios from "axios";
 import { API_BASE_URL } from "../constants/ApiConfig";
 import { Image as ExpoImage } from "expo-image";
+import {
+  getPlaceholderImage,
+  getOptimizedImageConfig,
+} from "../utils/imageUtils";
 
 const { width } = Dimensions.get("window");
-const COVER_SIZE = Platform.OS === "web" ? width / 6 - 24 : width / 3 - 24;
+const COVER_SIZE = Platform.OS === "web" ? width / 5 - 20 : width / 2.5 - 16;
 
 export default function FavoritosBuscar() {
   const router = useRouter();
@@ -94,12 +98,11 @@ export default function FavoritosBuscar() {
                 >
                   <ExpoImage
                     source={{
-                      uri: book.image || "https://placehold.co/90x120",
+                      uri: book.image || getPlaceholderImage(150, 200),
                     }}
                     style={styles.cover}
-                    placeholder="https://placehold.co/90x120"
-                    contentFit="cover"
-                    transition={100}
+                    placeholder={getPlaceholderImage(150, 200)}
+                    {...getOptimizedImageConfig()}
                   />
                   <Text style={styles.bookTitle} numberOfLines={2}>
                     {book.title}
@@ -183,13 +186,18 @@ const styles = StyleSheet.create({
     height: COVER_SIZE * 1.45 + 32,
     borderRadius: 14,
     backgroundColor: "#FFF4E4",
-    marginHorizontal: Platform.OS === "web" ? 10 : 2,
+    marginHorizontal: Platform.OS === "web" ? 8 : 4,
     marginBottom: 0,
     alignItems: "center",
     justifyContent: "flex-end",
     position: "relative",
     overflow: "hidden",
     paddingBottom: 32,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
   cover: {
     width: "100%",

@@ -13,6 +13,10 @@ import { Image as ExpoImage } from "expo-image";
 import axios from "axios";
 import { API_BASE_URL } from "../constants/ApiConfig";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import {
+  getPlaceholderImage,
+  getOptimizedImageConfig,
+} from "../utils/imageUtils";
 
 export default function FavoritosEditar() {
   const router = useRouter();
@@ -85,12 +89,11 @@ export default function FavoritosEditar() {
                 {libro && libro.portada ? (
                   <ExpoImage
                     source={{
-                      uri: libro.portada || "https://placehold.co/90x120",
+                      uri: libro.portada || getPlaceholderImage(90, 130),
                     }}
                     style={styles.bookCover}
-                    placeholder="https://placehold.co/90x120"
-                    contentFit="cover"
-                    transition={100}
+                    placeholder={getPlaceholderImage(90, 130)}
+                    {...getOptimizedImageConfig()}
                   />
                 ) : (
                   <View style={styles.bookCover} />
@@ -157,16 +160,16 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   bookCover: {
-    width: 90,
-    height: 130,
+    width: 100,
+    height: 145,
     borderRadius: 12,
     backgroundColor: "#FFF4E4",
     marginHorizontal: 8,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
     shadowRadius: 6,
-    elevation: 4,
+    elevation: 5,
   },
   deleteButton: {
     position: "absolute",
