@@ -34,6 +34,11 @@ export const getBestQualityImage = (imageLinks: any): string => {
     improvedUrl = `${imageUrl}${separator}zoom=2`;
   }
 
+  // Asegurar que la URL sea HTTPS
+  if (improvedUrl.startsWith("http://")) {
+    improvedUrl = improvedUrl.replace("http://", "https://");
+  }
+
   return improvedUrl;
 };
 
@@ -47,7 +52,7 @@ export const getPlaceholderImage = (
   width: number = 200,
   height: number = 280
 ): string => {
-  return `https://placehold.co/${width}x${height}`;
+  return `https://placehold.co/${width}x${height}/FFF4E4/3B2412?text=Sin+imagen`;
 };
 
 /**

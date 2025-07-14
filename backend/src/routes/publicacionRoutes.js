@@ -13,5 +13,10 @@ router.post(
 router.get("/", publicacionController.obtenerPublicaciones);
 router.get("/mis", publicacionController.obtenerMisPublicaciones);
 router.get("/:id", publicacionController.obtenerUnaPublicacion);
+router.put(
+  "/:id",
+  publicacionController.uploadPublicacionImage,
+  publicacionController.editarPublicacion
+);
 
 module.exports = router;

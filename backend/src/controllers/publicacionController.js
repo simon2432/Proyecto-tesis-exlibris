@@ -119,3 +119,44 @@ exports.obtenerMisPublicaciones = async (req, res) => {
     res.status(500).json({ error: "Error al obtener mis publicaciones" });
   }
 };
+
+exports.editarPublicacion = async (req, res) => {
+  const { id } = req.params;
+  const {
+    titulo,
+    autor,
+    genero,
+    editorial,
+    paginas,
+    idioma,
+    estadoLibro,
+    precio,
+  } = req.body;
+
+  let imagenUrl = undefined;
+  if (req.file) {
+    imagenUrl = `/assets/publicaciones/${req.file.filename}`;
+  }
+
+  try {
+    const data = {
+      titulo,
+      autor,
+      genero,
+      editorial,
+      paginas: paginas ? parseInt(paginas) : undefined,
+      idioma,
+      estadoLibro,
+      precio: precio ? parseFloat(precio) : undefined,
+    };
+    if (imagenUrl) data.imagenUrl = imagenUrl;
+    const updated = await prisma.publicacion.update({
+      where: { id: parseInt(id) },
+      data,
+    });
+    res.json(updated);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Error al editar la publicación" });
+  }
+};

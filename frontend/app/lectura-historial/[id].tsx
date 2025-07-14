@@ -26,7 +26,7 @@ import {
 
 // Precargar imagen placeholder
 const preloadPlaceholder = () => {
-  ExpoImage.prefetch(getPlaceholderImage());
+  ExpoImage.prefetch(getPlaceholderImage(160, 230));
 };
 export default function LecturaHistorialDetalle() {
   const router = useRouter();
@@ -266,11 +266,17 @@ export default function LecturaHistorialDetalle() {
       <View style={styles.mainRow}>
         <ExpoImage
           source={{
-            uri: getBestQualityImage(libro?.imageLinks),
+            uri:
+              lectura.portada ||
+              getBestQualityImage(libro?.imageLinks) ||
+              getPlaceholderImage(160, 230),
           }}
           style={styles.cover}
-          placeholder={getPlaceholderImage()}
+          placeholder={getPlaceholderImage(160, 230)}
           {...getOptimizedImageConfig()}
+          onError={() => {
+            console.log("Error cargando imagen de portada para lectura:", id);
+          }}
         />
         <View style={styles.infoCol}>
           <Text style={styles.title}>{libro?.title || "Sin título"}</Text>
@@ -1159,9 +1165,9 @@ const styles = StyleSheet.create({
     marginHorizontal: 18,
   },
   cover: {
-    width: 140,
-    height: 200,
-    borderRadius: 12,
+    width: 160,
+    height: 230,
+    borderRadius: 16,
     marginRight: 18,
     backgroundColor: "#FFF4E4",
     shadowColor: "#000",

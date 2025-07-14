@@ -13,7 +13,8 @@ const getPortadaConCache = async (libroId) => {
   const cached = portadasCache.get(libroId);
   if (
     cached &&
-    cached.portada !== "https://placehold.co/90x120" &&
+    cached.portada !==
+      "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen" &&
     Date.now() - cached.timestamp < CACHE_DURATION
   ) {
     console.log(`[Portada] libroId: ${libroId} => (cache) ${cached.portada}`);
@@ -25,12 +26,32 @@ const getPortadaConCache = async (libroId) => {
       `https://www.googleapis.com/books/v1/volumes/${libroId}?key=${GOOGLE_BOOKS_API_KEY}`,
       { timeout: 5000 }
     );
-    const imageUrl =
+    let imageUrl =
       libroRes.data.volumeInfo?.imageLinks?.thumbnail ||
       libroRes.data.volumeInfo?.imageLinks?.smallThumbnail ||
-      "https://placehold.co/90x120";
+      "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen";
 
-    if (imageUrl !== "https://placehold.co/90x120") {
+    // Mejorar la calidad de la imagen de Google Books
+    if (
+      imageUrl &&
+      imageUrl !== "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen"
+    ) {
+      if (imageUrl.includes("zoom=1")) {
+        imageUrl = imageUrl.replace("zoom=1", "zoom=2");
+      } else if (!imageUrl.includes("zoom=")) {
+        const separator = imageUrl.includes("?") ? "&" : "?";
+        imageUrl = `${imageUrl}${separator}zoom=2`;
+      }
+
+      // Asegurar que la URL sea HTTPS
+      if (imageUrl.startsWith("http://")) {
+        imageUrl = imageUrl.replace("http://", "https://");
+      }
+    }
+
+    if (
+      imageUrl !== "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen"
+    ) {
       portadasCache.set(libroId, {
         portada: imageUrl,
         timestamp: Date.now(),
@@ -40,9 +61,9 @@ const getPortadaConCache = async (libroId) => {
     return imageUrl;
   } catch {
     console.log(
-      `[Portada] libroId: ${libroId} => (error) https://placehold.co/90x120`
+      `[Portada] libroId: ${libroId} => (error) https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen`
     );
-    return "https://placehold.co/90x120";
+    return "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen";
   }
 };
 
@@ -52,13 +73,33 @@ const getPortadaGoogleBooks = async (libroId) => {
       `https://www.googleapis.com/books/v1/volumes/${libroId}?key=${GOOGLE_BOOKS_API_KEY}`,
       { timeout: 5000 }
     );
-    return (
+
+    let imageUrl =
       libroRes.data.volumeInfo?.imageLinks?.thumbnail ||
       libroRes.data.volumeInfo?.imageLinks?.smallThumbnail ||
-      "https://placehold.co/90x120"
-    );
+      "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen";
+
+    // Mejorar la calidad de la imagen de Google Books
+    if (
+      imageUrl &&
+      imageUrl !== "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen"
+    ) {
+      if (imageUrl.includes("zoom=1")) {
+        imageUrl = imageUrl.replace("zoom=1", "zoom=2");
+      } else if (!imageUrl.includes("zoom=")) {
+        const separator = imageUrl.includes("?") ? "&" : "?";
+        imageUrl = `${imageUrl}${separator}zoom=2`;
+      }
+
+      // Asegurar que la URL sea HTTPS
+      if (imageUrl.startsWith("http://")) {
+        imageUrl = imageUrl.replace("http://", "https://");
+      }
+    }
+
+    return imageUrl;
   } catch {
-    return "https://placehold.co/90x120";
+    return "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen";
   }
 };
 

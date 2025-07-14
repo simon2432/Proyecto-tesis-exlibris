@@ -13,6 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE_URL } from "../constants/ApiConfig";
+import ModalDetallePublicacion from "../components/ModalDetallePublicacion";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -21,6 +22,8 @@ export default function MisPublicaciones() {
   const [tab, setTab] = useState("activas");
   const [publicaciones, setPublicaciones] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const [selectedPublicacion, setSelectedPublicacion] = useState<any>(null);
+  const [modalVisible, setModalVisible] = useState(false);
 
   useEffect(() => {
     if (tab === "activas") {
@@ -132,7 +135,15 @@ export default function MisPublicaciones() {
           ) : (
             <View style={styles.grid}>
               {publicaciones.map((pub) => (
-                <View key={pub.id} style={styles.bookCard}>
+                <TouchableOpacity
+                  key={pub.id}
+                  style={styles.bookCard}
+                  onPress={() => {
+                    setSelectedPublicacion(pub);
+                    setModalVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                >
                   {pub.imagenUrl ? (
                     <Image
                       source={{ uri: `${API_BASE_URL}${pub.imagenUrl}` }}
@@ -149,11 +160,22 @@ export default function MisPublicaciones() {
                   <Text style={styles.pubTitle} numberOfLines={2}>
                     {pub.titulo}
                   </Text>
-                </View>
+                </TouchableOpacity>
               ))}
             </View>
           ))}
       </ScrollView>
+      <ModalDetallePublicacion
+        visible={modalVisible}
+        publicacion={selectedPublicacion}
+        onClose={() => setModalVisible(false)}
+        onEdit={() => {
+          setModalVisible(false);
+          if (selectedPublicacion) {
+            router.replace(`/editar-publicacion?id=${selectedPublicacion.id}`);
+          }
+        }}
+      />
     </View>
   );
 }
