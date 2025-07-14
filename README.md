@@ -25,6 +25,7 @@ Este repositorio contiene una aplicación móvil desarrollada con **Expo/React N
    DATABASE_URL="postgresql://USER:PASSWORD@HOST:PORT/DATABASE"
    JWT_SECRET="coloque_un_valor_seguro"
    OPENAI_API_KEY="su_clave_de_openai"
+   GOOGLE_BOOKS_API_KEY ="su_clave_de_google_books"
    PORT=3001 # puede cambiarse si es necesario
    ```
 
