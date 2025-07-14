@@ -1,4 +1,4 @@
-# Proyecto Tesis - Exlibris
+# Proyecto Tesis - EXLIBRIS
 
 ![logoLechuza](https://github.com/user-attachments/assets/d6776236-f336-4b82-bd28-698af4b7ff47)
 
