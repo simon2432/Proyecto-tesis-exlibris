@@ -28,7 +28,10 @@ export default function MarketScreen() {
           >
             <Text style={styles.topButtonText}>Tus publicaciones</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.topButton}>
+          <TouchableOpacity
+            style={styles.topButton}
+            onPress={() => router.replace("/historial-compras")}
+          >
             <Text style={styles.topButtonText}>Historial de compras</Text>
           </TouchableOpacity>
         </View>
