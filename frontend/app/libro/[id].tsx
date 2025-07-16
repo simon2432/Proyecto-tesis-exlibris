@@ -158,183 +158,189 @@ export default function LibroDetalleScreen() {
           <Text style={styles.addButtonText}>Agregar al historial lector</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        <View style={styles.bookInfoRow}>
-          {libro.image && (
-            <Image source={{ uri: libro.image }} style={styles.bookImage} />
-          )}
-          <View style={styles.bookInfoCol}>
-            <Text style={styles.bookTitle}>{libro.title}</Text>
-            {renderField("Autor", libro.authors)}
-            {renderField("Género", libro.categories)}
-            {renderField("Editorial", libro.publisher)}
-            {renderField("Fecha de publicación", libro.publishedDate)}
-            {renderField("Páginas", libro.pageCount)}
-            {renderField("Idioma", libro.language)}
-          </View>
-        </View>
-
-        {descripcion && (
-          <>
-            <Text style={styles.sectionTitle}>Descripción:</Text>
-            <Text style={styles.description}>{descripcion}</Text>
-            {descripcionGenerada && (
-              <Text style={styles.generatedMessage}>
-                📚 Descripción generada por asistente conversacional
-              </Text>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <View style={styles.mainContainer}>
+          <View style={styles.bookInfoRow}>
+            {libro.image && (
+              <Image source={{ uri: libro.image }} style={styles.bookImage} />
             )}
-          </>
-        )}
-
-        <Text style={styles.sectionTitle}>
-          Reseñas {total > 0 ? total : null}
-        </Text>
-        {total === 0 && (
-          <View style={styles.reviewsPlaceholder}>
-            <Text style={{ color: "#a08b7d", fontStyle: "italic" }}>
-              Aquí aparecerán las reseñas de los usuarios.
-            </Text>
+            <View style={styles.bookInfoCol}>
+              <Text style={styles.bookTitle}>{libro.title}</Text>
+              {renderField("Autor", libro.authors)}
+              {renderField("Género", libro.categories)}
+              {renderField("Editorial", libro.publisher)}
+              {renderField("Fecha de publicación", libro.publishedDate)}
+              {renderField("Páginas", libro.pageCount)}
+              {renderField("Idioma", libro.language)}
+            </View>
           </View>
-        )}
-        {total > 0 && (
-          <View style={{ marginHorizontal: 18, marginBottom: 24 }}>
-            <View
-              style={{
-                flexDirection: "row",
-                alignItems: "center",
-                marginBottom: 8,
-              }}
-            >
-              <Text
-                style={{
-                  fontWeight: "bold",
-                  color: "#3B2412",
-                  fontSize: 16,
-                  marginRight: 8,
-                }}
-              >
-                Valoración promedio:
-              </Text>
-              {[1, 2, 3, 4, 5].map((star) => (
-                <Text
-                  key={star}
-                  style={{
-                    fontSize: 18,
-                    color: promedio >= star ? "#FFD700" : "#CCC",
-                  }}
-                >
-                  ★
+
+          {descripcion && (
+            <>
+              <Text style={styles.sectionTitle}>Descripción:</Text>
+              <Text style={styles.description}>{descripcion}</Text>
+              {descripcionGenerada && (
+                <Text style={styles.generatedMessage}>
+                  📚 Descripción generada por asistente conversacional
                 </Text>
-              ))}
-              <Text style={{ marginLeft: 8, color: "#3B2412", fontSize: 15 }}>
-                {promedio.toFixed(1)}
+              )}
+            </>
+          )}
+
+          <Text style={styles.sectionTitle}>
+            Reseñas {total > 0 ? total : null}
+          </Text>
+          {total === 0 && (
+            <View style={styles.reviewsPlaceholder}>
+              <Text style={{ color: "#a08b7d", fontStyle: "italic" }}>
+                Aquí aparecerán las reseñas de los usuarios.
               </Text>
             </View>
-            <ScrollView style={{ maxHeight: 350 }}>
-              {resenas.map((r) => (
-                <View
-                  key={r.id}
-                  style={[
-                    styles.reviewCard,
-                    userId === r.userId && styles.reviewCardOwn,
-                  ]}
+          )}
+          {total > 0 && (
+            <View style={{ marginHorizontal: 18, marginBottom: 24 }}>
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
+                <Text
+                  style={{
+                    fontWeight: "bold",
+                    color: "#3B2412",
+                    fontSize: 16,
+                    marginRight: 8,
+                  }}
                 >
-                  <View
+                  Valoración promedio:
+                </Text>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Text
+                    key={star}
                     style={{
-                      flexDirection: "row",
-                      alignItems: "center",
-                      marginBottom: 4,
+                      fontSize: 18,
+                      color: promedio >= star ? "#FFD700" : "#CCC",
                     }}
                   >
-                    <ExpoImage
-                      source={
-                        avatarError[r.id] || !r.fotoPerfil
-                          ? require("../../assets/images/perfil.png")
-                          : getFotoPerfilUrl(r.fotoPerfil)
-                      }
-                      style={styles.reviewAvatar}
-                      contentFit="cover"
-                      onError={() =>
-                        setAvatarError((e) => ({ ...e, [r.id]: true }))
-                      }
-                    />
-                    <Text style={styles.reviewUser}>
-                      {r.nombre || "Usuario"}
-                    </Text>
-                    <View style={{ flexDirection: "row", marginLeft: 8 }}>
-                      {[1, 2, 3, 4, 5].map((star) => (
-                        <Text
-                          key={star}
-                          style={{
-                            fontSize: 15,
-                            color: r.reviewRating >= star ? "#FFD700" : "#CCC",
-                          }}
-                        >
-                          ★
-                        </Text>
-                      ))}
-                    </View>
-                  </View>
-                  <View style={{ position: "relative" }}>
-                    {r.esSpoiler ? (
-                      <TouchableOpacity
-                        activeOpacity={1}
-                        onPress={() =>
-                          setSpoilerVisible((s) => ({ ...s, [r.id]: !s[r.id] }))
+                    ★
+                  </Text>
+                ))}
+                <Text style={{ marginLeft: 8, color: "#3B2412", fontSize: 15 }}>
+                  {promedio.toFixed(1)}
+                </Text>
+              </View>
+              <ScrollView style={{ maxHeight: 350 }}>
+                {resenas.map((r) => (
+                  <View
+                    key={r.id}
+                    style={[
+                      styles.reviewCard,
+                      userId === r.userId && styles.reviewCardOwn,
+                    ]}
+                  >
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <ExpoImage
+                        source={
+                          avatarError[r.id] || !r.fotoPerfil
+                            ? require("../../assets/images/perfil.png")
+                            : getFotoPerfilUrl(r.fotoPerfil)
                         }
-                        style={{ minHeight: 36 }}
-                      >
-                        <Text
-                          style={[
-                            styles.reviewText,
-                            {
-                              color: "#3B2412",
-                              opacity: spoilerVisible[r.id] ? 1 : 0.3,
-                            },
-                          ]}
+                        style={styles.reviewAvatar}
+                        contentFit="cover"
+                        onError={() =>
+                          setAvatarError((e) => ({ ...e, [r.id]: true }))
+                        }
+                      />
+                      <Text style={styles.reviewUser}>
+                        {r.nombre || "Usuario"}
+                      </Text>
+                      <View style={{ flexDirection: "row", marginLeft: 8 }}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Text
+                            key={star}
+                            style={{
+                              fontSize: 15,
+                              color:
+                                r.reviewRating >= star ? "#FFD700" : "#CCC",
+                            }}
+                          >
+                            ★
+                          </Text>
+                        ))}
+                      </View>
+                    </View>
+                    <View style={{ position: "relative" }}>
+                      {r.esSpoiler ? (
+                        <TouchableOpacity
+                          activeOpacity={1}
+                          onPress={() =>
+                            setSpoilerVisible((s) => ({
+                              ...s,
+                              [r.id]: !s[r.id],
+                            }))
+                          }
+                          style={{ minHeight: 36 }}
                         >
-                          {r.reviewComment}
-                        </Text>
-                        {!spoilerVisible[r.id] && (
-                          <BlurView
-                            intensity={100}
-                            tint="dark"
+                          <Text
                             style={[
-                              StyleSheet.absoluteFill,
+                              styles.reviewText,
                               {
-                                borderRadius: 8,
-                                overflow: "hidden",
-                                justifyContent: "center",
-                                alignItems: "center",
-                                backgroundColor: "rgba(60,60,60,0.85)",
+                                color: "#3B2412",
+                                opacity: spoilerVisible[r.id] ? 1 : 0.3,
                               },
                             ]}
-                            pointerEvents="none"
                           >
-                            <Text
-                              style={{
-                                color: "#F8F2E9",
-                                fontWeight: "bold",
-                                fontSize: 22,
-                                textShadowColor: "rgba(0,0,0,0.4)",
-                                textShadowOffset: { width: 0, height: 2 },
-                                textShadowRadius: 4,
-                              }}
+                            {r.reviewComment}
+                          </Text>
+                          {!spoilerVisible[r.id] && (
+                            <BlurView
+                              intensity={100}
+                              tint="dark"
+                              style={[
+                                StyleSheet.absoluteFill,
+                                {
+                                  borderRadius: 8,
+                                  overflow: "hidden",
+                                  justifyContent: "center",
+                                  alignItems: "center",
+                                  backgroundColor: "rgba(60,60,60,0.85)",
+                                },
+                              ]}
+                              pointerEvents="none"
                             >
-                              Alerta de espoiler
-                            </Text>
-                          </BlurView>
-                        )}
-                      </TouchableOpacity>
-                    ) : (
-                      <Text style={styles.reviewText}>{r.reviewComment}</Text>
-                    )}
+                              <Text
+                                style={{
+                                  color: "#F8F2E9",
+                                  fontWeight: "bold",
+                                  fontSize: 22,
+                                  textShadowColor: "rgba(0,0,0,0.4)",
+                                  textShadowOffset: { width: 0, height: 2 },
+                                  textShadowRadius: 4,
+                                }}
+                              >
+                                Alerta de espoiler
+                              </Text>
+                            </BlurView>
+                          )}
+                        </TouchableOpacity>
+                      ) : (
+                        <Text style={styles.reviewText}>{r.reviewComment}</Text>
+                      )}
+                    </View>
                   </View>
-                </View>
-              ))}
-            </ScrollView>
-          </View>
-        )}
+                ))}
+              </ScrollView>
+            </View>
+          )}
+        </View>
       </ScrollView>
     </View>
   );
@@ -380,6 +386,23 @@ const styles = StyleSheet.create({
     color: "#f3e8da",
     fontWeight: "bold",
     fontSize: 15,
+  },
+  scrollContainer: {
+    paddingBottom: 40,
+  },
+  mainContainer: {
+    ...(Platform.OS === "web" && {
+      maxWidth: 800,
+      alignSelf: "center",
+      width: "100%",
+    }),
+  },
+  bookInfoContainer: {
+    ...(Platform.OS === "web" && {
+      maxWidth: 800,
+      alignSelf: "center",
+      width: "100%",
+    }),
   },
   bookInfoRow: {
     flexDirection: "row",

@@ -154,7 +154,9 @@ export default function MisPublicaciones() {
                   )}
                   <View style={styles.priceTagShadow}>
                     <View style={styles.priceTag}>
-                      <Text style={styles.priceText}>${pub.precio}</Text>
+                      <Text style={styles.priceText}>
+                        ${pub.precio.toLocaleString("es-ES")}
+                      </Text>
                     </View>
                   </View>
                   <Text style={styles.pubTitle} numberOfLines={2}>

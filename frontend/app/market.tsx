@@ -7,15 +7,57 @@ import {
   ScrollView,
   Dimensions,
   Platform,
+  Image,
+  ActivityIndicator,
 } from "react-native";
 import HeaderMarketplace from "../components/HeaderMarketplace";
 import CustomTabBar from "../components/CustomTabBar";
 import { useRouter } from "expo-router";
+import { usePublicaciones } from "../hooks/usePublicaciones";
+import { API_BASE_URL } from "../constants/ApiConfig";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function MarketScreen() {
   const router = useRouter();
+  const { publicaciones, loading, error } = usePublicaciones();
+
+  const renderPublicacion = (publicacion: any) => (
+    <TouchableOpacity
+      key={publicacion.id}
+      style={styles.bookCard}
+      onPress={() =>
+        router.push({
+          pathname: "/publicacion/[id]",
+          params: { id: publicacion.id.toString() },
+        })
+      }
+    >
+      {publicacion.imagenUrl ? (
+        <Image
+          source={{ uri: `${API_BASE_URL}${publicacion.imagenUrl}` }}
+          style={styles.bookImage}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={styles.imagePlaceholder} />
+      )}
+      <View style={styles.priceTagShadow}>
+        <View style={styles.priceTag}>
+          <Text style={styles.priceText}>
+            ${publicacion.precio.toLocaleString("es-ES")}
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.bookTitle} numberOfLines={2}>
+        {publicacion.titulo}
+      </Text>
+      <Text style={styles.bookAuthor} numberOfLines={1}>
+        {publicacion.autor}
+      </Text>
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
       <HeaderMarketplace />
@@ -37,21 +79,36 @@ export default function MarketScreen() {
         </View>
         {/* Título */}
         <Text style={styles.sectionTitle}>Encuentra tu siguiente libro</Text>
+
+        {/* Estado de carga */}
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3B2412" />
+            <Text style={styles.loadingText}>Cargando publicaciones...</Text>
+          </View>
+        )}
+
+        {/* Error */}
+        {error && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{error}</Text>
+          </View>
+        )}
+
         {/* Grilla de publicaciones */}
-        <View style={styles.grid}>
-          {[...Array(10)].map((_, idx) => (
-            <View key={idx} style={styles.bookCard}>
-              {/* Imagen vacía (simulación) */}
-              <View style={styles.imagePlaceholder} />
-              {/* Etiqueta de precio dummy */}
-              <View style={styles.priceTagShadow}>
-                <View style={styles.priceTag}>
-                  <Text style={styles.priceText}>$00.000</Text>
-                </View>
+        {!loading && !error && (
+          <View style={styles.grid}>
+            {publicaciones.length > 0 ? (
+              publicaciones.map(renderPublicacion)
+            ) : (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  No hay publicaciones disponibles
+                </Text>
               </View>
-            </View>
-          ))}
-        </View>
+            )}
+          </View>
+        )}
       </ScrollView>
       <CustomTabBar
         activeTab="market"
@@ -161,6 +218,60 @@ const styles = StyleSheet.create({
     color: "#7c4a2d",
     fontWeight: "bold",
     fontSize: 16,
+    textAlign: "center",
+  },
+  bookImage: {
+    width: "100%",
+    height: 110,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+  },
+  bookTitle: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#3B2412",
+    textAlign: "center",
+    marginTop: 8,
+    marginHorizontal: 8,
+    lineHeight: 18,
+  },
+  bookAuthor: {
+    fontSize: 12,
+    color: "#7c4a2d",
+    textAlign: "center",
+    marginTop: 2,
+    marginHorizontal: 8,
+    fontStyle: "italic",
+  },
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#3B2412",
+  },
+  errorContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#d32f2f",
+    textAlign: "center",
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    width: "100%",
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#7c4a2d",
     textAlign: "center",
   },
 });

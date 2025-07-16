@@ -12,11 +12,21 @@ router.post(
 );
 router.get("/", publicacionController.obtenerPublicaciones);
 router.get("/mis", publicacionController.obtenerMisPublicaciones);
-router.get("/:id", publicacionController.obtenerUnaPublicacion);
 router.put(
   "/:id",
   publicacionController.uploadPublicacionImage,
   publicacionController.editarPublicacion
 );
+router.delete(
+  "/:id",
+  (req, res, next) => {
+    console.log("=== RUTA DELETE INTERCEPTADA ===");
+    console.log("ID:", req.params.id);
+    console.log("User ID:", req.userId);
+    next();
+  },
+  publicacionController.eliminarPublicacion
+);
+router.get("/:id", publicacionController.obtenerUnaPublicacion);
 
 module.exports = router;

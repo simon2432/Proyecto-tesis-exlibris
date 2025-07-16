@@ -51,7 +51,9 @@ export default function ModalDetallePublicacion({
               <View style={styles.cover} />
             )}
           </View>
-          <Text style={styles.priceText}>${publicacion.precio}</Text>
+          <Text style={styles.priceText}>
+            ${publicacion.precio.toLocaleString("es-ES")}
+          </Text>
           <Text style={styles.title}>{publicacion.titulo}</Text>
           <View style={styles.infoList}>
             <Text style={styles.infoItem}>
@@ -74,8 +76,8 @@ export default function ModalDetallePublicacion({
               <Text style={styles.bold}>{publicacion.idioma || "-"}</Text>
             </Text>
             <Text style={styles.infoItem}>
-              Estado:{" "}
-              <Text style={styles.bold}>{publicacion.estado || "-"}</Text>
+              Estado del libro:{" "}
+              <Text style={styles.bold}>{publicacion.estadoLibro || "-"}</Text>
             </Text>
           </View>
         </View>

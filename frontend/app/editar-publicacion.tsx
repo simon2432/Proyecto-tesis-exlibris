@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Platform,
   Alert,
+  Modal,
+  Pressable,
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import { useRouter, useLocalSearchParams } from "expo-router";
@@ -20,32 +22,32 @@ import { Picker } from "@react-native-picker/picker";
 const ESTADOS = [
   "Nuevo",
   "Como nuevo",
-  "Usado en buen estado",
-  "Usado con detalles",
-  "Para repuesto o reciclaje",
+  "Muy buen estado",
+  "Aceptable",
+  "Dañado",
 ];
 
 const IDIOMAS = [
   "Español",
   "Inglés",
-  "Francés",
-  "Alemán",
-  "Italiano",
-  "Portugués",
-  "Ruso",
   "Chino",
+  "Hindi",
+  "Árabe",
+  "Francés",
+  "Ruso",
+  "Portugués",
+  "Bengalí",
+  "Alemán",
   "Japonés",
   "Coreano",
-  "Árabe",
-  "Holandés",
-  "Sueco",
-  "Danés",
-  "Finlandés",
-  "Noruego",
-  "Polaco",
+  "Italiano",
   "Turco",
+  "Vietnamita",
+  "Polaco",
+  "Holandés",
+  "Tailandés",
+  "Sueco",
   "Griego",
-  "Hebreo",
 ];
 
 export default function EditarPublicacion() {
@@ -56,6 +58,8 @@ export default function EditarPublicacion() {
   const [error, setError] = useState("");
   const [publicacion, setPublicacion] = useState<any>(null);
   const [imagen, setImagen] = useState<string | null>(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [form, setForm] = useState({
     titulo: "",
     autor: "",
@@ -90,7 +94,7 @@ export default function EditarPublicacion() {
         editorial: data.editorial || "",
         paginas: data.paginas ? String(data.paginas) : "",
         idioma: data.idioma || "",
-        estado: data.estado || "",
+        estado: data.estadoLibro || "",
         precio: data.precio ? String(data.precio) : "",
       });
     } catch (e: any) {
@@ -113,7 +117,23 @@ export default function EditarPublicacion() {
   };
 
   const handleChange = (field: string, value: string) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
+    if (field === "precio") {
+      // Eliminar todo lo que no sea número
+      const soloNumeros = value.replace(/[^0-9]/g, "");
+
+      // Validar precio máximo de 1.000.000
+      if (parseInt(soloNumeros) > 1000000) {
+        Alert.alert(
+          "Precio máximo",
+          "El precio máximo permitido es $1.000.000"
+        );
+        return;
+      }
+
+      setForm((prev) => ({ ...prev, [field]: soloNumeros }));
+    } else {
+      setForm((prev) => ({ ...prev, [field]: value }));
+    }
   };
 
   const handleSave = async () => {
@@ -157,6 +177,48 @@ export default function EditarPublicacion() {
     }
   };
 
+  const handleEliminar = async () => {
+    setIsDeleting(true);
+    try {
+      console.log("Intentando eliminar publicación con ID:", id);
+      const token = await AsyncStorage.getItem("token");
+      console.log("Token obtenido:", token ? "Sí" : "No");
+
+      const url = `${API_BASE_URL}/publicaciones/${id}`;
+      console.log("URL de eliminación:", url);
+
+      const res = await fetch(url, {
+        method: "DELETE",
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+
+      console.log("Respuesta del servidor:", res.status, res.statusText);
+
+      if (!res.ok) {
+        const errorData = await res.text();
+        console.log("Error del servidor:", errorData);
+        throw new Error(`No se pudo eliminar la publicación: ${res.status}`);
+      }
+
+      console.log("Publicación eliminada exitosamente");
+
+      // Cerrar modal y navegar directamente
+      setShowDeleteModal(false);
+      setIsDeleting(false);
+
+      // Pequeño delay para asegurar que el modal se cierre antes de navegar
+      setTimeout(() => {
+        router.replace("/mis-publicaciones");
+      }, 100);
+    } catch (e: any) {
+      console.error("Error al eliminar:", e);
+      Alert.alert("Error", e.message || "No se pudo eliminar la publicación");
+      setIsDeleting(false);
+    }
+  };
+
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
@@ -176,6 +238,12 @@ export default function EditarPublicacion() {
           <Text style={styles.volverBtnText}>Volver</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Editar publicación</Text>
+        <TouchableOpacity
+          style={styles.eliminarBtn}
+          onPress={() => setShowDeleteModal(true)}
+        >
+          <Text style={styles.eliminarBtnText}>Eliminar</Text>
+        </TouchableOpacity>
       </View>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={styles.form}>
@@ -229,10 +297,12 @@ export default function EditarPublicacion() {
           <TextInput
             style={styles.input}
             placeholder="Precio"
-            value={form.precio ? `$${form.precio}` : ""}
-            onChangeText={(v) =>
-              handleChange("precio", v.replace(/[^0-9]/g, ""))
+            value={
+              form.precio
+                ? `$${parseInt(form.precio).toLocaleString("es-ES")}`
+                : ""
             }
+            onChangeText={(v) => handleChange("precio", v)}
             keyboardType="numeric"
           />
           {/* Idioma */}
@@ -265,9 +335,9 @@ export default function EditarPublicacion() {
               )}
             </View>
           </View>
-          {/* Estado */}
+          {/* Estado del libro */}
           <View style={styles.selectContainer}>
-            <Text style={styles.selectLabel}>Estado</Text>
+            <Text style={styles.selectLabel}>Estado del libro</Text>
             <View style={styles.pickerWrapper}>
               {Platform.OS === "web" ? (
                 <select
@@ -308,6 +378,47 @@ export default function EditarPublicacion() {
           {error ? <Text style={styles.error}>{error}</Text> : null}
         </View>
       </ScrollView>
+
+      {/* Modal de confirmación para eliminar */}
+      <Modal
+        visible={showDeleteModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeleteModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowDeleteModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirmar eliminación</Text>
+            <Text style={styles.modalMessage}>
+              ¿Estás seguro de que quieres eliminar esta publicación?
+            </Text>
+            <Text style={styles.modalWarning}>
+              Esta acción no se puede deshacer.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowDeleteModal(false)}
+                disabled={isDeleting}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonDelete]}
+                onPress={handleEliminar}
+                disabled={isDeleting}
+              >
+                <Text style={styles.modalButtonDeleteText}>
+                  {isDeleting ? "Eliminando..." : "Eliminar"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
@@ -346,6 +457,17 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "center",
     marginRight: 40,
+  },
+  eliminarBtn: {
+    backgroundColor: "#d32f2f",
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 7,
+  },
+  eliminarBtnText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 15,
   },
   form: {
     marginTop: 24,
@@ -425,5 +547,75 @@ const styles = StyleSheet.create({
     color: "#d32f2f",
     marginTop: 10,
     textAlign: "center",
+  },
+  // Estilos del modal de confirmación
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 24,
+    marginHorizontal: 20,
+    maxWidth: 400,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#3B2412",
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: "#3B2412",
+    marginBottom: 8,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  modalWarning: {
+    fontSize: 14,
+    color: "#d32f2f",
+    marginBottom: 20,
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  modalButton: {
+    flex: 1,
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+  },
+  modalButtonCancel: {
+    backgroundColor: "#f5f5f5",
+    borderWidth: 1,
+    borderColor: "#ddd",
+  },
+  modalButtonDelete: {
+    backgroundColor: "#d32f2f",
+  },
+  modalButtonCancelText: {
+    color: "#3B2412",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  modalButtonDeleteText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
   },
 });
