@@ -21,10 +21,12 @@ model User {
   cantidadValoraciones Int       @default(0)
   fechaRegistro        DateTime  @default(now())
   ubicacion            String?
+  telefono             String?
   documento            Int?
   lecturas             Lectura[] // relación uno-a-muchos
   publicaciones Publicacion[] // relación inversa obligatoria
   compras Compra[] // relación inversa para el campo comprador en Compra
+  ventas Compra[] @relation("Ventas") // relación inversa para el campo vendedor en Compra
 }
 
 model Lectura {
@@ -64,18 +66,28 @@ model Publicacion {
 }
 
 enum EstadoCompra {
-  pendiente_pago
-  pendiente_envio
+  pago_pendiente
+  encuentro
+  envio_pendiente
   en_camino
   completado
+}
+
+enum TipoEntrega {
+  envio
+  encuentro
 }
 
 model Compra {
   id             Int          @id @default(autoincrement())
   compradorId    Int
   publicacionId  Int
-  estado         EstadoCompra @default(pendiente_pago)
+  vendedorId     Int
+  tipoEntrega    TipoEntrega
+  estado         EstadoCompra @default(pago_pendiente)
+  precio         Float
   fechaCompra    DateTime     @default(now())
   comprador      User         @relation(fields: [compradorId], references: [id])
   publicacion    Publicacion @relation(fields: [publicacionId], references: [id])
+  vendedor       User         @relation("Ventas", fields: [vendedorId], references: [id])
 }

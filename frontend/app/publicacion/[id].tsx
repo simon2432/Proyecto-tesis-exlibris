@@ -8,6 +8,8 @@ import {
   Image,
   Dimensions,
   ActivityIndicator,
+  Modal,
+  Pressable,
   Platform,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -44,6 +46,8 @@ export default function PublicacionDetalleScreen() {
   const [publicacion, setPublicacion] = useState<Publicacion | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
+  const [creatingCompra, setCreatingCompra] = useState(false);
 
   useEffect(() => {
     fetchPublicacion();
@@ -70,8 +74,55 @@ export default function PublicacionDetalleScreen() {
   };
 
   const handleComprar = () => {
-    // Aquí se implementaría la lógica de compra
-    console.log("Comprar publicación:", publicacion?.id);
+    setShowDeliveryModal(true);
+  };
+
+  const handleTipoEntrega = async (tipoEntrega: "envio" | "encuentro") => {
+    if (!publicacion) return;
+
+    setShowDeliveryModal(false);
+    setCreatingCompra(true);
+
+    try {
+      const token = await AsyncStorage.getItem("token");
+      if (!token) {
+        console.error("No hay token de autenticación");
+        return;
+      }
+
+      // Crear la compra
+      const compraData = {
+        publicacionId: publicacion.id,
+        vendedorId: publicacion.vendedor.id,
+        tipoEntrega: tipoEntrega,
+        estado: tipoEntrega === "encuentro" ? "encuentro" : "pago_pendiente",
+        precio: publicacion.precio,
+      };
+
+      console.log("Creando compra:", compraData);
+
+      const response = await axios.post(`${API_BASE_URL}/compras`, compraData, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      console.log("Compra creada exitosamente:", response.data);
+
+      // Si es encuentro, redirigir al historial de compras
+      if (tipoEntrega === "encuentro") {
+        router.replace("/historial-compras");
+      } else {
+        // Para envío, aquí se podría redirigir a una página de pago
+        console.log("Redirigiendo a página de pago para envío");
+      }
+    } catch (error) {
+      console.error("Error creando compra:", error);
+      // Aquí se podría mostrar un mensaje de error al usuario
+    } finally {
+      setCreatingCompra(false);
+    }
   };
 
   if (loading) {
@@ -230,10 +281,49 @@ export default function PublicacionDetalleScreen() {
         </View>
 
         {/* Botón Comprar */}
-        <TouchableOpacity style={styles.buyButton} onPress={handleComprar}>
-          <Text style={styles.buyButtonText}>COMPRAR</Text>
+        <TouchableOpacity
+          style={[styles.buyButton, creatingCompra && styles.buyButtonDisabled]}
+          onPress={handleComprar}
+          disabled={creatingCompra}
+        >
+          {creatingCompra ? (
+            <ActivityIndicator size="small" color="#fff" />
+          ) : (
+            <Text style={styles.buyButtonText}>COMPRAR</Text>
+          )}
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Modal de selección de tipo de entrega */}
+      <Modal
+        visible={showDeliveryModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDeliveryModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowDeliveryModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Seleccione tipo de entrega</Text>
+
+            <TouchableOpacity
+              style={styles.deliveryOption}
+              onPress={() => handleTipoEntrega("envio")}
+            >
+              <Text style={styles.deliveryOptionText}>Envío</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.deliveryOption}
+              onPress={() => handleTipoEntrega("encuentro")}
+            >
+              <Text style={styles.deliveryOptionText}>Encuentro</Text>
+            </TouchableOpacity>
+          </View>
+        </Pressable>
+      </Modal>
 
       <CustomTabBar
         activeTab="market"
@@ -419,5 +509,42 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 18,
     textTransform: "uppercase",
+  },
+  buyButtonDisabled: {
+    backgroundColor: "#ccc",
+    opacity: 0.7,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    width: "80%",
+    alignItems: "center",
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#3B2412",
+    marginBottom: 20,
+  },
+  deliveryOption: {
+    backgroundColor: "#f3e8da",
+    borderRadius: 10,
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    marginBottom: 10,
+    width: "100%",
+    alignItems: "center",
+  },
+  deliveryOptionText: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#3B2412",
   },
 });
