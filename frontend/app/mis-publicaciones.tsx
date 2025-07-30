@@ -21,6 +21,9 @@ export default function MisPublicaciones() {
   const router = useRouter();
   const [tab, setTab] = useState("activas");
   const [publicaciones, setPublicaciones] = useState<any[]>([]);
+  const [publicacionesEnProceso, setPublicacionesEnProceso] = useState<any[]>(
+    []
+  );
   const [loading, setLoading] = useState(false);
   const [selectedPublicacion, setSelectedPublicacion] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -28,6 +31,8 @@ export default function MisPublicaciones() {
   useEffect(() => {
     if (tab === "activas") {
       fetchPublicaciones();
+    } else if (tab === "en-proceso") {
+      fetchPublicacionesEnProceso();
     }
   }, [tab]);
 
@@ -51,6 +56,57 @@ export default function MisPublicaciones() {
       setPublicaciones([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPublicacionesEnProceso = async () => {
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/publicaciones/mis`, {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        // Solo mostrar las que están en proceso (estado en_venta)
+        setPublicacionesEnProceso(
+          data.filter((p: any) => p.estado === "en_venta")
+        );
+      } else {
+        setPublicacionesEnProceso([]);
+      }
+    } catch (err) {
+      setPublicacionesEnProceso([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCompraByPublicacion = async (publicacionId: number) => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const res = await fetch(
+        `${API_BASE_URL}/compras/publicacion/${publicacionId}`,
+        {
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+          },
+        }
+      );
+      if (res.ok) {
+        const compra = await res.json();
+        console.log("[Mis Publicaciones] Compra encontrada:", compra);
+        router.push({
+          pathname: "/venta/[id]",
+          params: { id: compra.id.toString() },
+        });
+      } else {
+        console.error("No se encontró compra para esta publicación");
+      }
+    } catch (error) {
+      console.error("Error buscando compra:", error);
     }
   };
 
@@ -82,6 +138,8 @@ export default function MisPublicaciones() {
         <Text style={styles.title}>
           {tab === "activas"
             ? "Tus publicaciones activas"
+            : tab === "en-proceso"
+            ? "Tus publicaciones en proceso"
             : "Tus publicaciones vendidas"}
         </Text>
         {/* Tabs */}
@@ -100,6 +158,19 @@ export default function MisPublicaciones() {
             </Text>
           </TouchableOpacity>
           <TouchableOpacity
+            style={[styles.tabBtn, tab === "en-proceso" && styles.tabBtnActive]}
+            onPress={() => setTab("en-proceso")}
+          >
+            <Text
+              style={[
+                styles.tabBtnText,
+                tab === "en-proceso" && styles.tabBtnTextActive,
+              ]}
+            >
+              En proceso
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
             style={[styles.tabBtn, tab === "vendidas" && styles.tabBtnActive]}
             onPress={() => setTab("vendidas")}
           >
@@ -113,7 +184,7 @@ export default function MisPublicaciones() {
             </Text>
           </TouchableOpacity>
         </View>
-        {/* Mostrar grilla solo si tab es activas */}
+        {/* Mostrar grilla según el tab seleccionado */}
         {tab === "activas" &&
           (loading ? (
             <ActivityIndicator
@@ -141,6 +212,58 @@ export default function MisPublicaciones() {
                   onPress={() => {
                     setSelectedPublicacion(pub);
                     setModalVisible(true);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  {pub.imagenUrl ? (
+                    <Image
+                      source={{ uri: `${API_BASE_URL}${pub.imagenUrl}` }}
+                      style={styles.imagePlaceholder}
+                    />
+                  ) : (
+                    <View style={styles.imagePlaceholder} />
+                  )}
+                  <View style={styles.priceTagShadow}>
+                    <View style={styles.priceTag}>
+                      <Text style={styles.priceText}>
+                        ${pub.precio.toLocaleString("es-ES")}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.pubTitle} numberOfLines={2}>
+                    {pub.titulo}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ))}
+        {tab === "en-proceso" &&
+          (loading ? (
+            <ActivityIndicator
+              size="large"
+              color="#7c4a2d"
+              style={{ marginTop: 40 }}
+            />
+          ) : publicacionesEnProceso.length === 0 ? (
+            <Text
+              style={{
+                color: "#a08b7d",
+                fontStyle: "italic",
+                textAlign: "center",
+                marginTop: 30,
+              }}
+            >
+              No tienes publicaciones en proceso.
+            </Text>
+          ) : (
+            <View style={styles.grid}>
+              {publicacionesEnProceso.map((pub) => (
+                <TouchableOpacity
+                  key={pub.id}
+                  style={styles.bookCard}
+                  onPress={() => {
+                    // Buscar la compra asociada a esta publicación
+                    fetchCompraByPublicacion(pub.id);
                   }}
                   activeOpacity={0.8}
                 >

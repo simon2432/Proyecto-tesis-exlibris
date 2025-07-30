@@ -11,11 +11,13 @@ exports.register = async (req, res) => {
       email: req.body.email,
       nombre: req.body.nombre,
     });
-    const { nombre, email, password, documento, ubicacion } = req.body;
-    if (!nombre || !email || !password) {
+    const { nombre, email, telefono, password, documento, ubicacion } =
+      req.body;
+    if (!nombre || !email || !telefono || !password) {
       console.log("Missing fields:", {
         nombre: !!nombre,
         email: !!email,
+        telefono: !!telefono,
         password: !!password,
       });
       return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -34,6 +36,7 @@ exports.register = async (req, res) => {
       data: {
         nombre,
         email,
+        telefono,
         password: hashedPassword,
         documento: documento ? parseInt(documento) : undefined,
         ubicacion,

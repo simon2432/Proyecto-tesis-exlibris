@@ -304,6 +304,80 @@ exports.obtenerUnaCompra = async (req, res) => {
   }
 };
 
+// Obtener compra por publicación
+exports.obtenerCompraPorPublicacion = async (req, res) => {
+  try {
+    const { publicacionId } = req.params;
+    const userId = req.userId;
+
+    console.log(
+      "[Compra] Obteniendo compra para publicación:",
+      publicacionId,
+      "usuario:",
+      userId
+    );
+
+    const compra = await prisma.compra.findFirst({
+      where: {
+        publicacionId: parseInt(publicacionId),
+        vendedorId: parseInt(userId), // Solo el vendedor puede ver la compra de su publicación
+      },
+      include: {
+        publicacion: {
+          include: {
+            vendedor: {
+              select: {
+                id: true,
+                nombre: true,
+                ubicacion: true,
+              },
+            },
+          },
+        },
+        vendedor: {
+          select: {
+            id: true,
+            nombre: true,
+            ubicacion: true,
+          },
+        },
+        comprador: {
+          select: {
+            id: true,
+            nombre: true,
+            email: true,
+            telefono: true,
+            ubicacion: true,
+            puntuacionVendedor: true,
+            librosVendidos: true,
+            librosComprados: true,
+          },
+        },
+      },
+    });
+
+    if (!compra) {
+      return res.status(404).json({ error: "Compra no encontrada" });
+    }
+
+    console.log("[Compra] Datos del comprador:", {
+      id: compra.comprador.id,
+      nombre: compra.comprador.nombre,
+      email: compra.comprador.email,
+      telefono: compra.comprador.telefono,
+      ubicacion: compra.comprador.ubicacion,
+      puntuacionVendedor: compra.comprador.puntuacionVendedor,
+      librosVendidos: compra.comprador.librosVendidos,
+      librosComprados: compra.comprador.librosComprados,
+    });
+
+    res.json(compra);
+  } catch (error) {
+    console.error("[Compra] Error obteniendo compra por publicación:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 // Completar una compra
 exports.completarCompra = async (req, res) => {
   try {
@@ -388,6 +462,56 @@ exports.cancelarCompra = async (req, res) => {
     res.json({ message: "Compra cancelada exitosamente" });
   } catch (error) {
     console.error("[Compra] Error cancelando compra:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// Cancelar una venta (desde el lado del vendedor)
+exports.cancelarVenta = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    console.log("[Venta] Cancelando venta:", id, "por usuario:", userId);
+
+    // Verificar que la compra existe y pertenece al vendedor
+    const compra = await prisma.compra.findFirst({
+      where: {
+        id: parseInt(id),
+        vendedorId: parseInt(userId),
+      },
+      include: {
+        publicacion: true,
+      },
+    });
+
+    if (!compra) {
+      return res.status(404).json({ error: "Venta no encontrada" });
+    }
+
+    // Solo permitir cancelar si no está completada
+    if (compra.estado === "completado") {
+      return res
+        .status(400)
+        .json({ error: "No se puede cancelar una venta completada" });
+    }
+
+    // Restaurar el estado de la publicación a activa
+    await prisma.publicacion.update({
+      where: { id: compra.publicacionId },
+      data: { estado: "activa" },
+    });
+
+    // Eliminar la compra
+    await prisma.compra.delete({
+      where: { id: parseInt(id) },
+    });
+
+    console.log("[Venta] Venta cancelada:", id);
+
+    res.json({ message: "Venta cancelada exitosamente" });
+  } catch (error) {
+    console.error("[Venta] Error cancelando venta:", error);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 };

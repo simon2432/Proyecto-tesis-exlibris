@@ -15,6 +15,12 @@ router.get("/mis-compras", compraController.obtenerCompras);
 // Obtener ventas del usuario (como vendedor)
 router.get("/mis-ventas", compraController.obtenerVentas);
 
+// Obtener compra por publicación
+router.get(
+  "/publicacion/:publicacionId",
+  compraController.obtenerCompraPorPublicacion
+);
+
 // Obtener una compra específica
 router.get("/:id", compraController.obtenerUnaCompra);
 
@@ -23,5 +29,8 @@ router.patch("/:id/completar", compraController.completarCompra);
 
 // Cancelar una compra
 router.patch("/:id/cancelar", compraController.cancelarCompra);
+
+// Cancelar una venta
+router.patch("/:id/cancelar-venta", compraController.cancelarVenta);
 
 module.exports = router;

@@ -24,6 +24,7 @@ export default function EditarPerfilScreen() {
   const router = useRouter();
   const [nombre, setNombre] = useState(user?.nombre || "");
   const [email, setEmail] = useState(user?.email || "");
+  const [telefono, setTelefono] = useState(user?.telefono || "");
   const [fotoPerfil, setFotoPerfil] = useState(user?.fotoPerfil || null);
   const [fotoPerfilFile, setFotoPerfilFile] = useState<any>(null);
   const [passwordActual, setPasswordActual] = useState("");
@@ -91,6 +92,7 @@ export default function EditarPerfilScreen() {
       const body: any = {
         nombre,
         email,
+        telefono,
         fotoPerfil: nuevaFotoUrl,
       };
       if (passwordActual && passwordNueva) {
@@ -163,6 +165,14 @@ export default function EditarPerfilScreen() {
           keyboardType="email-address"
           autoCapitalize="none"
           maxLength={60}
+        />
+        <Text style={styles.label}>Teléfono</Text>
+        <TextInput
+          style={styles.input}
+          value={telefono}
+          onChangeText={setTelefono}
+          keyboardType="phone-pad"
+          maxLength={20}
         />
         <Text style={styles.label}>Documento</Text>
         <TextInput

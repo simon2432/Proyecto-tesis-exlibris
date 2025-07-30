@@ -21,6 +21,7 @@ export default function Register() {
   const [nombre, setNombre] = useState("");
   const [dni, setDni] = useState("");
   const [email, setEmail] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
   const [ubicacion, setUbicacion] = useState(ubicaciones[0]);
@@ -32,10 +33,15 @@ export default function Register() {
       Alert.alert("Error", "Las contraseñas no coinciden");
       return;
     }
+    if (!telefono.trim()) {
+      Alert.alert("Error", "El teléfono es obligatorio");
+      return;
+    }
     try {
       const res = await axios.post(`${API_BASE_URL}/auth/register`, {
         nombre: nombre.trim(),
         email,
+        telefono: telefono.trim(),
         password,
         ubicacion,
         documento: dni,
@@ -76,6 +82,14 @@ export default function Register() {
         onChangeText={setEmail}
         autoCapitalize="none"
         keyboardType="email-address"
+        placeholderTextColor="#a08b7d"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Teléfono"
+        value={telefono}
+        onChangeText={setTelefono}
+        keyboardType="phone-pad"
         placeholderTextColor="#a08b7d"
       />
       <TextInput

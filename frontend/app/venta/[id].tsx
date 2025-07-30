@@ -20,7 +20,7 @@ import CustomTabBar from "../../components/CustomTabBar";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
-interface Compra {
+interface Venta {
   id: number;
   estado: string;
   tipoEntrega: string;
@@ -37,11 +37,11 @@ interface Compra {
     estadoLibro: string;
     imagenUrl: string;
   };
-  vendedor: {
+  comprador: {
     id: number;
     nombre: string;
     email: string;
-    telefono?: string;
+    telefono: string;
     ubicacion: string;
     puntuacionVendedor: number;
     librosVendidos: number;
@@ -49,138 +49,176 @@ interface Compra {
   };
 }
 
-export default function CompraDetalleScreen() {
+export default function DetalleVenta() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const [compra, setCompra] = useState<Compra | null>(null);
+  const [venta, setVenta] = useState<Venta | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [updating, setUpdating] = useState(false);
+  const [completando, setCompletando] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [canceling, setCanceling] = useState(false);
 
   useEffect(() => {
-    fetchCompra();
+    fetchVenta();
   }, [id]);
 
-  const fetchCompra = async () => {
+  const fetchVenta = async () => {
     try {
-      setLoading(true);
-      setError(null);
-
       const token = await AsyncStorage.getItem("token");
-      const response = await fetch(`${API_BASE_URL}/compras/${id}`, {
+      const res = await fetch(`${API_BASE_URL}/compras/${id}`, {
         headers: {
           Authorization: token ? `Bearer ${token}` : "",
         },
       });
+      if (res.ok) {
+        const data = await res.json();
+        console.log("[Venta] Datos recibidos:", data);
 
-      if (response.ok) {
-        const data = await response.json();
-        console.log("Datos de la compra recibidos:", data);
-        setCompra(data);
+        // Cargar datos completos del comprador usando su ID
+        if (data.compradorId) {
+          const compradorRes = await fetch(
+            `${API_BASE_URL}/usuarios/${data.compradorId}`,
+            {
+              headers: {
+                Authorization: token ? `Bearer ${token}` : "",
+              },
+            }
+          );
+          if (compradorRes.ok) {
+            const compradorData = await compradorRes.json();
+            console.log(
+              "[Venta] Datos completos del comprador:",
+              compradorData
+            );
+            console.log(
+              "[Venta] Teléfono del comprador:",
+              compradorData.telefono
+            );
+            console.log("[Venta] Email del comprador:", compradorData.email);
+
+            // Combinar los datos de la venta con los datos completos del comprador
+            setVenta({
+              ...data,
+              comprador: compradorData,
+            });
+          } else {
+            console.error("Error fetching comprador:", compradorRes.status);
+            setVenta(data);
+          }
+        } else {
+          setVenta(data);
+        }
       } else {
-        console.error("Error fetching compra:", response.status);
-        setError("Error al cargar la compra");
+        console.error("Error fetching venta:", res.status);
       }
-    } catch (err) {
-      console.error("Error en fetchCompra:", err);
-      setError("Error al cargar la compra");
+    } catch (error) {
+      console.error("Error fetching venta:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleTransaccionRealizada = async () => {
-    Alert.alert(
-      "Confirmar transacción",
-      "¿Estás seguro de que ya realizaste el pago y recibiste el libro en buenas condiciones?",
-      [
-        {
-          text: "Cancelar",
-          style: "cancel",
-        },
-        {
-          text: "Confirmar",
-          onPress: async () => {
-            setUpdating(true);
-            try {
-              const token = await AsyncStorage.getItem("token");
-              const response = await fetch(
-                `${API_BASE_URL}/compras/${id}/completar`,
-                {
-                  method: "PATCH",
-                  headers: {
-                    Authorization: token ? `Bearer ${token}` : "",
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ estado: "completado" }),
-                }
-              );
-
-              if (response.ok) {
-                Alert.alert("Éxito", "Transacción marcada como completada");
-                fetchCompra(); // Recargar datos
-              } else {
-                Alert.alert("Error", "No se pudo completar la transacción");
-              }
-            } catch (error) {
-              console.error("Error completando transacción:", error);
-              Alert.alert("Error", "Error al completar la transacción");
-            } finally {
-              setUpdating(false);
-            }
-          },
-        },
-      ]
-    );
+  const handleCompletarVenta = async () => {
+    if (Platform.OS === "web") {
+      if (
+        !window.confirm(
+          "¿Estás seguro de que quieres marcar esta venta como completada?"
+        )
+      ) {
+        return;
+      }
+    } else {
+      Alert.alert(
+        "Confirmar",
+        "¿Estás seguro de que quieres marcar esta venta como completada?",
+        [
+          { text: "Cancelar", style: "cancel" },
+          { text: "Confirmar", onPress: () => completarVenta() },
+        ]
+      );
+      return;
+    }
+    completarVenta();
   };
 
-  const handleCancelarCompra = async () => {
-    setShowCancelModal(true);
-  };
-
-  const confirmarCancelarCompra = async () => {
+  const completarVenta = async () => {
+    setCompletando(true);
     try {
-      setCanceling(true);
       const token = await AsyncStorage.getItem("token");
-      const response = await fetch(`${API_BASE_URL}/compras/${id}/cancelar`, {
+      const res = await fetch(`${API_BASE_URL}/compras/${id}/completar`, {
         method: "PATCH",
         headers: {
           Authorization: token ? `Bearer ${token}` : "",
           "Content-Type": "application/json",
         },
       });
-
-      if (response.ok) {
-        Alert.alert("Éxito", "Compra cancelada exitosamente");
-        router.replace("/historial-compras");
+      if (res.ok) {
+        Alert.alert("Éxito", "La venta ha sido marcada como completada");
+        router.back();
       } else {
-        Alert.alert("Error", "No se pudo cancelar la compra");
+        Alert.alert("Error", "No se pudo completar la venta");
       }
     } catch (error) {
-      console.error("Error cancelando compra:", error);
-      Alert.alert("Error", "Error al cancelar la compra");
+      console.error("Error completando venta:", error);
+      Alert.alert("Error", "No se pudo completar la venta");
+    } finally {
+      setCompletando(false);
+    }
+  };
+
+  const handleCancelarVenta = async () => {
+    setShowCancelModal(true);
+  };
+
+  const confirmarCancelarVenta = async () => {
+    try {
+      setCanceling(true);
+      const token = await AsyncStorage.getItem("token");
+      const response = await fetch(
+        `${API_BASE_URL}/compras/${id}/cancelar-venta`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.ok) {
+        Alert.alert("Éxito", "Venta cancelada exitosamente");
+        router.replace("/mis-publicaciones");
+      } else {
+        Alert.alert("Error", "No se pudo cancelar la venta");
+      }
+    } catch (error) {
+      console.error("Error cancelando venta:", error);
+      Alert.alert("Error", "Error al cancelar la venta");
     } finally {
       setCanceling(false);
       setShowCancelModal(false);
     }
   };
 
-  const getEstadoColor = (estado: string) => {
-    switch (estado) {
-      case "pago_pendiente":
-        return { backgroundColor: "#c6f6fa", color: "#3B2412" };
-      case "encuentro":
-        return { backgroundColor: "#ffb3d9", color: "#3B2412" };
-      case "envio_pendiente":
-        return { backgroundColor: "#e9d6fa", color: "#3B2412" };
-      case "en_camino":
-        return { backgroundColor: "#e9d6fa", color: "#3B2412" };
-      case "completado":
-        return { backgroundColor: "#c6fadc", color: "#3B2412" };
-      default:
-        return { backgroundColor: "#eee", color: "#3B2412" };
+  const cancelarVenta = async () => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const res = await fetch(`${API_BASE_URL}/compras/${id}/cancelar`, {
+        method: "PATCH",
+        headers: {
+          Authorization: token ? `Bearer ${token}` : "",
+          "Content-Type": "application/json",
+        },
+      });
+      if (res.ok) {
+        Alert.alert("Éxito", "La venta ha sido cancelada");
+        router.back();
+      } else {
+        Alert.alert("Error", "No se pudo cancelar la venta");
+      }
+    } catch (error) {
+      console.error("Error cancelando venta:", error);
+      Alert.alert("Error", "No se pudo cancelar la venta");
     }
   };
 
@@ -201,53 +239,42 @@ export default function CompraDetalleScreen() {
     }
   };
 
-  const getInstrucciones = (tipoEntrega: string, estado: string) => {
-    if (estado === "completado") {
-      return "Esta transacción ha sido completada exitosamente.";
+  const getEstadoColor = (estado: string) => {
+    switch (estado) {
+      case "pago_pendiente":
+        return "#ffd700";
+      case "encuentro":
+        return "#ff69b4";
+      case "envio_pendiente":
+        return "#ffa500";
+      case "en_camino":
+        return "#87ceeb";
+      case "completado":
+        return "#90ee90";
+      default:
+        return "#cccccc";
     }
+  };
 
-    if (tipoEntrega === "encuentro") {
-      return "Presione el siguiente botón si ya realizó el pago del libro y recibió el mismo en condiciones. Debe coordinar el encuentro con el vendedor.";
-    } else {
-      return "Presione el siguiente botón si ya realizó el pago del libro y lo recibió en buenas condiciones.";
-    }
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString("es-ES");
   };
 
   if (loading) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Image
-            source={require("../../assets/images/logoLechuza.png")}
-            style={styles.logo}
-          />
-          <Text style={styles.logoText}>EXLIBRIS</Text>
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#3B2412" />
-          <Text style={styles.loadingText}>
-            Cargando detalles de la compra...
-          </Text>
-        </View>
+        <ActivityIndicator size="large" color="#7c4a2d" style={styles.loader} />
       </View>
     );
   }
 
-  if (error || !compra) {
+  if (!venta) {
     return (
       <View style={styles.container}>
-        <View style={styles.header}>
-          <Image
-            source={require("../../assets/images/logoLechuza.png")}
-            style={styles.logo}
-          />
-          <Text style={styles.logoText}>EXLIBRIS</Text>
-        </View>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>
-            {error || "Compra no encontrada"}
-          </Text>
-        </View>
+        <Text style={styles.errorText}>
+          No se pudo cargar la información de la venta
+        </Text>
       </View>
     );
   }
@@ -273,25 +300,25 @@ export default function CompraDetalleScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.cancelButton}
-          onPress={handleCancelarCompra}
-          disabled={updating || compra.estado === "completado"}
+          onPress={handleCancelarVenta}
+          disabled={completando}
         >
-          <Text style={styles.cancelButtonText}>Cancelar compra</Text>
+          <Text style={styles.cancelButtonText}>Cancelar venta</Text>
         </TouchableOpacity>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
-        <Text style={styles.title}>Detalles de la compra</Text>
+        <Text style={styles.title}>Detalles de la venta</Text>
 
         {/* Detalles del libro */}
         <View style={styles.mainContent}>
           {/* Sección izquierda: Imagen */}
           <View style={styles.leftSection}>
             <View style={styles.imageContainer}>
-              {compra.publicacion.imagenUrl ? (
+              {venta.publicacion.imagenUrl ? (
                 <Image
                   source={{
-                    uri: `${API_BASE_URL}${compra.publicacion.imagenUrl}`,
+                    uri: `${API_BASE_URL}${venta.publicacion.imagenUrl}`,
                   }}
                   style={styles.bookImage}
                   resizeMode="cover"
@@ -306,70 +333,66 @@ export default function CompraDetalleScreen() {
 
           {/* Sección derecha: Detalles del libro */}
           <View style={styles.rightSection}>
-            <Text style={styles.bookTitle}>{compra.publicacion.titulo}</Text>
+            <Text style={styles.bookTitle}>{venta.publicacion.titulo}</Text>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Autor:</Text>
-              <Text style={styles.detailValue}>{compra.publicacion.autor}</Text>
+              <Text style={styles.detailValue}>{venta.publicacion.autor}</Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Género:</Text>
-              <Text style={styles.detailValue}>
-                {compra.publicacion.genero}
-              </Text>
+              <Text style={styles.detailValue}>{venta.publicacion.genero}</Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Editorial:</Text>
               <Text style={styles.detailValue}>
-                {compra.publicacion.editorial}
+                {venta.publicacion.editorial}
               </Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Cantidad de páginas:</Text>
               <Text style={styles.detailValue}>
-                {compra.publicacion.paginas}
+                {venta.publicacion.paginas}
               </Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Idioma:</Text>
-              <Text style={styles.detailValue}>
-                {compra.publicacion.idioma}
-              </Text>
+              <Text style={styles.detailValue}>{venta.publicacion.idioma}</Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Estado:</Text>
               <Text style={styles.detailValue}>
-                {compra.publicacion.estadoLibro}
+                {venta.publicacion.estadoLibro}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Perfil del vendedor */}
+        {/* Perfil del comprador */}
         <View style={styles.sellerSection}>
-          <Text style={styles.sellerTitle}>Perfil del vendedor</Text>
+          <Text style={styles.sellerTitle}>Perfil del comprador</Text>
 
           <View style={styles.sellerDetails}>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Vendedor:</Text>
-              <Text style={styles.detailValue}>{compra.vendedor.nombre}</Text>
+              <Text style={styles.detailLabel}>Comprador:</Text>
+              <Text style={styles.detailValue}>{venta.comprador.nombre}</Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Email:</Text>
-              <Text style={styles.detailValue}>{compra.vendedor.email}</Text>
+              <Text style={styles.detailValue}>{venta.comprador.email}</Text>
             </View>
 
-            {compra.vendedor.telefono && (
+            {venta.comprador.telefono && (
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Teléfono:</Text>
                 <Text style={styles.detailValue}>
-                  {compra.vendedor.telefono}
+                  {venta.comprador.telefono}
                 </Text>
               </View>
             )}
@@ -377,81 +400,80 @@ export default function CompraDetalleScreen() {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Libros vendidos:</Text>
               <Text style={styles.detailValue}>
-                {compra.vendedor.librosVendidos}
+                {venta.comprador.librosVendidos || 0}
               </Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Libros comprados:</Text>
               <Text style={styles.detailValue}>
-                {compra.vendedor.librosComprados}
+                {venta.comprador.librosComprados || 0}
               </Text>
             </View>
 
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Puntuación de vendedor:</Text>
+              <Text style={styles.detailLabel}>Puntuación de comprador:</Text>
               <Text style={styles.detailValue}>
-                {compra.vendedor.puntuacionVendedor} ⭐
+                {venta.comprador.puntuacionVendedor || 0} ⭐
               </Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Ubicación:</Text>
               <Text style={styles.detailValue}>
-                {compra.vendedor.ubicacion}
+                {venta.comprador.ubicacion}
               </Text>
             </View>
           </View>
         </View>
 
-        {/* Estado de la compra */}
+        {/* Estado de la venta */}
         <View style={styles.purchaseStatusSection}>
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>
-              Fecha de solicitud de compra:
-            </Text>
+            <Text style={styles.detailLabel}>Fecha de inicio de venta:</Text>
             <Text style={styles.detailValue}>
-              {new Date(compra.fechaCompra).toLocaleDateString("es-ES")}
+              {new Date(venta.fechaCompra).toLocaleDateString("es-ES")}
             </Text>
           </View>
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Estado:</Text>
-            <View style={[styles.estadoTag, getEstadoColor(compra.estado)]}>
+            <View
+              style={[
+                styles.estadoTag,
+                { backgroundColor: getEstadoColor(venta.estado) },
+              ]}
+            >
               <Text style={styles.estadoText}>
-                {getEstadoText(compra.estado)}
+                {getEstadoText(venta.estado)}
               </Text>
             </View>
           </View>
 
           <Text style={styles.instructions}>
-            {getInstrucciones(compra.tipoEntrega, compra.estado)}
+            Presione el siguiente botón si ya recibió el pago por parte del
+            comprador y entrego el libro en condiciones. Debe coordinar el
+            encuentro con el comprador.
           </Text>
 
-          {compra.estado !== "completado" && (
-            <TouchableOpacity
-              style={[
-                styles.completeButton,
-                updating && styles.completeButtonDisabled,
-              ]}
-              onPress={handleTransaccionRealizada}
-              disabled={updating}
-            >
-              {updating ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.completeButtonText}>
-                  Transacción realizada
-                </Text>
-              )}
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[
+              styles.completeButton,
+              completando && styles.completeButtonDisabled,
+            ]}
+            onPress={handleCompletarVenta}
+            disabled={completando}
+          >
+            {completando ? (
+              <ActivityIndicator size="small" color="#fff" />
+            ) : (
+              <Text style={styles.completeButtonText}>Pago recibido</Text>
+            )}
+          </TouchableOpacity>
 
           <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Confirmación vendedor:</Text>
-            <Text style={styles.detailValue}>
-              {compra.estado === "completado" ? "Confirmado" : "Pendiente"}
-            </Text>
+            <Text style={styles.detailLabel}>Confirmación comprador:</Text>
+            <Text style={styles.detailValue}>Pendiente</Text>
           </View>
         </View>
       </ScrollView>
@@ -465,7 +487,7 @@ export default function CompraDetalleScreen() {
         }}
       />
 
-      {/* Modal de confirmación para cancelar compra */}
+      {/* Modal de confirmación para cancelar venta */}
       <Modal
         visible={showCancelModal}
         transparent
@@ -479,7 +501,7 @@ export default function CompraDetalleScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Confirmar cancelación</Text>
             <Text style={styles.modalMessage}>
-              ¿Estás seguro de que quieres cancelar esta compra?
+              ¿Estás seguro de que quieres cancelar esta venta?
             </Text>
             <Text style={styles.modalWarning}>
               Esta acción no se puede deshacer.
@@ -494,7 +516,7 @@ export default function CompraDetalleScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalButtonDelete]}
-                onPress={confirmarCancelarCompra}
+                onPress={confirmarCancelarVenta}
                 disabled={canceling}
               >
                 <Text style={styles.modalButtonDeleteText}>
@@ -571,26 +593,6 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 20,
     marginBottom: 20,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: "#3B2412",
-  },
-  errorContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#d32f2f",
-    textAlign: "center",
   },
   mainContent: {
     flexDirection: "row",
@@ -719,6 +721,31 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     fontSize: 18,
     textTransform: "uppercase",
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: "#3B2412",
+  },
+  errorContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#d32f2f",
+    textAlign: "center",
+  },
+  loader: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
   },
   // Estilos del modal de confirmación
   modalOverlay: {

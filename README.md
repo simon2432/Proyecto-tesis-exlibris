@@ -9,6 +9,7 @@ Este repositorio contiene una aplicación móvil desarrollada con **Expo/React N
 - **Node.js** (versión 18 o superior) y **npm**
 - Una base de datos **PostgreSQL** disponible
 - Una clave de API para OpenAI
+- Una clave de API para Google books
 
 ## Configuración del backend
 

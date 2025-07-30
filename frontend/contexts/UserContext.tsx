@@ -15,6 +15,7 @@ export interface User {
   id: number;
   nombre: string;
   email: string;
+  telefono?: string;
   documento?: number;
   ubicacion?: string;
   fotoPerfil?: string;
