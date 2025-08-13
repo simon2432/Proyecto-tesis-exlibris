@@ -42,4 +42,7 @@ router.patch("/:id/cancelar", compraController.cancelarCompra);
 // Cancelar una venta
 router.patch("/:id/cancelar-venta", compraController.cancelarVenta);
 
+// Valorar al vendedor (solo comprador)
+router.patch("/:id/valorar-vendedor", compraController.valorarVendedor);
+
 module.exports = router;

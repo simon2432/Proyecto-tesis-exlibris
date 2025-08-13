@@ -28,6 +28,7 @@ interface Venta {
   fechaCompra: string;
   compradorConfirmado: boolean;
   vendedorConfirmado: boolean;
+  valoracionComprador?: number; // Valoración del 1 al 5 que recibió del comprador
   publicacion: {
     id: number;
     titulo: string;
@@ -501,6 +502,54 @@ export default function DetalleVenta() {
             </View>
           )}
 
+          {/* Sección de valoración - solo mostrar si está completada */}
+          {venta.estado === "completado" && (
+            <View style={styles.valoracionSection}>
+              <Text style={styles.valoracionTitle}>
+                Valoración del Comprador
+              </Text>
+
+              {venta.valoracionComprador ? (
+                <View style={styles.valoracionRecibida}>
+                  <Text style={styles.valoracionLabel}>
+                    Valoración recibida del comprador:
+                  </Text>
+                  <View style={styles.estrellasValoracion}>
+                    {[1, 2, 3, 4, 5].map((estrella) => (
+                      <Text
+                        key={estrella}
+                        style={[
+                          styles.estrella,
+                          estrella <= venta.valoracionComprador!
+                            ? styles.estrellaLlena
+                            : styles.estrellaVacia,
+                        ]}
+                      >
+                        ⭐
+                      </Text>
+                    ))}
+                  </View>
+                  <Text style={styles.valoracionTexto}>
+                    {venta.valoracionComprador}/5 estrellas
+                  </Text>
+                  <Text style={styles.valoracionMensaje}>
+                    ¡Gracias por tu excelente servicio!
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.valoracionPendiente}>
+                  <Text style={styles.valoracionLabel}>
+                    El comprador aún no ha valorado esta venta
+                  </Text>
+                  <Text style={styles.valoracionPendienteTexto}>
+                    La valoración aparecerá aquí una vez que el comprador
+                    complete su evaluación
+                  </Text>
+                </View>
+              )}
+            </View>
+          )}
+
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Confirmación comprador:</Text>
             <Text style={styles.detailValue}>
@@ -861,5 +910,74 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
     textAlign: "center",
+  },
+  valoracionSection: {
+    paddingHorizontal: 18,
+    marginBottom: 20,
+    ...(Platform.OS === "web" && {
+      maxWidth: 800,
+      alignSelf: "center",
+      width: "100%",
+    }),
+  },
+  valoracionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#3B2412",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  valoracionRecibida: {
+    backgroundColor: "#fff4e4",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+  },
+  valoracionLabel: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#3B2412",
+    marginBottom: 8,
+  },
+  estrellasValoracion: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginBottom: 8,
+    paddingVertical: 8,
+  },
+  estrella: {
+    fontSize: 32,
+    color: "#ffd700",
+    marginHorizontal: 8,
+  },
+  estrellaLlena: {
+    color: "#ffd700",
+  },
+  estrellaVacia: {
+    color: "#e0e0e0",
+  },
+  valoracionTexto: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#3B2412",
+    marginBottom: 8,
+  },
+  valoracionMensaje: {
+    fontSize: 14,
+    color: "#3B2412",
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+  valoracionPendiente: {
+    backgroundColor: "#fff4e4",
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+  },
+  valoracionPendienteTexto: {
+    fontSize: 14,
+    color: "#7c4a2d",
+    textAlign: "center",
+    marginTop: 8,
   },
 });

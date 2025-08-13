@@ -92,6 +92,7 @@ model Compra {
   fechaCompra    DateTime     @default(now())
   compradorConfirmado Boolean  @default(false)
   vendedorConfirmado  Boolean  @default(false)
+  valoracionComprador Int?     // Valoración del 1 al 5 que hace el comprador al vendedor
   comprador      User         @relation(fields: [compradorId], references: [id])
   publicacion    Publicacion @relation(fields: [publicacionId], references: [id])
   vendedor       User         @relation("Ventas", fields: [vendedorId], references: [id])

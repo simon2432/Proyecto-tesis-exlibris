@@ -673,3 +673,102 @@ exports.cancelarVenta = async (req, res) => {
     res.status(500).json({ error: "Error interno del servidor" });
   }
 };
+
+// Valorar al vendedor (solo comprador, solo una vez, solo si está completada)
+exports.valorarVendedor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { valoracion } = req.body;
+    const userId = req.userId;
+
+    console.log(
+      "[Compra] Valorando vendedor:",
+      id,
+      "valoración:",
+      valoracion,
+      "usuario:",
+      userId
+    );
+
+    // Validar que la valoración esté en el rango correcto
+    if (!valoracion || valoracion < 1 || valoracion > 5) {
+      return res.status(400).json({
+        error: "La valoración debe ser un número del 1 al 5",
+      });
+    }
+
+    // Verificar que la compra existe y pertenece al comprador
+    const compra = await prisma.compra.findFirst({
+      where: {
+        id: parseInt(id),
+        compradorId: parseInt(userId),
+      },
+    });
+
+    if (!compra) {
+      return res.status(404).json({ error: "Compra no encontrada" });
+    }
+
+    // Solo permitir valorar si está completada
+    if (compra.estado !== "completado") {
+      return res.status(400).json({
+        error: "Solo se puede valorar una venta completada",
+      });
+    }
+
+    // Verificar que no se haya valorado antes
+    if (compra.valoracionComprador) {
+      return res.status(400).json({
+        error: "Ya has valorado a este vendedor para esta compra",
+      });
+    }
+
+    // Actualizar la compra con la valoración
+    const compraActualizada = await prisma.compra.update({
+      where: { id: parseInt(id) },
+      data: {
+        valoracionComprador: valoracion,
+      },
+    });
+
+    // Actualizar la puntuación promedio del vendedor
+    const todasLasVentas = await prisma.compra.findMany({
+      where: {
+        vendedorId: compra.vendedorId,
+        valoracionComprador: { not: null },
+      },
+    });
+
+    const totalValoraciones = todasLasVentas.length;
+    const sumaValoraciones = todasLasVentas.reduce(
+      (sum, c) => sum + c.valoracionComprador,
+      0
+    );
+    const puntuacionPromedio =
+      totalValoraciones > 0 ? sumaValoraciones / totalValoraciones : 0;
+
+    await prisma.user.update({
+      where: { id: compra.vendedorId },
+      data: {
+        puntuacionVendedor: puntuacionPromedio,
+        cantidadValoraciones: totalValoraciones,
+      },
+    });
+
+    console.log(
+      "[Compra] Vendedor valorado:",
+      compra.vendedorId,
+      "nueva puntuación:",
+      puntuacionPromedio
+    );
+
+    res.json({
+      message: "Vendedor valorado exitosamente",
+      compra: compraActualizada,
+      nuevaPuntuacionVendedor: puntuacionPromedio,
+    });
+  } catch (error) {
+    console.error("[Compra] Error valorando vendedor:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};

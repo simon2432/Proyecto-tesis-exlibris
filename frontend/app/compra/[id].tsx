@@ -13,6 +13,7 @@ import {
   Modal,
   Pressable,
 } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE_URL } from "../../constants/ApiConfig";
@@ -28,6 +29,7 @@ interface Compra {
   fechaCompra: string;
   compradorConfirmado: boolean;
   vendedorConfirmado: boolean;
+  valoracionComprador?: number; // Valoración del 1 al 5
   publicacion: {
     id: number;
     titulo: string;
@@ -62,6 +64,9 @@ export default function CompraDetalleScreen() {
   const [canceling, setCanceling] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
+  const [valoracion, setValoracion] = useState<number>(0);
+  const [valorando, setValorando] = useState(false);
+  const [showValoracionModal, setShowValoracionModal] = useState(false);
 
   useEffect(() => {
     fetchCompra();
@@ -190,6 +195,54 @@ export default function CompraDetalleScreen() {
           },
         ]
       );
+    }
+  };
+
+  const handleValorarVendedor = async () => {
+    if (valoracion === 0) {
+      Alert.alert("Error", "Debes seleccionar una valoración");
+      return;
+    }
+
+    try {
+      setValorando(true);
+      const token = await AsyncStorage.getItem("token");
+
+      const response = await fetch(
+        `${API_BASE_URL}/compras/${id}/valorar-vendedor`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ valoracion }),
+        }
+      );
+
+      if (response.ok) {
+        const data = await response.json();
+        console.log("[Compra] Vendedor valorado:", data);
+
+        setSuccessMessage("Vendedor valorado exitosamente");
+        setShowSuccessModal(true);
+        setShowValoracionModal(false);
+        setValoracion(0);
+
+        // Recargar los datos de la compra
+        fetchCompra();
+      } else {
+        const errorData = await response.json();
+        Alert.alert(
+          "Error",
+          errorData.error || "No se pudo valorar al vendedor"
+        );
+      }
+    } catch (error) {
+      console.error("[Compra] Error valorando vendedor:", error);
+      Alert.alert("Error", "Error al valorar al vendedor");
+    } finally {
+      setValorando(false);
     }
   };
 
@@ -550,6 +603,103 @@ export default function CompraDetalleScreen() {
               <Text style={styles.waitingText}>
                 Esperando confirmación del vendedor...
               </Text>
+            </View>
+          )}
+
+          {/* Sección de valoración - solo mostrar si está completada */}
+          {compra.estado === "completado" && (
+            <View style={styles.valoracionSection}>
+              <Text style={styles.valoracionTitle}>Valoración</Text>
+
+              {compra.valoracionComprador ? (
+                <View style={styles.valoracionCompletada}>
+                  <Text style={styles.valoracionLabel}>
+                    Tu valoración al vendedor:
+                  </Text>
+                  <View style={styles.estrellasValoracion}>
+                    {[1, 2, 3, 4, 5].map((estrella) => (
+                      <Text
+                        key={estrella}
+                        style={[
+                          styles.estrella,
+                          estrella <= compra.valoracionComprador!
+                            ? styles.estrellaLlena
+                            : styles.estrellaVacia,
+                        ]}
+                      >
+                        ⭐
+                      </Text>
+                    ))}
+                  </View>
+                  <Text style={styles.valoracionResumen}>
+                    {compra.valoracionComprador}/5 estrellas
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.valoracionPendiente}>
+                  <View style={styles.pickerContainer}>
+                    {Platform.OS === "web" ? (
+                      <select
+                        value={valoracion}
+                        onChange={(e) => setValoracion(Number(e.target.value))}
+                        style={{
+                          width: "100%",
+                          height: 60,
+                          fontSize: 18,
+                          padding: 12,
+                          borderRadius: 15,
+                          border: "2px solid #ddd",
+                          backgroundColor: "#fff",
+                          color: "#3B2412",
+                          cursor: "pointer",
+                          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+                          outline: "none",
+                        }}
+                      >
+                        <option value={0}>⭐ Seleccione una valoración</option>
+                        <option value={1}>⭐</option>
+                        <option value={2}>⭐⭐</option>
+                        <option value={3}>⭐⭐⭐</option>
+                        <option value={4}>⭐⭐⭐⭐</option>
+                        <option value={5}>⭐⭐⭐⭐⭐</option>
+                      </select>
+                    ) : (
+                      <Picker
+                        selectedValue={valoracion}
+                        onValueChange={(itemValue) => setValoracion(itemValue)}
+                        style={styles.picker}
+                        itemStyle={styles.pickerItem}
+                      >
+                        <Picker.Item
+                          label="⭐ Seleccione una valoración"
+                          value={0}
+                        />
+                        <Picker.Item label="⭐" value={1} />
+                        <Picker.Item label="⭐⭐" value={2} />
+                        <Picker.Item label="⭐⭐⭐" value={3} />
+                        <Picker.Item label="⭐⭐⭐⭐" value={4} />
+                        <Picker.Item label="⭐⭐⭐⭐⭐" value={5} />
+                      </Picker>
+                    )}
+                  </View>
+                  <TouchableOpacity
+                    style={[
+                      styles.valorarButton,
+                      valoracion === 0 && styles.valorarButtonDisabled,
+                    ]}
+                    onPress={handleValorarVendedor}
+                    disabled={valoracion === 0 || valorando}
+                  >
+                    {valorando ? (
+                      <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                      <Text style={styles.valorarButtonText}>
+                        Valorar vendedor
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              )}
             </View>
           )}
 
@@ -942,5 +1092,140 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "bold",
     textAlign: "center",
+  },
+  valoracionSection: {
+    paddingHorizontal: 18,
+    marginBottom: 20,
+    ...(Platform.OS === "web" && {
+      maxWidth: 800,
+      alignSelf: "center",
+      width: "100%",
+    }),
+  },
+  valoracionTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#3B2412",
+    textAlign: "center",
+    marginBottom: 16,
+  },
+  valoracionCompletada: {
+    backgroundColor: "#f3e8da",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  valoracionLabel: {
+    fontSize: 16,
+    color: "#3B2412",
+    marginBottom: 12,
+    fontWeight: "bold",
+  },
+  estrellasValoracion: {
+    flexDirection: "row",
+    marginBottom: 12,
+  },
+  valoracionResumen: {
+    fontSize: 18,
+    color: "#3B2412",
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: "#fff",
+    borderRadius: 15,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  estrella: {
+    fontSize: 40,
+    color: "#e0e0e0",
+    marginHorizontal: 4,
+    textShadowColor: "rgba(0, 0, 0, 0.1)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
+  },
+  estrellaLlena: {
+    color: "#ffd700", // Color dorado para las estrellas llenas
+    textShadowColor: "rgba(255, 215, 0, 0.3)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 8,
+  },
+  estrellaVacia: {
+    color: "#e0e0e0", // Color gris claro para las estrellas vacías
+  },
+  valoracionTexto: {
+    fontSize: 16,
+    color: "#3B2412",
+    marginBottom: 16,
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+  valoracionPendiente: {
+    backgroundColor: "#f3e8da",
+    borderRadius: 20,
+    padding: 24,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  pickerContainer: {
+    marginBottom: 20,
+    paddingVertical: 8,
+    backgroundColor: "#fff",
+    borderRadius: 15,
+    borderWidth: 2,
+    borderColor: "#ddd",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  picker: {
+    height: 60,
+    width: "100%",
+  },
+  pickerItem: {
+    fontSize: 18,
+    color: "#3B2412",
+    fontWeight: "500",
+  },
+  valorarButton: {
+    backgroundColor: "#3B2412",
+    borderRadius: 25,
+    paddingVertical: 14,
+    paddingHorizontal: 40,
+    alignItems: "center",
+    minWidth: 180,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  valorarButtonDisabled: {
+    backgroundColor: "#ccc",
+    opacity: 0.6,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  valorarButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 18,
+    textTransform: "uppercase",
   },
 });
