@@ -6,6 +6,9 @@ const authMiddleware = require("../middleware/authMiddleware");
 // Aplicar middleware de autenticación a todas las rutas
 router.use(authMiddleware);
 
+// Ruta de prueba
+router.get("/test", compraController.test);
+
 // Crear una nueva compra
 router.post("/", compraController.crearCompra);
 
@@ -26,6 +29,12 @@ router.get("/:id", compraController.obtenerUnaCompra);
 
 // Completar una compra
 router.patch("/:id/completar", compraController.completarCompra);
+
+// Confirmar transacción desde el comprador
+router.patch("/:id/confirmar-comprador", compraController.confirmarComprador);
+
+// Confirmar pago desde el vendedor
+router.patch("/:id/confirmar-vendedor", compraController.confirmarVendedor);
 
 // Cancelar una compra
 router.patch("/:id/cancelar", compraController.cancelarCompra);

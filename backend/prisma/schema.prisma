@@ -45,6 +45,7 @@ model Lectura {
 enum EstadoPublicacion {
   activa
   en_venta
+  vendida
 }
 
 model Publicacion {
@@ -70,6 +71,8 @@ enum EstadoCompra {
   encuentro
   envio_pendiente
   en_camino
+  comprador_confirmado
+  vendedor_confirmado
   completado
 }
 
@@ -87,6 +90,8 @@ model Compra {
   estado         EstadoCompra @default(pago_pendiente)
   precio         Float
   fechaCompra    DateTime     @default(now())
+  compradorConfirmado Boolean  @default(false)
+  vendedorConfirmado  Boolean  @default(false)
   comprador      User         @relation(fields: [compradorId], references: [id])
   publicacion    Publicacion @relation(fields: [publicacionId], references: [id])
   vendedor       User         @relation("Ventas", fields: [vendedorId], references: [id])

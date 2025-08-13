@@ -24,6 +24,7 @@ export default function MisPublicaciones() {
   const [publicacionesEnProceso, setPublicacionesEnProceso] = useState<any[]>(
     []
   );
+  const [ventasCompletadas, setVentasCompletadas] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [selectedPublicacion, setSelectedPublicacion] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
@@ -33,6 +34,8 @@ export default function MisPublicaciones() {
       fetchPublicaciones();
     } else if (tab === "en-proceso") {
       fetchPublicacionesEnProceso();
+    } else if (tab === "vendidas") {
+      fetchVentasCompletadas();
     }
   }, [tab]);
 
@@ -63,22 +66,76 @@ export default function MisPublicaciones() {
     setLoading(true);
     try {
       const token = await AsyncStorage.getItem("token");
+
+      // Obtener publicaciones
+      const resPublicaciones = await fetch(
+        `${API_BASE_URL}/publicaciones/mis`,
+        {
+          headers: { Authorization: token ? `Bearer ${token}` : "" },
+        }
+      );
+
+      if (resPublicaciones.ok) {
+        const publicaciones = await resPublicaciones.json();
+        console.log(
+          "[Mis Publicaciones] Todas las publicaciones:",
+          publicaciones
+        );
+
+        // Solo mostrar las que están en proceso (estado en_venta)
+        // Las vendidas ya no aparecerán aquí porque tienen estado "vendida"
+        const enProceso = publicaciones.filter(
+          (p: any) => p.estado === "en_venta"
+        );
+
+        console.log("[Mis Publicaciones] Publicaciones en proceso:", enProceso);
+
+        setPublicacionesEnProceso(enProceso);
+      } else {
+        setPublicacionesEnProceso([]);
+      }
+    } catch (err) {
+      console.error(
+        "[Mis Publicaciones] Error en fetchPublicacionesEnProceso:",
+        err
+      );
+      setPublicacionesEnProceso([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchVentasCompletadas = async () => {
+    setLoading(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+
+      // Obtener publicaciones vendidas directamente
       const res = await fetch(`${API_BASE_URL}/publicaciones/mis`, {
         headers: {
           Authorization: token ? `Bearer ${token}` : "",
         },
       });
+
       if (res.ok) {
-        const data = await res.json();
-        // Solo mostrar las que están en proceso (estado en_venta)
-        setPublicacionesEnProceso(
-          data.filter((p: any) => p.estado === "en_venta")
+        const publicaciones = await res.json();
+        console.log(
+          "[Mis Publicaciones] Todas las publicaciones:",
+          publicaciones
         );
+
+        // Solo mostrar las que tienen estado "vendida"
+        const vendidas = publicaciones.filter(
+          (p: any) => p.estado === "vendida"
+        );
+        console.log("[Mis Publicaciones] Publicaciones vendidas:", vendidas);
+
+        setVentasCompletadas(vendidas);
       } else {
-        setPublicacionesEnProceso([]);
+        setVentasCompletadas([]);
       }
     } catch (err) {
-      setPublicacionesEnProceso([]);
+      setVentasCompletadas([]);
     } finally {
       setLoading(false);
     }
@@ -289,6 +346,65 @@ export default function MisPublicaciones() {
               ))}
             </View>
           ))}
+        {tab === "vendidas" &&
+          (loading ? (
+            <ActivityIndicator
+              size="large"
+              color="#7c4a2d"
+              style={{ marginTop: 40 }}
+            />
+          ) : ventasCompletadas.length === 0 ? (
+            <Text
+              style={{
+                color: "#a08b7d",
+                fontStyle: "italic",
+                textAlign: "center",
+                marginTop: 30,
+              }}
+            >
+              No tienes ventas completadas.
+            </Text>
+          ) : (
+            <View style={styles.grid}>
+              {ventasCompletadas.map((publicacion) => (
+                <TouchableOpacity
+                  key={publicacion.id}
+                  style={styles.bookCard}
+                  onPress={() => {
+                    // Navegar a la pantalla de venta completada
+                    // Necesitamos obtener el ID de la compra primero
+                    fetchCompraByPublicacion(publicacion.id);
+                  }}
+                  activeOpacity={0.8}
+                >
+                  {publicacion.imagenUrl ? (
+                    <Image
+                      source={{
+                        uri: `${API_BASE_URL}${publicacion.imagenUrl}`,
+                      }}
+                      style={styles.imagePlaceholder}
+                      resizeMode="cover"
+                    />
+                  ) : (
+                    <View style={styles.imagePlaceholder}>
+                      <Text style={styles.placeholderText}>Sin imagen</Text>
+                    </View>
+                  )}
+                  <View style={styles.priceTagShadow}>
+                    <View style={styles.priceTag}>
+                      <Text style={styles.priceText}>
+                        ${publicacion.precio.toLocaleString("es-ES")}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={styles.pubTitle} numberOfLines={2}>
+                    {publicacion.titulo || "Sin título"}
+                  </Text>
+                  <Text style={styles.ventaEstado}>Vendida</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ))}
       </ScrollView>
       <ModalDetallePublicacion
         visible={modalVisible}
@@ -450,5 +566,16 @@ const styles = StyleSheet.create({
     marginTop: 6,
     marginBottom: 0,
     paddingHorizontal: 2,
+  },
+  ventaEstado: {
+    fontSize: 12,
+    color: "#4caf50",
+    fontWeight: "bold",
+    textAlign: "center",
+    marginTop: 4,
+  },
+  placeholderText: {
+    color: "#7c4a2d",
+    fontSize: 14,
   },
 });

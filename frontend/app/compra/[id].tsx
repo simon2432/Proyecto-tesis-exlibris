@@ -26,6 +26,8 @@ interface Compra {
   tipoEntrega: string;
   precio: number;
   fechaCompra: string;
+  compradorConfirmado: boolean;
+  vendedorConfirmado: boolean;
   publicacion: {
     id: number;
     titulo: string;
@@ -58,6 +60,8 @@ export default function CompraDetalleScreen() {
   const [updating, setUpdating] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
 
   useEffect(() => {
     fetchCompra();
@@ -92,48 +96,101 @@ export default function CompraDetalleScreen() {
   };
 
   const handleTransaccionRealizada = async () => {
-    Alert.alert(
-      "Confirmar transacción",
-      "¿Estás seguro de que ya realizaste el pago y recibiste el libro en buenas condiciones?",
-      [
-        {
-          text: "Cancelar",
-          style: "cancel",
-        },
-        {
-          text: "Confirmar",
-          onPress: async () => {
-            setUpdating(true);
-            try {
-              const token = await AsyncStorage.getItem("token");
-              const response = await fetch(
-                `${API_BASE_URL}/compras/${id}/completar`,
-                {
-                  method: "PATCH",
-                  headers: {
-                    Authorization: token ? `Bearer ${token}` : "",
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({ estado: "completado" }),
-                }
-              );
+    console.log("[Compra] Botón presionado, iniciando confirmación...");
 
-              if (response.ok) {
-                Alert.alert("Éxito", "Transacción marcada como completada");
-                fetchCompra(); // Recargar datos
-              } else {
-                Alert.alert("Error", "No se pudo completar la transacción");
-              }
-            } catch (error) {
-              console.error("Error completando transacción:", error);
-              Alert.alert("Error", "Error al completar la transacción");
-            } finally {
-              setUpdating(false);
-            }
+    // Función para confirmar la transacción
+    const confirmarTransaccion = async () => {
+      console.log("[Compra] Usuario confirmó, iniciando proceso...");
+      setUpdating(true);
+      try {
+        const token = await AsyncStorage.getItem("token");
+        console.log("[Compra] Token obtenido:", token ? "Sí" : "No");
+        console.log("[Compra] ID de compra:", id);
+        console.log(
+          "[Compra] URL de la API:",
+          `${API_BASE_URL}/compras/${id}/confirmar-comprador`
+        );
+
+        const response = await fetch(
+          `${API_BASE_URL}/compras/${id}/confirmar-comprador`,
+          {
+            method: "PATCH",
+            headers: {
+              Authorization: token ? `Bearer ${token}` : "",
+              "Content-Type": "application/json",
+            },
+          }
+        );
+
+        console.log(
+          "[Compra] Respuesta del servidor:",
+          response.status,
+          response.statusText
+        );
+
+        if (response.ok) {
+          const responseData = await response.json();
+          console.log("[Compra] Respuesta exitosa:", responseData);
+
+          setSuccessMessage("Transacción confirmada por el comprador");
+          setShowSuccessModal(true);
+          fetchCompra(); // Recargar datos
+        } else {
+          const errorData = await response.json();
+          console.log("[Compra] Error del servidor:", errorData);
+
+          if (Platform.OS === "web") {
+            alert(
+              "Error: " +
+                (errorData.error || "No se pudo confirmar la transacción")
+            );
+          } else {
+            Alert.alert(
+              "Error",
+              errorData.error || "No se pudo confirmar la transacción"
+            );
+          }
+        }
+      } catch (error) {
+        console.error("[Compra] Error confirmando transacción:", error);
+
+        if (Platform.OS === "web") {
+          alert("Error: Error al confirmar la transacción");
+        } else {
+          Alert.alert("Error", "Error al confirmar la transacción");
+        }
+      } finally {
+        setUpdating(false);
+      }
+    };
+
+    // Manejar confirmación según la plataforma
+    if (Platform.OS === "web") {
+      // En web, usar window.confirm
+      if (
+        window.confirm(
+          "¿Estás seguro de que ya realizaste el pago y recibiste el libro en buenas condiciones?"
+        )
+      ) {
+        confirmarTransaccion();
+      }
+    } else {
+      // En móvil, usar Alert
+      Alert.alert(
+        "Confirmar transacción",
+        "¿Estás seguro de que ya realizaste el pago y recibiste el libro en buenas condiciones?",
+        [
+          {
+            text: "Cancelar",
+            style: "cancel",
           },
-        },
-      ]
-    );
+          {
+            text: "Confirmar",
+            onPress: confirmarTransaccion,
+          },
+        ]
+      );
+    }
   };
 
   const handleCancelarCompra = async () => {
@@ -177,6 +234,10 @@ export default function CompraDetalleScreen() {
         return { backgroundColor: "#e9d6fa", color: "#3B2412" };
       case "en_camino":
         return { backgroundColor: "#e9d6fa", color: "#3B2412" };
+      case "comprador_confirmado":
+        return { backgroundColor: "#ffb74d", color: "#3B2412" };
+      case "vendedor_confirmado":
+        return { backgroundColor: "#81c784", color: "#3B2412" };
       case "completado":
         return { backgroundColor: "#c6fadc", color: "#3B2412" };
       default:
@@ -194,6 +255,10 @@ export default function CompraDetalleScreen() {
         return "Envío pendiente";
       case "en_camino":
         return "En camino";
+      case "comprador_confirmado":
+        return "Comprador confirmó";
+      case "vendedor_confirmado":
+        return "Vendedor confirmó";
       case "completado":
         return "Completado";
       default:
@@ -204,6 +269,14 @@ export default function CompraDetalleScreen() {
   const getInstrucciones = (tipoEntrega: string, estado: string) => {
     if (estado === "completado") {
       return "Esta transacción ha sido completada exitosamente.";
+    }
+
+    if (estado === "comprador_confirmado") {
+      return "Has confirmado la transacción. Esperando confirmación del vendedor.";
+    }
+
+    if (estado === "vendedor_confirmado") {
+      return "El vendedor ya confirmó el pago. Confirma que recibiste el libro para completar la transacción.";
     }
 
     if (tipoEntrega === "encuentro") {
@@ -271,13 +344,15 @@ export default function CompraDetalleScreen() {
         >
           <Text style={styles.backButtonText}>Volver</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={handleCancelarCompra}
-          disabled={updating || compra.estado === "completado"}
-        >
-          <Text style={styles.cancelButtonText}>Cancelar compra</Text>
-        </TouchableOpacity>
+        {compra.estado !== "completado" && (
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={handleCancelarCompra}
+            disabled={updating}
+          >
+            <Text style={styles.cancelButtonText}>Cancelar compra</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -428,29 +503,60 @@ export default function CompraDetalleScreen() {
             {getInstrucciones(compra.tipoEntrega, compra.estado)}
           </Text>
 
-          {compra.estado !== "completado" && (
-            <TouchableOpacity
-              style={[
-                styles.completeButton,
-                updating && styles.completeButtonDisabled,
-              ]}
-              onPress={handleTransaccionRealizada}
-              disabled={updating}
-            >
-              {updating ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.completeButtonText}>
-                  Transacción realizada
-                </Text>
-              )}
-            </TouchableOpacity>
+          {(() => {
+            console.log("[Compra] Estado de la compra:", compra.estado);
+            console.log(
+              "[Compra] Comprador confirmado:",
+              compra.compradorConfirmado
+            );
+            console.log(
+              "[Compra] Vendedor confirmado:",
+              compra.vendedorConfirmado
+            );
+            console.log(
+              "[Compra] Condición del botón:",
+              (compra.estado === "encuentro" ||
+                compra.estado === "vendedor_confirmado") &&
+                !compra.compradorConfirmado
+            );
+            return null;
+          })()}
+
+          {(compra.estado === "encuentro" ||
+            compra.estado === "vendedor_confirmado") &&
+            !compra.compradorConfirmado && (
+              <TouchableOpacity
+                style={[
+                  styles.completeButton,
+                  updating && styles.completeButtonDisabled,
+                ]}
+                onPress={handleTransaccionRealizada}
+                disabled={updating}
+              >
+                {updating ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.completeButtonText}>
+                    {compra.estado === "vendedor_confirmado"
+                      ? "Confirmar recepción"
+                      : "Transacción realizada"}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
+
+          {compra.compradorConfirmado && !compra.vendedorConfirmado && (
+            <View style={styles.waitingMessage}>
+              <Text style={styles.waitingText}>
+                Esperando confirmación del vendedor...
+              </Text>
+            </View>
           )}
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Confirmación vendedor:</Text>
             <Text style={styles.detailValue}>
-              {compra.estado === "completado" ? "Confirmado" : "Pendiente"}
+              {compra.vendedorConfirmado ? "Confirmado" : "Pendiente"}
             </Text>
           </View>
         </View>
@@ -500,6 +606,32 @@ export default function CompraDetalleScreen() {
                 <Text style={styles.modalButtonDeleteText}>
                   {canceling ? "Cancelando..." : "Eliminar"}
                 </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de confirmación exitosa */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowSuccessModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>¡Éxito!</Text>
+            <Text style={styles.modalMessage}>{successMessage}</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSuccess]}
+                onPress={() => setShowSuccessModal(false)}
+              >
+                <Text style={styles.modalButtonSuccessText}>Aceptar</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -789,5 +921,26 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  modalButtonSuccess: {
+    backgroundColor: "#4caf50",
+  },
+  modalButtonSuccessText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
+  waitingMessage: {
+    backgroundColor: "#e3f2fd",
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 16,
+    alignItems: "center",
+  },
+  waitingText: {
+    color: "#1976d2",
+    fontSize: 14,
+    fontWeight: "bold",
+    textAlign: "center",
   },
 });

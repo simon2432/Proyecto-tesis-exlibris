@@ -378,15 +378,34 @@ exports.obtenerCompraPorPublicacion = async (req, res) => {
   }
 };
 
-// Completar una compra
-exports.completarCompra = async (req, res) => {
+// Función de prueba para verificar que el controlador esté funcionando
+exports.test = async (req, res) => {
+  try {
+    console.log("[Compra] Test endpoint llamado");
+    res.json({
+      message: "Controlador de compras funcionando correctamente",
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error("[Compra] Error en test:", error);
+    res.status(500).json({ error: "Error en test" });
+  }
+};
+
+// Confirmar transacción desde el lado del comprador
+exports.confirmarComprador = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.userId;
 
-    console.log("[Compra] Completando compra:", id, "por usuario:", userId);
+    console.log(
+      "[Compra] Comprador confirmando transacción:",
+      id,
+      "usuario:",
+      userId
+    );
 
-    // Verificar que la compra existe y pertenece al usuario
+    // Verificar que la compra existe y pertenece al comprador
     const compra = await prisma.compra.findFirst({
       where: {
         id: parseInt(id),
@@ -398,18 +417,157 @@ exports.completarCompra = async (req, res) => {
       return res.status(404).json({ error: "Compra no encontrada" });
     }
 
-    // Actualizar el estado de la compra
+    // Solo permitir confirmar si está en estado de encuentro o vendedor_confirmado
+    if (
+      compra.estado !== "encuentro" &&
+      compra.estado !== "vendedor_confirmado"
+    ) {
+      return res.status(400).json({
+        error:
+          "Solo se puede confirmar transacciones en estado de encuentro o cuando el vendedor ya confirmó",
+      });
+    }
+
+    // Marcar como confirmado por el comprador
     const compraActualizada = await prisma.compra.update({
       where: { id: parseInt(id) },
-      data: { estado: "completado" },
+      data: {
+        compradorConfirmado: true,
+        estado: compra.vendedorConfirmado
+          ? "completado"
+          : "comprador_confirmado",
+      },
     });
 
-    console.log("[Compra] Compra completada:", compraActualizada.id);
+    // Si la venta se completó, actualizar el estado de la publicación
+    if (compraActualizada.estado === "completado") {
+      await prisma.publicacion.update({
+        where: { id: compra.publicacionId },
+        data: { estado: "vendida" },
+      });
+      console.log(
+        "[Compra] Publicación marcada como vendida:",
+        compra.publicacionId
+      );
+    }
+
+    console.log(
+      "[Compra] Comprador confirmó transacción:",
+      compraActualizada.id
+    );
 
     res.json({
-      message: "Compra completada exitosamente",
+      message: "Transacción confirmada por el comprador",
       compra: compraActualizada,
     });
+  } catch (error) {
+    console.error("[Compra] Error confirmando comprador:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// Confirmar pago desde el lado del vendedor
+exports.confirmarVendedor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    console.log("[Compra] Vendedor confirmando pago:", id, "usuario:", userId);
+
+    // Verificar que la compra existe y pertenece al vendedor
+    const compra = await prisma.compra.findFirst({
+      where: {
+        id: parseInt(id),
+        vendedorId: parseInt(userId),
+      },
+    });
+
+    if (!compra) {
+      return res.status(404).json({ error: "Venta no encontrada" });
+    }
+
+    // Solo permitir confirmar si está en estado de encuentro o comprador_confirmado
+    if (
+      compra.estado !== "encuentro" &&
+      compra.estado !== "comprador_confirmado"
+    ) {
+      return res.status(400).json({
+        error:
+          "Solo se puede confirmar transacciones en estado de encuentro o cuando el comprador ya confirmó",
+      });
+    }
+
+    // Marcar como confirmado por el vendedor
+    const compraActualizada = await prisma.compra.update({
+      where: { id: parseInt(id) },
+      data: {
+        vendedorConfirmado: true,
+        estado: compra.compradorConfirmado
+          ? "completado"
+          : "vendedor_confirmado",
+      },
+    });
+
+    // Si la venta se completó, actualizar el estado de la publicación
+    if (compraActualizada.estado === "completado") {
+      await prisma.publicacion.update({
+        where: { id: compra.publicacionId },
+        data: { estado: "vendida" },
+      });
+      console.log(
+        "[Compra] Publicación marcada como vendida:",
+        compra.publicacionId
+      );
+    }
+
+    console.log("[Compra] Vendedor confirmó pago:", compraActualizada.id);
+
+    res.json({
+      message: "Pago confirmado por el vendedor",
+      compra: compraActualizada,
+    });
+  } catch (error) {
+    console.error("[Compra] Error confirmando vendedor:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// Completar una compra (mantener compatibilidad)
+exports.completarCompra = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    console.log("[Compra] Completando compra:", id, "por usuario:", userId);
+
+    // Verificar que la compra existe y pertenece al usuario
+    const compra = await prisma.compra.findFirst({
+      where: {
+        id: parseInt(id),
+        OR: [
+          { compradorId: parseInt(userId) },
+          { vendedorId: parseInt(userId) },
+        ],
+      },
+    });
+
+    if (!compra) {
+      return res.status(404).json({ error: "Compra no encontrada" });
+    }
+
+    // Si es el comprador, confirmar desde su lado
+    if (compra.compradorId === parseInt(userId)) {
+      return exports.confirmarComprador(req, res);
+    }
+
+    // Si es el vendedor, confirmar desde su lado
+    if (compra.vendedorId === parseInt(userId)) {
+      return exports.confirmarVendedor(req, res);
+    }
+
+    res
+      .status(403)
+      .json({ error: "No tienes permisos para completar esta compra" });
   } catch (error) {
     console.error("[Compra] Error completando compra:", error);
     res.status(500).json({ error: "Error interno del servidor" });

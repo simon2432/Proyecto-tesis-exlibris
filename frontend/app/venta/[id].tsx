@@ -26,6 +26,8 @@ interface Venta {
   tipoEntrega: string;
   precio: number;
   fechaCompra: string;
+  compradorConfirmado: boolean;
+  vendedorConfirmado: boolean;
   publicacion: {
     id: number;
     titulo: string;
@@ -145,22 +147,26 @@ export default function DetalleVenta() {
     setCompletando(true);
     try {
       const token = await AsyncStorage.getItem("token");
-      const res = await fetch(`${API_BASE_URL}/compras/${id}/completar`, {
-        method: "PATCH",
-        headers: {
-          Authorization: token ? `Bearer ${token}` : "",
-          "Content-Type": "application/json",
-        },
-      });
+      const res = await fetch(
+        `${API_BASE_URL}/compras/${id}/confirmar-vendedor`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json",
+          },
+        }
+      );
       if (res.ok) {
-        Alert.alert("Éxito", "La venta ha sido marcada como completada");
-        router.back();
+        Alert.alert("Éxito", "Pago confirmado por el vendedor");
+        fetchVenta(); // Recargar datos
       } else {
-        Alert.alert("Error", "No se pudo completar la venta");
+        const errorData = await res.json();
+        Alert.alert("Error", errorData.error || "No se pudo confirmar el pago");
       }
     } catch (error) {
-      console.error("Error completando venta:", error);
-      Alert.alert("Error", "No se pudo completar la venta");
+      console.error("Error confirmando pago:", error);
+      Alert.alert("Error", "No se pudo confirmar el pago");
     } finally {
       setCompletando(false);
     }
@@ -232,6 +238,10 @@ export default function DetalleVenta() {
         return "Envío pendiente";
       case "en_camino":
         return "En camino";
+      case "comprador_confirmado":
+        return "Comprador confirmó";
+      case "vendedor_confirmado":
+        return "Vendedor confirmó";
       case "completado":
         return "Completado";
       default:
@@ -249,6 +259,10 @@ export default function DetalleVenta() {
         return "#ffa500";
       case "en_camino":
         return "#87ceeb";
+      case "comprador_confirmado":
+        return "#ffb74d";
+      case "vendedor_confirmado":
+        return "#81c784";
       case "completado":
         return "#90ee90";
       default:
@@ -298,13 +312,15 @@ export default function DetalleVenta() {
         >
           <Text style={styles.backButtonText}>Volver</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.cancelButton}
-          onPress={handleCancelarVenta}
-          disabled={completando}
-        >
-          <Text style={styles.cancelButtonText}>Cancelar venta</Text>
-        </TouchableOpacity>
+        {venta.estado !== "completado" && (
+          <TouchableOpacity
+            style={styles.cancelButton}
+            onPress={handleCancelarVenta}
+            disabled={completando}
+          >
+            <Text style={styles.cancelButtonText}>Cancelar venta</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -451,29 +467,45 @@ export default function DetalleVenta() {
           </View>
 
           <Text style={styles.instructions}>
-            Presione el siguiente botón si ya recibió el pago por parte del
-            comprador y entrego el libro en condiciones. Debe coordinar el
-            encuentro con el comprador.
+            {venta.estado === "completado"
+              ? "Esta transacción ha sido completada exitosamente."
+              : venta.estado === "vendedor_confirmado"
+              ? "Ya confirmaste el pago. Esperando confirmación del comprador."
+              : venta.estado === "comprador_confirmado"
+              ? "El comprador ya confirmó la transacción. Confirma que recibiste el pago para completar la transacción."
+              : "Presione el siguiente botón si ya recibió el pago por parte del comprador y entrego el libro en condiciones. Debe coordinar el encuentro con el comprador."}
           </Text>
 
-          <TouchableOpacity
-            style={[
-              styles.completeButton,
-              completando && styles.completeButtonDisabled,
-            ]}
-            onPress={handleCompletarVenta}
-            disabled={completando}
-          >
-            {completando ? (
-              <ActivityIndicator size="small" color="#fff" />
-            ) : (
-              <Text style={styles.completeButtonText}>Pago recibido</Text>
-            )}
-          </TouchableOpacity>
+          {venta.estado !== "completado" && !venta.vendedorConfirmado && (
+            <TouchableOpacity
+              style={[
+                styles.completeButton,
+                completando && styles.completeButtonDisabled,
+              ]}
+              onPress={handleCompletarVenta}
+              disabled={completando}
+            >
+              {completando ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.completeButtonText}>Pago recibido</Text>
+              )}
+            </TouchableOpacity>
+          )}
+
+          {venta.vendedorConfirmado && !venta.compradorConfirmado && (
+            <View style={styles.waitingMessage}>
+              <Text style={styles.waitingText}>
+                Esperando confirmación del comprador...
+              </Text>
+            </View>
+          )}
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Confirmación comprador:</Text>
-            <Text style={styles.detailValue}>Pendiente</Text>
+            <Text style={styles.detailValue}>
+              {venta.compradorConfirmado ? "Confirmado" : "Pendiente"}
+            </Text>
           </View>
         </View>
       </ScrollView>
@@ -816,5 +848,18 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  waitingMessage: {
+    backgroundColor: "#e3f2fd",
+    borderRadius: 8,
+    padding: 12,
+    marginVertical: 16,
+    alignItems: "center",
+  },
+  waitingText: {
+    color: "#1976d2",
+    fontSize: 14,
+    fontWeight: "bold",
+    textAlign: "center",
   },
 });
