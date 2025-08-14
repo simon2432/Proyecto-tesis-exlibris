@@ -100,7 +100,6 @@ exports.editarPerfil = async (req, res) => {
 exports.getUserById = async (req, res) => {
   try {
     const { id } = req.params;
-
     const user = await prisma.user.findUnique({
       where: { id: parseInt(id) },
       select: {
@@ -109,10 +108,10 @@ exports.getUserById = async (req, res) => {
         email: true,
         telefono: true,
         ubicacion: true,
-        puntuacionVendedor: true,
-        librosVendidos: true,
-        librosComprados: true,
         fotoPerfil: true,
+        puntuacionVendedor: true,
+        cantidadValoraciones: true,
+        librosFavoritos: true,
       },
     });
 
@@ -120,17 +119,57 @@ exports.getUserById = async (req, res) => {
       return res.status(404).json({ error: "Usuario no encontrado" });
     }
 
-    console.log("[User] Datos del usuario obtenidos:", {
-      id: user.id,
-      nombre: user.nombre,
-      email: user.email,
-      telefono: user.telefono,
-      ubicacion: user.ubicacion,
-    });
-
     res.json(user);
   } catch (error) {
-    console.error("Error obteniendo usuario por ID:", error);
+    console.error("Error al obtener usuario:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// GET /api/usuarios/estadisticas
+exports.getEstadisticasUsuario = async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: "Usuario no autenticado" });
+    }
+
+    const userId = req.userId;
+
+    // Contar libros vendidos (compras completadas donde el usuario es vendedor)
+    const librosVendidos = await prisma.compra.count({
+      where: {
+        publicacion: {
+          vendedorId: userId,
+        },
+        estado: "completado",
+      },
+    });
+
+    // Contar libros comprados (compras completadas donde el usuario es comprador)
+    const librosComprados = await prisma.compra.count({
+      where: {
+        compradorId: userId,
+        estado: "completado",
+      },
+    });
+
+    // Obtener puntuación promedio del vendedor
+    const usuario = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        puntuacionVendedor: true,
+        cantidadValoraciones: true,
+      },
+    });
+
+    res.json({
+      librosVendidos,
+      librosComprados,
+      puntuacionVendedor: usuario?.puntuacionVendedor || 0,
+      cantidadValoraciones: usuario?.cantidadValoraciones || 0,
+    });
+  } catch (error) {
+    console.error("Error al obtener estadísticas:", error);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 };

@@ -27,6 +27,7 @@ router.post(
 );
 
 router.get("/favoritos", authMiddleware, userController.getFavoritos);
+router.get("/estadisticas", authMiddleware, userController.getEstadisticasUsuario);
 router.get("/:id", authMiddleware, userController.getUserById);
 router.put("/favoritos", authMiddleware, userController.updateFavoritos);
 router.put("/editar", authMiddleware, userController.editarPerfil);

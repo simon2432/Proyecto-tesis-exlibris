@@ -67,6 +67,7 @@ export default function CompraDetalleScreen() {
   const [valoracion, setValoracion] = useState<number>(0);
   const [valorando, setValorando] = useState(false);
   const [showValoracionModal, setShowValoracionModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
 
   useEffect(() => {
     fetchCompra();
@@ -102,99 +103,71 @@ export default function CompraDetalleScreen() {
 
   const handleTransaccionRealizada = async () => {
     console.log("[Compra] Botón presionado, iniciando confirmación...");
+    setShowConfirmModal(true);
+  };
 
-    // Función para confirmar la transacción
-    const confirmarTransaccion = async () => {
-      console.log("[Compra] Usuario confirmó, iniciando proceso...");
-      setUpdating(true);
-      try {
-        const token = await AsyncStorage.getItem("token");
-        console.log("[Compra] Token obtenido:", token ? "Sí" : "No");
-        console.log("[Compra] ID de compra:", id);
-        console.log(
-          "[Compra] URL de la API:",
-          `${API_BASE_URL}/compras/${id}/confirmar-comprador`
-        );
+  const confirmarTransaccion = async () => {
+    console.log("[Compra] Usuario confirmó, iniciando proceso...");
+    setUpdating(true);
+    try {
+      const token = await AsyncStorage.getItem("token");
+      console.log("[Compra] Token obtenido:", token ? "Sí" : "No");
+      console.log("[Compra] ID de compra:", id);
+      console.log(
+        "[Compra] URL de la API:",
+        `${API_BASE_URL}/compras/${id}/confirmar-comprador`
+      );
 
-        const response = await fetch(
-          `${API_BASE_URL}/compras/${id}/confirmar-comprador`,
-          {
-            method: "PATCH",
-            headers: {
-              Authorization: token ? `Bearer ${token}` : "",
-              "Content-Type": "application/json",
-            },
-          }
-        );
-
-        console.log(
-          "[Compra] Respuesta del servidor:",
-          response.status,
-          response.statusText
-        );
-
-        if (response.ok) {
-          const responseData = await response.json();
-          console.log("[Compra] Respuesta exitosa:", responseData);
-
-          setSuccessMessage("Transacción confirmada por el comprador");
-          setShowSuccessModal(true);
-          fetchCompra(); // Recargar datos
-        } else {
-          const errorData = await response.json();
-          console.log("[Compra] Error del servidor:", errorData);
-
-          if (Platform.OS === "web") {
-            alert(
-              "Error: " +
-                (errorData.error || "No se pudo confirmar la transacción")
-            );
-          } else {
-            Alert.alert(
-              "Error",
-              errorData.error || "No se pudo confirmar la transacción"
-            );
-          }
+      const response = await fetch(
+        `${API_BASE_URL}/compras/${id}/confirmar-comprador`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json",
+          },
         }
-      } catch (error) {
-        console.error("[Compra] Error confirmando transacción:", error);
+      );
+
+      console.log(
+        "[Compra] Respuesta del servidor:",
+        response.status,
+        response.statusText
+      );
+
+      if (response.ok) {
+        const responseData = await response.json();
+        console.log("[Compra] Respuesta exitosa:", responseData);
+
+        setSuccessMessage("Transacción confirmada por el comprador");
+        setShowSuccessModal(true);
+        fetchCompra(); // Recargar datos
+      } else {
+        const errorData = await response.json();
+        console.log("[Compra] Error del servidor:", errorData);
 
         if (Platform.OS === "web") {
-          alert("Error: Error al confirmar la transacción");
+          alert(
+            "Error: " +
+              (errorData.error || "No se pudo confirmar la transacción")
+          );
         } else {
-          Alert.alert("Error", "Error al confirmar la transacción");
+          Alert.alert(
+            "Error",
+            errorData.error || "No se pudo confirmar la transacción"
+          );
         }
-      } finally {
-        setUpdating(false);
       }
-    };
+    } catch (error) {
+      console.error("[Compra] Error confirmando transacción:", error);
 
-    // Manejar confirmación según la plataforma
-    if (Platform.OS === "web") {
-      // En web, usar window.confirm
-      if (
-        window.confirm(
-          "¿Estás seguro de que ya realizaste el pago y recibiste el libro en buenas condiciones?"
-        )
-      ) {
-        confirmarTransaccion();
+      if (Platform.OS === "web") {
+        alert("Error: Error al confirmar la transacción");
+      } else {
+        Alert.alert("Error", "Error al confirmar la transacción");
       }
-    } else {
-      // En móvil, usar Alert
-      Alert.alert(
-        "Confirmar transacción",
-        "¿Estás seguro de que ya realizaste el pago y recibiste el libro en buenas condiciones?",
-        [
-          {
-            text: "Cancelar",
-            style: "cancel",
-          },
-          {
-            text: "Confirmar",
-            onPress: confirmarTransaccion,
-          },
-        ]
-      );
+    } finally {
+      setUpdating(false);
     }
   };
 
@@ -393,7 +366,7 @@ export default function CompraDetalleScreen() {
       <View style={styles.actionButtons}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.replace("/historial-compras")}
         >
           <Text style={styles.backButtonText}>Volver</Text>
         </TouchableOpacity>
@@ -756,6 +729,44 @@ export default function CompraDetalleScreen() {
                 <Text style={styles.modalButtonDeleteText}>
                   {canceling ? "Cancelando..." : "Eliminar"}
                 </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de confirmación para transacción realizada */}
+      <Modal
+        visible={showConfirmModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowConfirmModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirmar transacción</Text>
+            <Text style={styles.modalMessage}>
+              ¿Estás seguro de que ya realizaste el pago y recibiste el libro en
+              buenas condiciones?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowConfirmModal(false)}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSuccess]}
+                onPress={() => {
+                  setShowConfirmModal(false);
+                  confirmarTransaccion();
+                }}
+              >
+                <Text style={styles.modalButtonSuccessText}>Confirmar</Text>
               </TouchableOpacity>
             </View>
           </View>

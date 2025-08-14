@@ -60,6 +60,11 @@ export default function DetalleVenta() {
   const [completando, setCompletando] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [canceling, setCanceling] = useState(false);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [showErrorModal, setShowErrorModal] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
 
   useEffect(() => {
     fetchVenta();
@@ -122,26 +127,7 @@ export default function DetalleVenta() {
   };
 
   const handleCompletarVenta = async () => {
-    if (Platform.OS === "web") {
-      if (
-        !window.confirm(
-          "¿Estás seguro de que quieres marcar esta venta como completada?"
-        )
-      ) {
-        return;
-      }
-    } else {
-      Alert.alert(
-        "Confirmar",
-        "¿Estás seguro de que quieres marcar esta venta como completada?",
-        [
-          { text: "Cancelar", style: "cancel" },
-          { text: "Confirmar", onPress: () => completarVenta() },
-        ]
-      );
-      return;
-    }
-    completarVenta();
+    setShowConfirmModal(true);
   };
 
   const completarVenta = async () => {
@@ -159,15 +145,18 @@ export default function DetalleVenta() {
         }
       );
       if (res.ok) {
-        Alert.alert("Éxito", "Pago confirmado por el vendedor");
+        setSuccessMessage("Pago confirmado por el vendedor");
+        setShowSuccessModal(true);
         fetchVenta(); // Recargar datos
       } else {
         const errorData = await res.json();
-        Alert.alert("Error", errorData.error || "No se pudo confirmar el pago");
+        setErrorMessage(errorData.error || "No se pudo confirmar el pago");
+        setShowErrorModal(true);
       }
     } catch (error) {
       console.error("Error confirmando pago:", error);
-      Alert.alert("Error", "No se pudo confirmar el pago");
+      setErrorMessage("No se pudo confirmar el pago");
+      setShowErrorModal(true);
     } finally {
       setCompletando(false);
     }
@@ -193,14 +182,20 @@ export default function DetalleVenta() {
       );
 
       if (response.ok) {
-        Alert.alert("Éxito", "Venta cancelada exitosamente");
-        router.replace("/mis-publicaciones");
+        setSuccessMessage("Venta cancelada exitosamente");
+        setShowSuccessModal(true);
+        // Redirigir después de cerrar el modal
+        setTimeout(() => {
+          router.replace("/mis-publicaciones");
+        }, 1500);
       } else {
-        Alert.alert("Error", "No se pudo cancelar la venta");
+        setErrorMessage("No se pudo cancelar la venta");
+        setShowErrorModal(true);
       }
     } catch (error) {
       console.error("Error cancelando venta:", error);
-      Alert.alert("Error", "Error al cancelar la venta");
+      setErrorMessage("Error al cancelar la venta");
+      setShowErrorModal(true);
     } finally {
       setCanceling(false);
       setShowCancelModal(false);
@@ -218,14 +213,20 @@ export default function DetalleVenta() {
         },
       });
       if (res.ok) {
-        Alert.alert("Éxito", "La venta ha sido cancelada");
-        router.back();
+        setSuccessMessage("La venta ha sido cancelada");
+        setShowSuccessModal(true);
+        // Redirigir después de cerrar el modal
+        setTimeout(() => {
+          router.replace("/mis-publicaciones");
+        }, 1500);
       } else {
-        Alert.alert("Error", "No se pudo cancelar la venta");
+        setErrorMessage("No se pudo cancelar la venta");
+        setShowErrorModal(true);
       }
     } catch (error) {
       console.error("Error cancelando venta:", error);
-      Alert.alert("Error", "No se pudo cancelar la venta");
+      setErrorMessage("No se pudo cancelar la venta");
+      setShowErrorModal(true);
     }
   };
 
@@ -309,7 +310,7 @@ export default function DetalleVenta() {
       <View style={styles.actionButtons}>
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => router.back()}
+          onPress={() => router.replace("/mis-publicaciones")}
         >
           <Text style={styles.backButtonText}>Volver</Text>
         </TouchableOpacity>
@@ -558,6 +559,95 @@ export default function DetalleVenta() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Modal de éxito */}
+      <Modal
+        visible={showSuccessModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSuccessModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowSuccessModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>¡Éxito!</Text>
+            <Text style={styles.modalMessage}>{successMessage}</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSuccess]}
+                onPress={() => setShowSuccessModal(false)}
+              >
+                <Text style={styles.modalButtonSuccessText}>Aceptar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de error */}
+      <Modal
+        visible={showErrorModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowErrorModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowErrorModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Error</Text>
+            <Text style={styles.modalMessage}>{errorMessage}</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowErrorModal(false)}
+              >
+                <Text style={styles.modalButtonCancelText}>Aceptar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
+
+      {/* Modal de confirmación para completar venta */}
+      <Modal
+        visible={showConfirmModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setShowConfirmModal(false)}
+        >
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirmar</Text>
+            <Text style={styles.modalMessage}>
+              ¿Estás seguro de que quieres marcar esta venta como completada?
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={() => setShowConfirmModal(false)}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonSuccess]}
+                onPress={() => {
+                  setShowConfirmModal(false);
+                  completarVenta();
+                }}
+              >
+                <Text style={styles.modalButtonSuccessText}>Confirmar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Pressable>
+      </Modal>
 
       <CustomTabBar
         activeTab="market"
@@ -979,5 +1069,13 @@ const styles = StyleSheet.create({
     color: "#7c4a2d",
     textAlign: "center",
     marginTop: 8,
+  },
+  modalButtonSuccess: {
+    backgroundColor: "#4CAF50",
+  },
+  modalButtonSuccessText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
   },
 });

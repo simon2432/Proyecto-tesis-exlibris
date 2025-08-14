@@ -37,6 +37,13 @@ export default function PerfilScreen() {
   const [lecturas, setLecturas] = useState<any[]>([]);
   const [portadas, setPortadas] = useState<{ [key: string]: string }>({});
   const [loadingLecturas, setLoadingLecturas] = useState(true);
+  const [estadisticas, setEstadisticas] = useState({
+    librosVendidos: 0,
+    librosComprados: 0,
+    puntuacionVendedor: 0,
+    cantidadValoraciones: 0,
+  });
+  const [loadingEstadisticas, setLoadingEstadisticas] = useState(true);
 
   // Función para obtener lecturas
   const fetchLecturas = async () => {
@@ -77,16 +84,43 @@ export default function PerfilScreen() {
     }
   };
 
+  // Función para obtener estadísticas del usuario
+  const fetchEstadisticas = async () => {
+    try {
+      setLoadingEstadisticas(true);
+      const token = await AsyncStorage.getItem("token");
+      const res = await axios.get(`${API_BASE_URL}/usuarios/estadisticas`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        timeout: 5000,
+      });
+
+      setEstadisticas(res.data);
+    } catch (error) {
+      console.error("Error al cargar estadísticas:", error);
+      // En caso de error, mantener valores por defecto
+      setEstadisticas({
+        librosVendidos: 0,
+        librosComprados: 0,
+        puntuacionVendedor: 0,
+        cantidadValoraciones: 0,
+      });
+    } finally {
+      setLoadingEstadisticas(false);
+    }
+  };
+
   useEffect(() => {
     // Precargar imágenes comunes
     preloadImages();
     fetchLecturas();
+    fetchEstadisticas();
   }, []);
 
   // Refrescar lecturas cuando se regrese al perfil
   useFocusEffect(
     React.useCallback(() => {
       fetchLecturas();
+      fetchEstadisticas();
     }, [])
   );
 
@@ -371,13 +405,28 @@ export default function PerfilScreen() {
         <View style={styles.sellerSection}>
           <Text style={styles.sellerTitle}>Perfil vendedor</Text>
           <Text style={styles.sellerStat}>
-            Libros vendidos: <Text style={{ fontWeight: "bold" }}>4</Text>
+            Libros vendidos:{" "}
+            <Text style={{ fontWeight: "bold" }}>
+              {loadingEstadisticas ? "..." : estadisticas.librosVendidos}
+            </Text>
           </Text>
           <Text style={styles.sellerStat}>
-            Libros comprados: <Text style={{ fontWeight: "bold" }}>11</Text>
+            Libros comprados:{" "}
+            <Text style={{ fontWeight: "bold" }}>
+              {loadingEstadisticas ? "..." : estadisticas.librosComprados}
+            </Text>
           </Text>
           <Text style={[styles.sellerStat, { fontWeight: "bold" }]}>
-            Puntuacion de vendedor: 4.5⭐
+            Puntuacion de vendedor:{" "}
+            {loadingEstadisticas
+              ? "..."
+              : `${estadisticas.puntuacionVendedor.toFixed(1)}⭐`}
+            {estadisticas.cantidadValoraciones > 0 && (
+              <Text style={{ fontSize: 12, color: "#7c4a2d" }}>
+                {" "}
+                ({estadisticas.cantidadValoraciones} valoraciones)
+              </Text>
+            )}
           </Text>
         </View>
       </ScrollView>
