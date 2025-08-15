@@ -70,7 +70,9 @@ export default function HistorialCompras() {
       compra.estado === "pago_pendiente" ||
       compra.estado === "encuentro" ||
       compra.estado === "envio_pendiente" ||
-      compra.estado === "en_camino"
+      compra.estado === "en_camino" ||
+      compra.estado === "comprador_confirmado" ||
+      compra.estado === "vendedor_confirmado"
   );
 
   const comprasCompletadas = compras.filter(

@@ -752,6 +752,7 @@ exports.valorarVendedor = async (req, res) => {
       data: {
         puntuacionVendedor: puntuacionPromedio,
         cantidadValoraciones: totalValoraciones,
+        sumaValoraciones: sumaValoraciones,
       },
     });
 

@@ -111,6 +111,7 @@ exports.getUserById = async (req, res) => {
         fotoPerfil: true,
         puntuacionVendedor: true,
         cantidadValoraciones: true,
+        sumaValoraciones: true,
         librosFavoritos: true,
       },
     });
@@ -159,6 +160,7 @@ exports.getEstadisticasUsuario = async (req, res) => {
       select: {
         puntuacionVendedor: true,
         cantidadValoraciones: true,
+        sumaValoraciones: true,
       },
     });
 
@@ -167,6 +169,7 @@ exports.getEstadisticasUsuario = async (req, res) => {
       librosComprados,
       puntuacionVendedor: usuario?.puntuacionVendedor || 0,
       cantidadValoraciones: usuario?.cantidadValoraciones || 0,
+      sumaValoraciones: usuario?.sumaValoraciones || 0,
     });
   } catch (error) {
     console.error("Error al obtener estadísticas:", error);

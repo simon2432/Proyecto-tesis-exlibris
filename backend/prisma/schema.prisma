@@ -19,6 +19,7 @@ model User {
   librosComprados      Int       @default(0)
   puntuacionVendedor   Float     @default(0.0)
   cantidadValoraciones Int       @default(0)
+  sumaValoraciones     Int       @default(0)
   fechaRegistro        DateTime  @default(now())
   ubicacion            String?
   telefono             String?
