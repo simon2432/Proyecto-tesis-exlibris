@@ -36,6 +36,18 @@ router.patch("/:id/confirmar-comprador", compraController.confirmarComprador);
 // Confirmar pago desde el vendedor
 router.patch("/:id/confirmar-vendedor", compraController.confirmarVendedor);
 
+// Proceso de envío - Confirmar pago por vendedor
+router.patch(
+  "/:id/confirmar-pago-vendedor",
+  compraController.confirmarPagoVendedor
+);
+
+// Proceso de envío - Confirmar envío por comprador
+router.patch(
+  "/:id/confirmar-envio-comprador",
+  compraController.confirmarEnvioComprador
+);
+
 // Cancelar una compra
 router.patch("/:id/cancelar", compraController.cancelarCompra);
 

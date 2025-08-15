@@ -532,6 +532,114 @@ exports.confirmarVendedor = async (req, res) => {
   }
 };
 
+// Confirmar pago por parte del vendedor (cambia estado a envio_pendiente)
+exports.confirmarPagoVendedor = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    console.log("[Compra] Vendedor confirmando pago:", id, "usuario:", userId);
+
+    // Verificar que la compra existe y pertenece al vendedor
+    const compra = await prisma.compra.findFirst({
+      where: {
+        id: parseInt(id),
+        vendedorId: parseInt(userId),
+      },
+    });
+
+    if (!compra) {
+      return res.status(404).json({ error: "Compra no encontrada" });
+    }
+
+    // Solo permitir confirmar pago si está en estado pago_pendiente
+    if (compra.estado !== "pago_pendiente") {
+      return res.status(400).json({
+        error: "Solo se puede confirmar pago en estado de pago pendiente",
+      });
+    }
+
+    // Actualizar el estado a envio_pendiente
+    const compraActualizada = await prisma.compra.update({
+      where: { id: parseInt(id) },
+      data: {
+        estado: "envio_pendiente",
+        vendedorConfirmado: true,
+      },
+    });
+
+    console.log(
+      "[Compra] Pago confirmado por vendedor:",
+      id,
+      "nuevo estado: envio_pendiente"
+    );
+
+    res.json({
+      message: "Pago confirmado exitosamente",
+      compra: compraActualizada,
+    });
+  } catch (error) {
+    console.error("[Compra] Error confirmando pago:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// Confirmar envío por parte del comprador (cambia estado a en_camino)
+exports.confirmarEnvioComprador = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.userId;
+
+    console.log(
+      "[Compra] Comprador confirmando envío:",
+      id,
+      "usuario:",
+      userId
+    );
+
+    // Verificar que la compra existe y pertenece al comprador
+    const compra = await prisma.compra.findFirst({
+      where: {
+        id: parseInt(id),
+        compradorId: parseInt(userId),
+      },
+    });
+
+    if (!compra) {
+      return res.status(404).json({ error: "Compra no encontrada" });
+    }
+
+    // Solo permitir confirmar envío si está en estado envio_pendiente
+    if (compra.estado !== "envio_pendiente") {
+      return res.status(400).json({
+        error: "Solo se puede confirmar envío en estado de envío pendiente",
+      });
+    }
+
+    // Actualizar el estado a en_camino
+    const compraActualizada = await prisma.compra.update({
+      where: { id: parseInt(id) },
+      data: {
+        estado: "en_camino",
+      },
+    });
+
+    console.log(
+      "[Compra] Envío confirmado por comprador:",
+      id,
+      "nuevo estado: en_camino"
+    );
+
+    res.json({
+      message: "Envío confirmado exitosamente",
+      compra: compraActualizada,
+    });
+  } catch (error) {
+    console.error("[Compra] Error confirmando envío:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
 // Completar una compra (mantener compatibilidad)
 exports.completarCompra = async (req, res) => {
   try {

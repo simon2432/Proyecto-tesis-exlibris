@@ -100,6 +100,8 @@ export default function PublicacionDetalleScreen() {
       };
 
       console.log("Creando compra:", compraData);
+      console.log("API_BASE_URL:", API_BASE_URL);
+      console.log("URL completa:", `${API_BASE_URL}/compras`);
 
       const response = await axios.post(`${API_BASE_URL}/compras`, compraData, {
         headers: {
@@ -110,12 +112,15 @@ export default function PublicacionDetalleScreen() {
 
       console.log("Compra creada exitosamente:", response.data);
 
-      // Si es encuentro, redirigir al historial de compras
+      // Redirigir al historial de compras para ambos tipos de entrega
+      router.replace("/historial-compras");
+
+      // Si es encuentro, mostrar mensaje específico
       if (tipoEntrega === "encuentro") {
-        router.replace("/historial-compras");
+        console.log("Compra con encuentro creada, redirigiendo al historial");
       } else {
-        // Para envío, aquí se podría redirigir a una página de pago
-        console.log("Redirigiendo a página de pago para envío");
+        // Para envío, mostrar mensaje específico
+        console.log("Compra con envío creada, redirigiendo al historial");
       }
     } catch (error) {
       console.error("Error creando compra:", error);
