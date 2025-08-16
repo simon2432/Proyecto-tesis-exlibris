@@ -57,7 +57,7 @@ export default function DetalleVenta() {
   const router = useRouter();
   const [venta, setVenta] = useState<Venta | null>(null);
   const [loading, setLoading] = useState(true);
-  const [completando, setCompletando] = useState(false);
+  const [confirmandoPago, setConfirmandoPago] = useState(false);
   const [showCancelModal, setShowCancelModal] = useState(false);
   const [canceling, setCanceling] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -126,16 +126,16 @@ export default function DetalleVenta() {
     }
   };
 
-  const handleCompletarVenta = async () => {
+  const handleConfirmarPago = () => {
     setShowConfirmModal(true);
   };
 
-  const completarVenta = async () => {
-    setCompletando(true);
+  const confirmarPagoVendedor = async () => {
+    setConfirmandoPago(true);
     try {
       const token = await AsyncStorage.getItem("token");
       const res = await fetch(
-        `${API_BASE_URL}/compras/${id}/confirmar-vendedor`,
+        `${API_BASE_URL}/compras/${id}/confirmar-pago-vendedor`,
         {
           method: "PATCH",
           headers: {
@@ -145,7 +145,7 @@ export default function DetalleVenta() {
         }
       );
       if (res.ok) {
-        setSuccessMessage("Pago confirmado por el vendedor");
+        setSuccessMessage("Pago confirmado exitosamente");
         setShowSuccessModal(true);
         fetchVenta(); // Recargar datos
       } else {
@@ -158,7 +158,7 @@ export default function DetalleVenta() {
       setErrorMessage("No se pudo confirmar el pago");
       setShowErrorModal(true);
     } finally {
-      setCompletando(false);
+      setConfirmandoPago(false);
     }
   };
 
@@ -318,7 +318,7 @@ export default function DetalleVenta() {
           <TouchableOpacity
             style={styles.cancelButton}
             onPress={handleCancelarVenta}
-            disabled={completando}
+            disabled={confirmandoPago}
           >
             <Text style={styles.cancelButtonText}>Cancelar venta</Text>
           </TouchableOpacity>
@@ -471,23 +471,25 @@ export default function DetalleVenta() {
           <Text style={styles.instructions}>
             {venta.estado === "completado"
               ? "Esta transacción ha sido completada exitosamente."
+              : venta.estado === "envio_pendiente"
+              ? "Debe realizar el envío y enviarle al comprador la información del envío. Una vez que el comprador confirme que recibió la información, el pedido pasará a estado 'En camino'."
               : venta.estado === "vendedor_confirmado"
               ? "Ya confirmaste el pago. Esperando confirmación del comprador."
               : venta.estado === "comprador_confirmado"
               ? "El comprador ya confirmó la transacción. Confirma que recibiste el pago para completar la transacción."
-              : "Presione el siguiente botón si ya recibió el pago por parte del comprador y entrego el libro en condiciones. Debe coordinar el encuentro con el comprador."}
+              : "Presione el siguiente botón si ya recibió el pago por parte del comprador. El comprador debe enviarle el comprobante del envio."}
           </Text>
 
           {venta.estado !== "completado" && !venta.vendedorConfirmado && (
             <TouchableOpacity
               style={[
                 styles.completeButton,
-                completando && styles.completeButtonDisabled,
+                confirmandoPago && styles.completeButtonDisabled,
               ]}
-              onPress={handleCompletarVenta}
-              disabled={completando}
+              onPress={handleConfirmarPago}
+              disabled={confirmandoPago}
             >
-              {completando ? (
+              {confirmandoPago ? (
                 <ActivityIndicator size="small" color="#fff" />
               ) : (
                 <Text style={styles.completeButtonText}>Pago recibido</Text>
@@ -551,12 +553,17 @@ export default function DetalleVenta() {
             </View>
           )}
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Confirmación comprador:</Text>
-            <Text style={styles.detailValue}>
-              {venta.compradorConfirmado ? "Confirmado" : "Pendiente"}
-            </Text>
-          </View>
+          {/* Solo mostrar confirmación del comprador si NO está en estados intermedios */}
+          {!["pago_pendiente", "envio_pendiente", "en_camino"].includes(
+            venta.estado
+          ) && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Confirmación comprador:</Text>
+              <Text style={styles.detailValue}>
+                {venta.compradorConfirmado ? "Confirmado" : "Pendiente"}
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -612,7 +619,7 @@ export default function DetalleVenta() {
         </Pressable>
       </Modal>
 
-      {/* Modal de confirmación para completar venta */}
+      {/* Modal de confirmación para confirmar pago */}
       <Modal
         visible={showConfirmModal}
         transparent
@@ -624,9 +631,12 @@ export default function DetalleVenta() {
           onPress={() => setShowConfirmModal(false)}
         >
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Confirmar</Text>
+            <Text style={styles.modalTitle}>Confirmar pago</Text>
             <Text style={styles.modalMessage}>
-              ¿Estás seguro de que quieres marcar esta venta como completada?
+              ¿Estás seguro de que ya recibiste el pago por parte del comprador?
+            </Text>
+            <Text style={styles.modalMessage}>
+              Al confirmar, el pedido pasará a estado Pendiente de envío
             </Text>
             <View style={styles.modalButtons}>
               <TouchableOpacity
@@ -639,10 +649,12 @@ export default function DetalleVenta() {
                 style={[styles.modalButton, styles.modalButtonSuccess]}
                 onPress={() => {
                   setShowConfirmModal(false);
-                  completarVenta();
+                  confirmarPagoVendedor();
                 }}
               >
-                <Text style={styles.modalButtonSuccessText}>Confirmar</Text>
+                <Text style={styles.modalButtonSuccessText}>
+                  Confirmar pago
+                </Text>
               </TouchableOpacity>
             </View>
           </View>

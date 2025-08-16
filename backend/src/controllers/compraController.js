@@ -417,14 +417,15 @@ exports.confirmarComprador = async (req, res) => {
       return res.status(404).json({ error: "Compra no encontrada" });
     }
 
-    // Solo permitir confirmar si está en estado de encuentro o vendedor_confirmado
+    // Solo permitir confirmar si está en estado de encuentro, vendedor_confirmado, o en_camino
     if (
       compra.estado !== "encuentro" &&
-      compra.estado !== "vendedor_confirmado"
+      compra.estado !== "vendedor_confirmado" &&
+      compra.estado !== "en_camino"
     ) {
       return res.status(400).json({
         error:
-          "Solo se puede confirmar transacciones en estado de encuentro o cuando el vendedor ya confirmó",
+          "Solo se puede confirmar transacciones en estado de encuentro, cuando el vendedor ya confirmó, o cuando el envío está en camino",
       });
     }
 

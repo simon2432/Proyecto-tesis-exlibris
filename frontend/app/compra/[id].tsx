@@ -303,19 +303,55 @@ export default function CompraDetalleScreen() {
       );
 
       if (response.ok) {
-        setSuccessMessage("Comprobante de envío confirmado exitosamente");
+        setSuccessMessage("Información de envío confirmada exitosamente");
         setShowSuccessModal(true);
         fetchCompra(); // Recargar datos
       } else {
         const errorData = await response.json();
         Alert.alert(
           "Error",
-          errorData.error || "No se pudo confirmar el comprobante de envío"
+          errorData.error || "No se pudo confirmar la información de envío"
         );
       }
     } catch (error) {
-      console.error("Error confirmando comprobante de envío:", error);
-      Alert.alert("Error", "Error al confirmar el comprobante de envío");
+      console.error("Error confirmando información de envío:", error);
+      Alert.alert("Error", "Error al confirmar la información de envío");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
+  // Función para que el comprador confirme la recepción del envío en buen estado
+  const confirmarRecepcionEnvio = async () => {
+    try {
+      setUpdating(true);
+      const token = await AsyncStorage.getItem("token");
+
+      const response = await fetch(
+        `${API_BASE_URL}/compras/${id}/confirmar-comprador`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.ok) {
+        setSuccessMessage("Recepción del envío confirmada exitosamente");
+        setShowSuccessModal(true);
+        fetchCompra(); // Recargar datos
+      } else {
+        const errorData = await response.json();
+        Alert.alert(
+          "Error",
+          errorData.error || "No se pudo confirmar la recepción del envío"
+        );
+      }
+    } catch (error) {
+      console.error("Error confirmando recepción del envío:", error);
+      Alert.alert("Error", "Error al confirmar la recepción del envío");
     } finally {
       setUpdating(false);
     }
@@ -415,6 +451,8 @@ export default function CompraDetalleScreen() {
         return "Ahora debes realizar el pago del libro, coordinar con el vendedor";
       } else if (estado === "envio_pendiente") {
         return "Presione el siguiente botón si ya recibio la informacion del envio por parte del vendedor";
+      } else if (estado === "en_camino") {
+        return "El envío está en camino. Una vez que recibas el libro, confirma que llegó en buen estado.";
       }
       return "Presione el siguiente botón si ya realizó el pago del libro y lo recibió en buenas condiciones.";
     } else {
@@ -677,7 +715,29 @@ export default function CompraDetalleScreen() {
                   <ActivityIndicator size="small" color="#fff" />
                 ) : (
                   <Text style={styles.completeButtonText}>
-                    Comprobante de envío recibido
+                    Información de envío recibida
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
+
+          {/* Botón para comprador confirmar recepción del envío - solo para envío en estado en_camino */}
+          {compra.tipoEntrega === "envio" &&
+            compra.estado === "en_camino" &&
+            isComprador && (
+              <TouchableOpacity
+                style={[
+                  styles.completeButton,
+                  updating && styles.completeButtonDisabled,
+                ]}
+                onPress={confirmarRecepcionEnvio}
+                disabled={updating}
+              >
+                {updating ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.completeButtonText}>
+                    Confirmar recepción del envío
                   </Text>
                 )}
               </TouchableOpacity>
@@ -721,7 +781,18 @@ export default function CompraDetalleScreen() {
               {isComprador && compra.estado === "envio_pendiente" && (
                 <View style={styles.waitingMessage}>
                   <Text style={styles.waitingText}>
-                    Esperando confirmación del envío por parte del vendedor...
+                    El vendedor debe realizar el envío y enviarte la
+                    información. Una vez que la recibas, confirma con el botón
+                    de arriba.
+                  </Text>
+                </View>
+              )}
+
+              {isComprador && compra.estado === "en_camino" && (
+                <View style={styles.waitingMessage}>
+                  <Text style={styles.waitingText}>
+                    El envío está en camino. Debes esperar a que llegue y luego
+                    confirmar que recibiste el libro en buen estado.
                   </Text>
                 </View>
               )}
@@ -731,6 +802,15 @@ export default function CompraDetalleScreen() {
                   <Text style={styles.waitingText}>
                     Debe despachar el envío y enviarle al comprador el
                     comprobante de envío
+                  </Text>
+                </View>
+              )}
+
+              {isVendedor && compra.estado === "en_camino" && (
+                <View style={styles.waitingMessage}>
+                  <Text style={styles.waitingText}>
+                    El envío está en camino. Debes esperar a que el comprador
+                    confirme que recibió el libro en buen estado.
                   </Text>
                 </View>
               )}
@@ -842,12 +922,17 @@ export default function CompraDetalleScreen() {
             </View>
           )}
 
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Confirmación vendedor:</Text>
-            <Text style={styles.detailValue}>
-              {compra.vendedorConfirmado ? "Confirmado" : "Pendiente"}
-            </Text>
-          </View>
+          {/* Solo mostrar confirmación del vendedor si NO está en estados intermedios */}
+          {!["pago_pendiente", "envio_pendiente", "en_camino"].includes(
+            compra.estado
+          ) && (
+            <View style={styles.detailRow}>
+              <Text style={styles.detailLabel}>Confirmación vendedor:</Text>
+              <Text style={styles.detailValue}>
+                {compra.vendedorConfirmado ? "Confirmado" : "Pendiente"}
+              </Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
