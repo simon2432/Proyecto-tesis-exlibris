@@ -239,7 +239,10 @@ export default function PerfilScreen() {
           >
             <Text style={styles.topButtonText}>Agregar lectura</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.topButton}>
+          <TouchableOpacity
+            style={styles.topButton}
+            onPress={() => router.push("/logros")}
+          >
             <Text style={styles.topButtonText}>Ver logros</Text>
           </TouchableOpacity>
         </View>

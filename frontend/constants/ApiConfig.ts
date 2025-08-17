@@ -7,7 +7,7 @@ const API_URLS = {
   // Para emulador Android (usa 10.0.2.2 en lugar de localhost)
   androidEmulator: "http://10.0.2.2:3001",
   // Para dispositivos móviles físicos (iOS/Android en dispositivo real)
-  mobile: "http://192.168.0.111", // <--- Cambia esta IP por la de tu PC
+  mobile: "http:// 192.168.0.113", // <--- Cambia esta IP por la de tu PC
   // Para producción (cuando despliegues)
   production: "https://tu-backend-produccion.com",
 };

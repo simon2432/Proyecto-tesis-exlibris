@@ -18,7 +18,7 @@ import { API_BASE_URL } from "../constants/ApiConfig";
 
 const BACKEND_URL = API_BASE_URL;
 
-const lechuzaImg = require("../assets/images/lechuza.png");
+const lechuzaImg = require("../assets/images/Lechuza.png");
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 

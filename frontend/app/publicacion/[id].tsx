@@ -135,7 +135,7 @@ export default function PublicacionDetalleScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <Image
-            source={require("../../assets/images/lechuza.png")}
+            source={require("../../assets/images/Lechuza.png")}
             style={styles.logo}
           />
           <Text style={styles.logoText}>EXLIBRIS</Text>
@@ -153,7 +153,7 @@ export default function PublicacionDetalleScreen() {
       <View style={styles.container}>
         <View style={styles.header}>
           <Image
-            source={require("../../assets/images/lechuza.png")}
+            source={require("../../assets/images/Lechuza.png")}
             style={styles.logo}
           />
           <Text style={styles.logoText}>EXLIBRIS</Text>
@@ -172,7 +172,7 @@ export default function PublicacionDetalleScreen() {
       {/* Header */}
       <View style={styles.header}>
         <Image
-          source={require("../../assets/images/lechuza.png")}
+          source={require("../../assets/images/Lechuza.png")}
           style={styles.logo}
         />
         <Text style={styles.logoText}>EXLIBRIS</Text>
