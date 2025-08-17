@@ -21,6 +21,7 @@ export default function LogrosScreen() {
   const [librosLeidos, setLibrosLeidos] = useState(0);
   const [librosVendidos, setLibrosVendidos] = useState(0);
   const [librosComprados, setLibrosComprados] = useState(0);
+  const [puntuacionVendedor, setPuntuacionVendedor] = useState(0);
   const [loadingLogros, setLoadingLogros] = useState(true);
 
   // Función para obtener logros del usuario
@@ -37,12 +38,14 @@ export default function LogrosScreen() {
       setLibrosLeidos(res.data.librosLeidos || 0);
       setLibrosVendidos(res.data.librosVendidos || 0);
       setLibrosComprados(res.data.librosComprados || 0);
+      setPuntuacionVendedor(res.data.puntuacionVendedor || 0);
     } catch (error) {
       console.error("Error al cargar logros:", error);
       setLogros([]);
       setLibrosLeidos(0);
       setLibrosVendidos(0);
       setLibrosComprados(0);
+      setPuntuacionVendedor(0);
     } finally {
       setLoadingLogros(false);
     }
@@ -104,22 +107,39 @@ export default function LogrosScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {/* Estadísticas del usuario */}
-        <View style={styles.statsSection}>
-          <View style={styles.statsCard}>
-            <Text style={styles.statsNumber}>{librosLeidos}</Text>
-            <Text style={styles.statsLabel}>Libros leídos</Text>
+        <View style={styles.statsContainer}>
+          {/* Logro principal destacado */}
+          <View style={styles.mainStatsCard}>
+            <Text style={styles.mainStatsNumber}>{logros.length}</Text>
+            <Text style={styles.mainStatsLabel}>Logros Desbloqueados</Text>
+            <Text style={styles.mainStatsSubtitle}>¡Sigue creciendo!</Text>
           </View>
-          <View style={styles.statsCard}>
-            <Text style={styles.statsNumber}>{librosVendidos}</Text>
-            <Text style={styles.statsLabel}>Libros vendidos</Text>
-          </View>
-          <View style={styles.statsCard}>
-            <Text style={styles.statsNumber}>{librosComprados}</Text>
-            <Text style={styles.statsLabel}>Libros comprados</Text>
-          </View>
-          <View style={styles.statsCard}>
-            <Text style={styles.statsNumber}>{logros.length}</Text>
-            <Text style={styles.statsLabel}>Logros desbloqueados</Text>
+
+          {/* Métricas secundarias compactas */}
+          <View style={styles.compactStatsSection}>
+            <View style={styles.compactStatsRow}>
+              <View style={styles.compactStatsItem}>
+                <Text style={styles.compactStatsNumber}>{librosLeidos}</Text>
+                <Text style={styles.compactStatsLabel}>Leídos</Text>
+              </View>
+              <View style={styles.compactStatsDivider} />
+              <View style={styles.compactStatsItem}>
+                <Text style={styles.compactStatsNumber}>{librosVendidos}</Text>
+                <Text style={styles.compactStatsLabel}>Vendidos</Text>
+              </View>
+              <View style={styles.compactStatsDivider} />
+              <View style={styles.compactStatsItem}>
+                <Text style={styles.compactStatsNumber}>{librosComprados}</Text>
+                <Text style={styles.compactStatsLabel}>Comprados</Text>
+              </View>
+              <View style={styles.compactStatsDivider} />
+              <View style={styles.compactStatsItem}>
+                <Text style={styles.compactStatsNumber}>
+                  {puntuacionVendedor.toFixed(1)}
+                </Text>
+                <Text style={styles.compactStatsLabel}>Puntuación</Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -134,8 +154,7 @@ export default function LogrosScreen() {
               nombre: "Primer Libro",
               descripcion: "Completa tu primera lectura",
               requerido: 1,
-              // imagen: require("../assets/images/svg/Leidos1.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Leidos1.svg"),
               color: "#FF6B6B",
             },
             {
@@ -143,8 +162,7 @@ export default function LogrosScreen() {
               nombre: "Lector Novato",
               descripcion: "Completa 5 lecturas",
               requerido: 5,
-              // imagen: require("../assets/images/svg/Leidos5.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Leidos5.svg"),
               color: "#4ECDC4",
             },
             {
@@ -152,8 +170,7 @@ export default function LogrosScreen() {
               nombre: "Lector Intermedio",
               descripcion: "Completa 10 lecturas",
               requerido: 10,
-              // imagen: require("../assets/images/svg/Leidos10.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Leidos10.svg"),
               color: "#45B7D1",
             },
             {
@@ -161,8 +178,7 @@ export default function LogrosScreen() {
               nombre: "Lector Avanzado",
               descripcion: "Completa 20 lecturas",
               requerido: 20,
-              // imagen: require("../assets/images/svg/Leidos20.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Leidos20.svg"),
               color: "#96CEB4",
             },
             {
@@ -170,8 +186,7 @@ export default function LogrosScreen() {
               nombre: "Lector Experto",
               descripcion: "Completa 25 lecturas",
               requerido: 25,
-              // imagen: require("../assets/images/svg/Leidos25.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Leidos25.svg"),
               color: "#FFEAA7",
             },
           ].map((logro) => {
@@ -274,8 +289,7 @@ export default function LogrosScreen() {
               nombre: "Primera Venta",
               descripcion: "Completa tu primera venta",
               requerido: 1,
-              // imagen: require("../assets/images/svg/Vendido1.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Vendido1.svg"),
               color: "#FF8A65",
             },
             {
@@ -283,8 +297,7 @@ export default function LogrosScreen() {
               nombre: "Vendedor Novato",
               descripcion: "Completa 5 ventas",
               requerido: 5,
-              // imagen: require("../assets/images/svg/Vendido5.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Vendido5.svg"),
               color: "#81C784",
             },
             {
@@ -292,8 +305,7 @@ export default function LogrosScreen() {
               nombre: "Vendedor Intermedio",
               descripcion: "Completa 10 ventas",
               requerido: 10,
-              // imagen: require("../assets/images/svg/Vendido5.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Vendido10.svg"),
               color: "#64B5F6",
             },
             {
@@ -301,8 +313,7 @@ export default function LogrosScreen() {
               nombre: "Vendedor Avanzado",
               descripcion: "Completa 20 ventas",
               requerido: 20,
-              // imagen: require("../assets/images/svg/Vendido20.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Vendido20.svg"),
               color: "#BA68C8",
             },
             {
@@ -310,8 +321,7 @@ export default function LogrosScreen() {
               nombre: "Vendedor Experto",
               descripcion: "Completa 40 ventas",
               requerido: 40,
-              // imagen: require("../assets/images/svg/Vendido40.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Vendido40.svg"),
               color: "#FFD54F",
             },
           ].map((logro) => {
@@ -410,8 +420,7 @@ export default function LogrosScreen() {
               nombre: "Primera Compra",
               descripcion: "Completa tu primera compra",
               requerido: 1,
-              // imagen: require("../assets/images/svg/Compras1.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Compras1.svg"),
               color: "#FF9800",
             },
             {
@@ -419,8 +428,7 @@ export default function LogrosScreen() {
               nombre: "Comprador Novato",
               descripcion: "Completa 5 compras",
               requerido: 5,
-              // imagen: require("../assets/images/svg/Compras5.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Compras5.svg"),
               color: "#9C27B0",
             },
             {
@@ -428,8 +436,7 @@ export default function LogrosScreen() {
               nombre: "Comprador Intermedio",
               descripcion: "Completa 10 compras",
               requerido: 10,
-              // imagen: require("../assets/images/svg/Compras10.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Compras10.svg"),
               color: "#2196F3",
             },
             {
@@ -437,8 +444,7 @@ export default function LogrosScreen() {
               nombre: "Comprador Avanzado",
               descripcion: "Completa 20 compras",
               requerido: 20,
-              // imagen: require("../assets/images/svg/Compras20.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Compras20.svg"),
               color: "#4CAF50",
             },
             {
@@ -446,8 +452,7 @@ export default function LogrosScreen() {
               nombre: "Comprador Experto",
               descripcion: "Completa 30 compras",
               requerido: 30,
-              // imagen: require("../assets/images/svg/Compras30.svg"),
-              imagen: undefined, // Temporalmente comentado
+              imagen: require("../assets/images/svg/Compras30.svg"),
               color: "#F44336",
             },
           ].map((logro) => {
@@ -535,14 +540,122 @@ export default function LogrosScreen() {
           })}
         </View>
 
+        {/* Título de la sección de logros de puntuación */}
+        <Text style={styles.sectionTitle}>Logros de Puntuación</Text>
+
+        {/* Grid de logros de puntuación */}
+        <View style={styles.logrosGrid}>
+          {[
+            {
+              id: "Puntuacion4.0",
+              nombre: "Vendedor Confiable",
+              descripcion: "Alcanza una puntuación de 4.0 o superior",
+              requerido: 4.0,
+              imagen: require("../assets/images/svg/Puntuacion4.0.svg"),
+              color: "#FF9800",
+            },
+            {
+              id: "Puntuacion5.0",
+              nombre: "Vendedor Excelente",
+              descripcion: "Alcanza una puntuación de 5.0",
+              requerido: 5.0,
+              imagen: require("../assets/images/svg/Puntuacion5.0.svg"),
+              color: "#4CAF50",
+            },
+          ].map((logro) => {
+            const desbloqueado = logros.includes(logro.id);
+            const progreso = Math.min(puntuacionVendedor / logro.requerido, 1);
+            const porcentaje = Math.round(progreso * 100);
+
+            return (
+              <View
+                key={logro.id}
+                style={[
+                  styles.logroItem,
+                  desbloqueado && styles.logroItemDesbloqueado,
+                ]}
+              >
+                {/* Imagen del logro */}
+                <View
+                  style={[
+                    styles.logroImagen,
+                    !desbloqueado && styles.logroImagenBloqueado,
+                    { backgroundColor: logro.color },
+                  ]}
+                >
+                  <Image
+                    source={logro.imagen}
+                    style={styles.logroImagenInner}
+                  />
+                  {!desbloqueado && (
+                    <View style={styles.logroBloqueado}>
+                      <Text style={styles.logroBloqueadoText}>🔒</Text>
+                    </View>
+                  )}
+                  {desbloqueado && (
+                    <View style={styles.logroDesbloqueado}>
+                      <Text style={styles.logroDesbloqueadoText}>✓</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Información del logro */}
+                <View style={styles.logroInfo}>
+                  <Text
+                    style={[
+                      styles.logroNombre,
+                      !desbloqueado && styles.logroNombreBloqueado,
+                    ]}
+                  >
+                    {logro.nombre}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.logroDescripcion,
+                      !desbloqueado && styles.logroDescripcionBloqueado,
+                    ]}
+                  >
+                    {logro.descripcion}
+                  </Text>
+
+                  {/* Progreso */}
+                  <View style={styles.progressContainer}>
+                    <Text
+                      style={[
+                        styles.progressText,
+                        !desbloqueado && styles.progressTextBloqueado,
+                      ]}
+                    >
+                      {puntuacionVendedor.toFixed(1)}/{logro.requerido} puntos (
+                      {porcentaje}%)
+                    </Text>
+                    <View style={styles.progressBar}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${progreso * 100}%`,
+                            backgroundColor: desbloqueado ? "#4CAF50" : "#ddd",
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
         {/* Mensaje motivacional */}
         <View style={styles.motivacionSection}>
           <Text style={styles.motivacionTitle}>¡Sigue creciendo!</Text>
           <Text style={styles.motivacionText}>
-            Cada libro que leas, cada venta que completes y cada compra que
-            hagas te acerca más a nuevos logros. ¡Descubre historias increíbles,
-            construye tu biblioteca personal y comparte el amor por la lectura
-            con otros!
+            Cada libro que leas, cada venta que completes, cada compra que hagas
+            y cada buena valoración que recibas te acerca más a nuevos logros.
+            ¡Descubre historias increíbles, construye tu biblioteca personal,
+            comparte el amor por la lectura con otros y mantén tu reputación
+            como vendedor confiable!
           </Text>
         </View>
       </ScrollView>
@@ -607,39 +720,78 @@ const styles = StyleSheet.create({
   },
 
   // Sección de estadísticas
-  statsSection: {
-    flexDirection: "row",
-    justifyContent: "space-around",
+  statsContainer: {
     paddingHorizontal: 18,
     marginTop: 20,
     marginBottom: 30,
-    flexWrap: "wrap",
-    gap: 8,
   },
-  statsCard: {
-    backgroundColor: "#fff4e4",
-    borderRadius: 16,
-    padding: 12,
+
+  // Tarjeta principal destacada
+  mainStatsCard: {
+    backgroundColor: "#3B2412",
+    borderRadius: 20,
+    padding: 24,
     alignItems: "center",
-    minWidth: 80,
-    flex: 1,
+    marginBottom: 20,
     shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  statsNumber: {
-    fontSize: 28,
+  mainStatsNumber: {
+    fontSize: 48,
     fontWeight: "bold",
-    color: "#3B2412",
+    color: "#fff",
+    marginBottom: 8,
+  },
+  mainStatsLabel: {
+    fontSize: 18,
+    color: "#fff",
+    textAlign: "center",
+    fontWeight: "600",
     marginBottom: 4,
   },
-  statsLabel: {
+  mainStatsSubtitle: {
     fontSize: 14,
+    color: "#fff4e4",
+    textAlign: "center",
+    fontWeight: "400",
+  },
+
+  // Métricas secundarias compactas
+  compactStatsSection: {
+    backgroundColor: "#f8f9fa",
+    borderRadius: 16,
+    padding: 16,
+    marginTop: 16,
+  },
+  compactStatsRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  compactStatsItem: {
+    alignItems: "center",
+    flex: 1,
+  },
+  compactStatsNumber: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#3B2412",
+    marginBottom: 2,
+  },
+  compactStatsLabel: {
+    fontSize: 10,
     color: "#7c4a2d",
     textAlign: "center",
     fontWeight: "500",
+  },
+  compactStatsDivider: {
+    width: 1,
+    height: 30,
+    backgroundColor: "#e0e0e0",
+    marginHorizontal: 8,
   },
 
   // Título de sección

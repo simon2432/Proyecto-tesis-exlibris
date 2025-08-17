@@ -213,7 +213,7 @@ exports.getLogrosUsuario = async (req, res) => {
     // Obtener logros actuales del usuario
     const usuario = await prisma.user.findUnique({
       where: { id: userId },
-      select: { logros: true },
+      select: { logros: true, puntuacionVendedor: true },
     });
 
     const logrosActuales = usuario?.logros || [];
@@ -270,6 +270,21 @@ exports.getLogrosUsuario = async (req, res) => {
       nuevosLogros.push("Comprado30");
     }
 
+    // Verificar qué logros debería tener basado en la puntuación del vendedor
+    const puntuacionVendedor = usuario?.puntuacionVendedor || 0;
+    if (
+      puntuacionVendedor >= 4.0 &&
+      !logrosActuales.includes("Puntuacion4.0")
+    ) {
+      nuevosLogros.push("Puntuacion4.0");
+    }
+    if (
+      puntuacionVendedor >= 5.0 &&
+      !logrosActuales.includes("Puntuacion5.0")
+    ) {
+      nuevosLogros.push("Puntuacion5.0");
+    }
+
     // Si hay nuevos logros, actualizar al usuario
     if (nuevosLogros.length > 0) {
       const todosLosLogros = [...logrosActuales, ...nuevosLogros];
@@ -286,6 +301,7 @@ exports.getLogrosUsuario = async (req, res) => {
       librosLeidos,
       librosVendidos,
       librosComprados,
+      puntuacionVendedor: usuario?.puntuacionVendedor || 0,
       logros: logrosFinales,
       nuevosLogros,
     });
@@ -380,6 +396,26 @@ exports.verificarLogros = async (userId) => {
     }
     if (librosComprados >= 30 && !logrosActuales.includes("Comprado30")) {
       nuevosLogros.push("Comprado30");
+    }
+
+    // Verificar logros de puntuación del vendedor
+    const usuarioActual = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { puntuacionVendedor: true },
+    });
+
+    const puntuacionVendedor = usuarioActual?.puntuacionVendedor || 0;
+    if (
+      puntuacionVendedor >= 4.0 &&
+      !logrosActuales.includes("Puntuacion4.0")
+    ) {
+      nuevosLogros.push("Puntuacion4.0");
+    }
+    if (
+      puntuacionVendedor >= 5.0 &&
+      !logrosActuales.includes("Puntuacion5.0")
+    ) {
+      nuevosLogros.push("Puntuacion5.0");
     }
 
     // Si hay nuevos logros, actualizar al usuario
