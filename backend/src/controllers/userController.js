@@ -176,3 +176,126 @@ exports.getEstadisticasUsuario = async (req, res) => {
     res.status(500).json({ error: "Error interno del servidor" });
   }
 };
+
+// GET /api/usuarios/logros
+exports.getLogrosUsuario = async (req, res) => {
+  try {
+    if (!req.userId) {
+      return res.status(401).json({ error: "Usuario no autenticado" });
+    }
+
+    const userId = req.userId;
+
+    // Contar libros leídos (lecturas con fechaFin)
+    const librosLeidos = await prisma.lectura.count({
+      where: {
+        userId: userId,
+        fechaFin: { not: null }, // Solo libros que han sido terminados
+      },
+    });
+
+    // Obtener logros actuales del usuario
+    const usuario = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { logros: true },
+    });
+
+    const logrosActuales = usuario?.logros || [];
+    const nuevosLogros = [];
+
+    // Verificar qué logros debería tener basado en la cantidad de libros leídos
+    if (librosLeidos >= 1 && !logrosActuales.includes("Leidos1")) {
+      nuevosLogros.push("Leidos1");
+    }
+    if (librosLeidos >= 5 && !logrosActuales.includes("Leidos5")) {
+      nuevosLogros.push("Leidos5");
+    }
+    if (librosLeidos >= 10 && !logrosActuales.includes("Leidos10")) {
+      nuevosLogros.push("Leidos10");
+    }
+    if (librosLeidos >= 20 && !logrosActuales.includes("Leidos20")) {
+      nuevosLogros.push("Leidos20");
+    }
+    if (librosLeidos >= 25 && !logrosActuales.includes("Leidos25")) {
+      nuevosLogros.push("Leidos25");
+    }
+
+    // Si hay nuevos logros, actualizar al usuario
+    if (nuevosLogros.length > 0) {
+      const todosLosLogros = [...logrosActuales, ...nuevosLogros];
+      await prisma.user.update({
+        where: { id: userId },
+        data: { logros: todosLosLogros },
+      });
+    }
+
+    // Obtener logros actualizados
+    const logrosFinales = [...logrosActuales, ...nuevosLogros];
+
+    res.json({
+      librosLeidos,
+      logros: logrosFinales,
+      nuevosLogros,
+    });
+  } catch (error) {
+    console.error("Error al obtener logros:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+};
+
+// Función para verificar y otorgar logros (se puede llamar desde otros controladores)
+exports.verificarLogros = async (userId) => {
+  try {
+    // Contar libros leídos
+    const librosLeidos = await prisma.lectura.count({
+      where: {
+        userId: userId,
+        fechaFin: { not: null },
+      },
+    });
+
+    // Obtener logros actuales
+    const usuario = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { logros: true },
+    });
+
+    const logrosActuales = usuario?.logros || [];
+    const nuevosLogros = [];
+
+    // Verificar logros
+    if (librosLeidos >= 1 && !logrosActuales.includes("Leidos1")) {
+      nuevosLogros.push("Leidos1");
+    }
+    if (librosLeidos >= 5 && !logrosActuales.includes("Leidos5")) {
+      nuevosLogros.push("Leidos5");
+    }
+    if (librosLeidos >= 10 && !logrosActuales.includes("Leidos10")) {
+      nuevosLogros.push("Leidos10");
+    }
+    if (librosLeidos >= 20 && !logrosActuales.includes("Leidos20")) {
+      nuevosLogros.push("Leidos20");
+    }
+    if (librosLeidos >= 25 && !logrosActuales.includes("Leidos25")) {
+      nuevosLogros.push("Leidos25");
+    }
+
+    // Si hay nuevos logros, actualizar al usuario
+    if (nuevosLogros.length > 0) {
+      const todosLosLogros = [...logrosActuales, ...nuevosLogros];
+      await prisma.user.update({
+        where: { id: userId },
+        data: { logros: todosLosLogros },
+      });
+    }
+
+    return {
+      librosLeidos,
+      logros: [...logrosActuales, ...nuevosLogros],
+      nuevosLogros,
+    };
+  } catch (error) {
+    console.error("Error al verificar logros:", error);
+    return null;
+  }
+};

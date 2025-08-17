@@ -165,6 +165,19 @@ exports.actualizarLectura = async (req, res) => {
   try {
     const { id } = req.params;
     const { fechaInicio, fechaFin, resenaTexto, valoracion } = req.body;
+
+    // Obtener la lectura actual para verificar si se está completando
+    const lecturaActual = await prisma.lectura.findUnique({
+      where: { id: Number(id) },
+      select: { userId: true, fechaFin: true },
+    });
+
+    if (!lecturaActual) {
+      return res.status(404).json({ error: "Lectura no encontrada" });
+    }
+
+    const seEstaCompletando = !lecturaActual.fechaFin && fechaFin;
+
     const lectura = await prisma.lectura.update({
       where: { id: Number(id) },
       data: {
@@ -174,6 +187,22 @@ exports.actualizarLectura = async (req, res) => {
         ...(valoracion !== undefined && { valoracion }),
       },
     });
+
+    // Si se está completando la lectura, verificar logros
+    if (seEstaCompletando) {
+      try {
+        const { verificarLogros } = require("./userController");
+        const logrosInfo = await verificarLogros(lecturaActual.userId);
+        if (logrosInfo && logrosInfo.nuevosLogros.length > 0) {
+          // Agregar información de logros a la respuesta
+          lectura.logrosNuevos = logrosInfo.nuevosLogros;
+        }
+      } catch (logrosError) {
+        console.error("Error verificando logros:", logrosError);
+        // No fallar la operación principal por errores en logros
+      }
+    }
+
     res.json(lectura);
   } catch (err) {
     res.status(500).json({ error: "Error al actualizar lectura" });
