@@ -477,7 +477,7 @@ export default function DetalleVenta() {
               ? "Ya confirmaste el pago. Esperando confirmación del comprador."
               : venta.estado === "comprador_confirmado"
               ? "El comprador ya confirmó la transacción. Confirma que recibiste el pago para completar la transacción."
-              : "Presione el siguiente botón si ya recibió el pago por parte del comprador. El comprador debe enviarle el comprobante del envio."}
+              : "Su venta se encuentra en camino, debe aguardar a que el comprador reciba su pedido y confirme la recepcion en condiciones."}
           </Text>
 
           {venta.estado !== "completado" && !venta.vendedorConfirmado && (

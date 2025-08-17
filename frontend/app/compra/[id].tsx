@@ -75,8 +75,11 @@ export default function CompraDetalleScreen() {
   const [isVendedor, setIsVendedor] = useState(false);
 
   useEffect(() => {
-    fetchCompra();
-    getCurrentUserId();
+    const initializeData = async () => {
+      await getCurrentUserId();
+      await fetchCompra();
+    };
+    initializeData();
   }, [id]);
 
   const fetchCompra = async () => {
@@ -96,10 +99,30 @@ export default function CompraDetalleScreen() {
         console.log("Datos de la compra recibidos:", data);
         setCompra(data);
 
-        // Verificar si es comprador o vendedor después de cargar la compra
-        if (currentUserId) {
-          setIsComprador(currentUserId === data.compradorId);
-          setIsVendedor(currentUserId === data.vendedorId);
+        // Obtener el userId del token para establecer isComprador e isVendedor
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split(".")[1]));
+            const userId = payload.userId;
+            setIsComprador(userId === data.compradorId);
+            setIsVendedor(userId === data.vendedorId);
+            console.log(
+              "Usuario actual:",
+              userId,
+              "Comprador:",
+              data.compradorId,
+              "Vendedor:",
+              data.vendedorId
+            );
+            console.log(
+              "isComprador:",
+              userId === data.compradorId,
+              "isVendedor:",
+              userId === data.vendedorId
+            );
+          } catch (error) {
+            console.error("Error decodificando token:", error);
+          }
         }
       } else {
         console.error("Error fetching compra:", response.status);
@@ -122,12 +145,6 @@ export default function CompraDetalleScreen() {
         const payload = JSON.parse(atob(token.split(".")[1]));
         const userId = payload.userId;
         setCurrentUserId(userId);
-
-        // Verificar si es comprador o vendedor cuando se cargue la compra
-        if (compra) {
-          setIsComprador(userId === compra.compradorId);
-          setIsVendedor(userId === compra.vendedorId);
-        }
       }
     } catch (error) {
       console.error("Error obteniendo ID del usuario:", error);
@@ -357,6 +374,44 @@ export default function CompraDetalleScreen() {
     }
   };
 
+  // Función para que el comprador confirme la recepción del libro y complete la compra
+  const confirmarRecepcionLibro = async () => {
+    try {
+      setUpdating(true);
+      const token = await AsyncStorage.getItem("token");
+
+      const response = await fetch(
+        `${API_BASE_URL}/compras/${id}/confirmar-comprador`,
+        {
+          method: "PATCH",
+          headers: {
+            Authorization: token ? `Bearer ${token}` : "",
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (response.ok) {
+        setSuccessMessage(
+          "Recepción del libro confirmada exitosamente. La compra ha sido completada."
+        );
+        setShowSuccessModal(true);
+        fetchCompra(); // Recargar datos
+      } else {
+        const errorData = await response.json();
+        Alert.alert(
+          "Error",
+          errorData.error || "No se pudo confirmar la recepción del libro"
+        );
+      }
+    } catch (error) {
+      console.error("Error confirmando recepción del libro:", error);
+      Alert.alert("Error", "Error al confirmar la recepción del libro");
+    } finally {
+      setUpdating(false);
+    }
+  };
+
   const handleCancelarCompra = async () => {
     setShowCancelModal(true);
   };
@@ -436,7 +491,7 @@ export default function CompraDetalleScreen() {
     }
 
     if (estado === "comprador_confirmado") {
-      return "Has confirmado la transacción. Esperando confirmación del vendedor.";
+      return "Solo apriete el botón si recibió el libro en condiciones y como acordó con el vendedor.";
     }
 
     if (estado === "vendedor_confirmado") {
@@ -452,7 +507,7 @@ export default function CompraDetalleScreen() {
       } else if (estado === "envio_pendiente") {
         return "Presione el siguiente botón si ya recibio la informacion del envio por parte del vendedor";
       } else if (estado === "en_camino") {
-        return "El envío está en camino. Una vez que recibas el libro, confirma que llegó en buen estado.";
+        return "El envío está en camino. Una vez que recibas el libro en condiciones y como acordo con el vendedor, confirma que llegó en buen estado. Si hay algun inconveniente comunicarse con soporte.";
       }
       return "Presione el siguiente botón si ya realizó el pago del libro y lo recibió en buenas condiciones.";
     } else {
@@ -498,6 +553,24 @@ export default function CompraDetalleScreen() {
       </View>
     );
   }
+
+  // Log para debugging
+  console.log("Render de CompraDetalleScreen:", {
+    compra: compra
+      ? {
+          id: compra.id,
+          estado: compra.estado,
+          tipoEntrega: compra.tipoEntrega,
+          compradorId: compra.compradorId,
+          vendedorId: compra.vendedorId,
+        }
+      : null,
+    currentUserId,
+    isComprador,
+    isVendedor,
+    loading,
+    error,
+  });
 
   return (
     <View style={styles.container}>
@@ -678,9 +751,20 @@ export default function CompraDetalleScreen() {
           </Text>
 
           {/* Botón para vendedor confirmar pago - solo para envío en estado pago_pendiente */}
-          {compra.tipoEntrega === "envio" &&
-            compra.estado === "pago_pendiente" &&
-            isVendedor && (
+          {(() => {
+            const shouldShowButton =
+              compra.tipoEntrega === "envio" &&
+              compra.estado === "pago_pendiente" &&
+              isVendedor;
+
+            console.log("Condiciones del botón de confirmar pago vendedor:", {
+              tipoEntrega: compra.tipoEntrega,
+              estado: compra.estado,
+              isVendedor,
+              shouldShowButton,
+            });
+
+            return shouldShowButton ? (
               <TouchableOpacity
                 style={[
                   styles.completeButton,
@@ -697,12 +781,24 @@ export default function CompraDetalleScreen() {
                   </Text>
                 )}
               </TouchableOpacity>
-            )}
+            ) : null;
+          })()}
 
           {/* Botón para comprador confirmar comprobante de envío - solo para envío en estado envio_pendiente */}
-          {compra.tipoEntrega === "envio" &&
-            compra.estado === "envio_pendiente" &&
-            isComprador && (
+          {(() => {
+            const shouldShowButton =
+              compra.tipoEntrega === "envio" &&
+              compra.estado === "envio_pendiente" &&
+              isComprador;
+
+            console.log("Condiciones del botón de información de envío:", {
+              tipoEntrega: compra.tipoEntrega,
+              estado: compra.estado,
+              isComprador,
+              shouldShowButton,
+            });
+
+            return shouldShowButton ? (
               <TouchableOpacity
                 style={[
                   styles.completeButton,
@@ -719,12 +815,27 @@ export default function CompraDetalleScreen() {
                   </Text>
                 )}
               </TouchableOpacity>
-            )}
+            ) : null;
+          })()}
 
           {/* Botón para comprador confirmar recepción del envío - solo para envío en estado en_camino */}
-          {compra.tipoEntrega === "envio" &&
-            compra.estado === "en_camino" &&
-            isComprador && (
+          {(() => {
+            const shouldShowButton =
+              compra.tipoEntrega === "envio" &&
+              compra.estado === "en_camino" &&
+              isComprador;
+
+            console.log(
+              "Condiciones del botón de confirmar recepción del envío:",
+              {
+                tipoEntrega: compra.tipoEntrega,
+                estado: compra.estado,
+                isComprador,
+                shouldShowButton,
+              }
+            );
+
+            return shouldShowButton ? (
               <TouchableOpacity
                 style={[
                   styles.completeButton,
@@ -741,7 +852,45 @@ export default function CompraDetalleScreen() {
                   </Text>
                 )}
               </TouchableOpacity>
-            )}
+            ) : null;
+          })()}
+
+          {/* Botón para comprador confirmar recepción del libro - solo para envío en estado comprador_confirmado */}
+          {(() => {
+            const shouldShowButton =
+              compra.tipoEntrega === "envio" &&
+              compra.estado === "comprador_confirmado" &&
+              isComprador;
+
+            console.log(
+              "Condiciones del botón de confirmar recepción del libro:",
+              {
+                tipoEntrega: compra.tipoEntrega,
+                estado: compra.estado,
+                isComprador,
+                shouldShowButton,
+              }
+            );
+
+            return shouldShowButton ? (
+              <TouchableOpacity
+                style={[
+                  styles.completeButton,
+                  updating && styles.completeButtonDisabled,
+                ]}
+                onPress={confirmarRecepcionLibro}
+                disabled={updating}
+              >
+                {updating ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.completeButtonText}>
+                    Confirmar recepción del libro
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ) : null;
+          })()}
 
           {/* Lógica original para encuentro */}
           {(compra.estado === "encuentro" ||
@@ -797,6 +946,15 @@ export default function CompraDetalleScreen() {
                 </View>
               )}
 
+              {isComprador && compra.estado === "comprador_confirmado" && (
+                <View style={styles.waitingMessage}>
+                  <Text style={styles.waitingText}>
+                    Solo apriete el botón si recibió el libro en condiciones y
+                    como acordó con el vendedor.
+                  </Text>
+                </View>
+              )}
+
               {isVendedor && compra.estado === "envio_pendiente" && (
                 <View style={styles.waitingMessage}>
                   <Text style={styles.waitingText}>
@@ -811,6 +969,15 @@ export default function CompraDetalleScreen() {
                   <Text style={styles.waitingText}>
                     El envío está en camino. Debes esperar a que el comprador
                     confirme que recibió el libro en buen estado.
+                  </Text>
+                </View>
+              )}
+
+              {isVendedor && compra.estado === "comprador_confirmado" && (
+                <View style={styles.waitingMessage}>
+                  <Text style={styles.waitingText}>
+                    El comprador ya confirmó la recepción del envío. Esperando
+                    que confirme la recepción del libro.
                   </Text>
                 </View>
               )}

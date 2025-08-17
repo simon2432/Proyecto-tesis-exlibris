@@ -417,26 +417,36 @@ exports.confirmarComprador = async (req, res) => {
       return res.status(404).json({ error: "Compra no encontrada" });
     }
 
-    // Solo permitir confirmar si está en estado de encuentro, vendedor_confirmado, o en_camino
+    // Solo permitir confirmar si está en estado de encuentro, vendedor_confirmado, en_camino, o comprador_confirmado
     if (
       compra.estado !== "encuentro" &&
       compra.estado !== "vendedor_confirmado" &&
-      compra.estado !== "en_camino"
+      compra.estado !== "en_camino" &&
+      compra.estado !== "comprador_confirmado"
     ) {
       return res.status(400).json({
         error:
-          "Solo se puede confirmar transacciones en estado de encuentro, cuando el vendedor ya confirmó, o cuando el envío está en camino",
+          "Solo se puede confirmar transacciones en estado de encuentro, cuando el vendedor ya confirmó, cuando el envío está en camino, o cuando ya confirmaste la recepción del envío",
       });
     }
 
     // Marcar como confirmado por el comprador
+    let nuevoEstado;
+    if (compra.estado === "comprador_confirmado") {
+      // Si ya está en comprador_confirmado, completar la compra
+      nuevoEstado = "completado";
+    } else {
+      // Para otros estados, usar la lógica original
+      nuevoEstado = compra.vendedorConfirmado
+        ? "completado"
+        : "comprador_confirmado";
+    }
+
     const compraActualizada = await prisma.compra.update({
       where: { id: parseInt(id) },
       data: {
         compradorConfirmado: true,
-        estado: compra.vendedorConfirmado
-          ? "completado"
-          : "comprador_confirmado",
+        estado: nuevoEstado,
       },
     });
 
