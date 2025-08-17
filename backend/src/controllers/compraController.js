@@ -1,6 +1,9 @@
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
+// Importar función para verificar logros
+const { verificarLogros } = require("./userController");
+
 // Crear una nueva compra
 exports.crearCompra = async (req, res) => {
   try {
@@ -460,6 +463,37 @@ exports.confirmarComprador = async (req, res) => {
         "[Compra] Publicación marcada como vendida:",
         compra.publicacionId
       );
+
+      // Verificar logros del vendedor
+      try {
+        const logrosInfo = await verificarLogros(compra.vendedorId);
+        if (logrosInfo && logrosInfo.nuevosLogros.length > 0) {
+          console.log(
+            "[Compra] Nuevos logros otorgados al vendedor:",
+            logrosInfo.nuevosLogros
+          );
+        }
+      } catch (logrosError) {
+        console.error("Error verificando logros:", logrosError);
+        // No fallar la operación principal por errores en logros
+      }
+
+      // Verificar logros del comprador
+      try {
+        const logrosInfoComprador = await verificarLogros(compra.compradorId);
+        if (
+          logrosInfoComprador &&
+          logrosInfoComprador.nuevosLogros.length > 0
+        ) {
+          console.log(
+            "[Compra] Nuevos logros otorgados al comprador:",
+            logrosInfoComprador.nuevosLogros
+          );
+        }
+      } catch (logrosError) {
+        console.error("Error verificando logros del comprador:", logrosError);
+        // No fallar la operación principal por errores en logros
+      }
     }
 
     console.log(
@@ -529,6 +563,37 @@ exports.confirmarVendedor = async (req, res) => {
         "[Compra] Publicación marcada como vendida:",
         compra.publicacionId
       );
+
+      // Verificar logros del vendedor
+      try {
+        const logrosInfo = await verificarLogros(compra.vendedorId);
+        if (logrosInfo && logrosInfo.nuevosLogros.length > 0) {
+          console.log(
+            "[Compra] Nuevos logros otorgados al vendedor:",
+            logrosInfo.nuevosLogros
+          );
+        }
+      } catch (logrosError) {
+        console.error("Error verificando logros:", logrosError);
+        // No fallar la operación principal por errores en logros
+      }
+
+      // Verificar logros del comprador
+      try {
+        const logrosInfoComprador = await verificarLogros(compra.compradorId);
+        if (
+          logrosInfoComprador &&
+          logrosInfoComprador.nuevosLogros.length > 0
+        ) {
+          console.log(
+            "[Compra] Nuevos logros otorgados al comprador:",
+            logrosInfoComprador.nuevosLogros
+          );
+        }
+      } catch (logrosError) {
+        console.error("Error verificando logros del comprador:", logrosError);
+        // No fallar la operación principal por errores en logros
+      }
     }
 
     console.log("[Compra] Vendedor confirmó pago:", compraActualizada.id);

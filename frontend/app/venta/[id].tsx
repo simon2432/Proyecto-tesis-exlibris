@@ -473,11 +473,13 @@ export default function DetalleVenta() {
               ? "Esta transacción ha sido completada exitosamente."
               : venta.estado === "envio_pendiente"
               ? "Debe realizar el envío y enviarle al comprador la información del envío. Una vez que el comprador confirme que recibió la información, el pedido pasará a estado 'En camino'."
+              : venta.estado === "en_camino"
+              ? "El pedido está en camino hacia el comprador. Esperando que el comprador confirme la recepción del libro."
               : venta.estado === "vendedor_confirmado"
               ? "Ya confirmaste el pago. Esperando confirmación del comprador."
               : venta.estado === "comprador_confirmado"
               ? "El comprador ya confirmó la transacción. Confirma que recibiste el pago para completar la transacción."
-              : "Su venta se encuentra en camino, debe aguardar a que el comprador reciba su pedido y confirme la recepcion en condiciones."}
+              : "Presione el siguiente boton para confirmar que recibio el pago por parte del comprador."}
           </Text>
 
           {venta.estado !== "completado" && !venta.vendedorConfirmado && (

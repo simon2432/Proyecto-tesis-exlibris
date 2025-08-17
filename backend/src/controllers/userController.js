@@ -194,6 +194,22 @@ exports.getLogrosUsuario = async (req, res) => {
       },
     });
 
+    // Contar libros vendidos (compras con estado completado)
+    const librosVendidos = await prisma.compra.count({
+      where: {
+        vendedorId: userId,
+        estado: "completado",
+      },
+    });
+
+    // Contar libros comprados (compras con estado completado)
+    const librosComprados = await prisma.compra.count({
+      where: {
+        compradorId: userId,
+        estado: "completado",
+      },
+    });
+
     // Obtener logros actuales del usuario
     const usuario = await prisma.user.findUnique({
       where: { id: userId },
@@ -220,6 +236,40 @@ exports.getLogrosUsuario = async (req, res) => {
       nuevosLogros.push("Leidos25");
     }
 
+    // Verificar qué logros debería tener basado en la cantidad de libros vendidos
+    if (librosVendidos >= 1 && !logrosActuales.includes("Vendido1")) {
+      nuevosLogros.push("Vendido1");
+    }
+    if (librosVendidos >= 5 && !logrosActuales.includes("Vendido5")) {
+      nuevosLogros.push("Vendido5");
+    }
+    if (librosVendidos >= 10 && !logrosActuales.includes("Vendido10")) {
+      nuevosLogros.push("Vendido10");
+    }
+    if (librosVendidos >= 20 && !logrosActuales.includes("Vendido20")) {
+      nuevosLogros.push("Vendido20");
+    }
+    if (librosVendidos >= 40 && !logrosActuales.includes("Vendido40")) {
+      nuevosLogros.push("Vendido40");
+    }
+
+    // Verificar qué logros debería tener basado en la cantidad de libros comprados
+    if (librosComprados >= 1 && !logrosActuales.includes("Comprado1")) {
+      nuevosLogros.push("Comprado1");
+    }
+    if (librosComprados >= 5 && !logrosActuales.includes("Comprado5")) {
+      nuevosLogros.push("Comprado5");
+    }
+    if (librosComprados >= 10 && !logrosActuales.includes("Comprado10")) {
+      nuevosLogros.push("Comprado10");
+    }
+    if (librosComprados >= 20 && !logrosActuales.includes("Comprado20")) {
+      nuevosLogros.push("Comprado20");
+    }
+    if (librosComprados >= 30 && !logrosActuales.includes("Comprado30")) {
+      nuevosLogros.push("Comprado30");
+    }
+
     // Si hay nuevos logros, actualizar al usuario
     if (nuevosLogros.length > 0) {
       const todosLosLogros = [...logrosActuales, ...nuevosLogros];
@@ -234,6 +284,8 @@ exports.getLogrosUsuario = async (req, res) => {
 
     res.json({
       librosLeidos,
+      librosVendidos,
+      librosComprados,
       logros: logrosFinales,
       nuevosLogros,
     });
@@ -254,6 +306,22 @@ exports.verificarLogros = async (userId) => {
       },
     });
 
+    // Contar libros vendidos (compras con estado completado)
+    const librosVendidos = await prisma.compra.count({
+      where: {
+        vendedorId: userId,
+        estado: "completado",
+      },
+    });
+
+    // Contar libros comprados (compras con estado completado)
+    const librosComprados = await prisma.compra.count({
+      where: {
+        compradorId: userId,
+        estado: "completado",
+      },
+    });
+
     // Obtener logros actuales
     const usuario = await prisma.user.findUnique({
       where: { id: userId },
@@ -263,7 +331,7 @@ exports.verificarLogros = async (userId) => {
     const logrosActuales = usuario?.logros || [];
     const nuevosLogros = [];
 
-    // Verificar logros
+    // Verificar logros de lectura
     if (librosLeidos >= 1 && !logrosActuales.includes("Leidos1")) {
       nuevosLogros.push("Leidos1");
     }
@@ -280,6 +348,40 @@ exports.verificarLogros = async (userId) => {
       nuevosLogros.push("Leidos25");
     }
 
+    // Verificar logros de venta
+    if (librosVendidos >= 1 && !logrosActuales.includes("Vendido1")) {
+      nuevosLogros.push("Vendido1");
+    }
+    if (librosVendidos >= 5 && !logrosActuales.includes("Vendido5")) {
+      nuevosLogros.push("Vendido5");
+    }
+    if (librosVendidos >= 10 && !logrosActuales.includes("Vendido10")) {
+      nuevosLogros.push("Vendido10");
+    }
+    if (librosVendidos >= 20 && !logrosActuales.includes("Vendido20")) {
+      nuevosLogros.push("Vendido20");
+    }
+    if (librosVendidos >= 40 && !logrosActuales.includes("Vendido40")) {
+      nuevosLogros.push("Vendido40");
+    }
+
+    // Verificar logros de compra
+    if (librosComprados >= 1 && !logrosActuales.includes("Comprado1")) {
+      nuevosLogros.push("Comprado1");
+    }
+    if (librosComprados >= 5 && !logrosActuales.includes("Comprado5")) {
+      nuevosLogros.push("Comprado5");
+    }
+    if (librosComprados >= 10 && !logrosActuales.includes("Comprado10")) {
+      nuevosLogros.push("Comprado10");
+    }
+    if (librosComprados >= 20 && !logrosActuales.includes("Comprado20")) {
+      nuevosLogros.push("Comprado20");
+    }
+    if (librosComprados >= 30 && !logrosActuales.includes("Comprado30")) {
+      nuevosLogros.push("Comprado30");
+    }
+
     // Si hay nuevos logros, actualizar al usuario
     if (nuevosLogros.length > 0) {
       const todosLosLogros = [...logrosActuales, ...nuevosLogros];
@@ -291,6 +393,8 @@ exports.verificarLogros = async (userId) => {
 
     return {
       librosLeidos,
+      librosVendidos,
+      librosComprados,
       logros: [...logrosActuales, ...nuevosLogros],
       nuevosLogros,
     };

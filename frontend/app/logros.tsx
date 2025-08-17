@@ -19,6 +19,8 @@ export default function LogrosScreen() {
   const router = useRouter();
   const [logros, setLogros] = useState<string[]>([]);
   const [librosLeidos, setLibrosLeidos] = useState(0);
+  const [librosVendidos, setLibrosVendidos] = useState(0);
+  const [librosComprados, setLibrosComprados] = useState(0);
   const [loadingLogros, setLoadingLogros] = useState(true);
 
   // Función para obtener logros del usuario
@@ -33,10 +35,14 @@ export default function LogrosScreen() {
 
       setLogros(res.data.logros || []);
       setLibrosLeidos(res.data.librosLeidos || 0);
+      setLibrosVendidos(res.data.librosVendidos || 0);
+      setLibrosComprados(res.data.librosComprados || 0);
     } catch (error) {
       console.error("Error al cargar logros:", error);
       setLogros([]);
       setLibrosLeidos(0);
+      setLibrosVendidos(0);
+      setLibrosComprados(0);
     } finally {
       setLoadingLogros(false);
     }
@@ -104,15 +110,23 @@ export default function LogrosScreen() {
             <Text style={styles.statsLabel}>Libros leídos</Text>
           </View>
           <View style={styles.statsCard}>
+            <Text style={styles.statsNumber}>{librosVendidos}</Text>
+            <Text style={styles.statsLabel}>Libros vendidos</Text>
+          </View>
+          <View style={styles.statsCard}>
+            <Text style={styles.statsNumber}>{librosComprados}</Text>
+            <Text style={styles.statsLabel}>Libros comprados</Text>
+          </View>
+          <View style={styles.statsCard}>
             <Text style={styles.statsNumber}>{logros.length}</Text>
             <Text style={styles.statsLabel}>Logros desbloqueados</Text>
           </View>
         </View>
 
-        {/* Título de la sección de logros */}
-        <Text style={styles.sectionTitle}>Progreso de logros</Text>
+        {/* Título de la sección de logros de lectura */}
+        <Text style={styles.sectionTitle}>Logros de Lectura</Text>
 
-        {/* Grid de logros */}
+        {/* Grid de logros de lectura */}
         <View style={styles.logrosGrid}>
           {[
             {
@@ -120,7 +134,8 @@ export default function LogrosScreen() {
               nombre: "Primer Libro",
               descripcion: "Completa tu primera lectura",
               requerido: 1,
-              imagen: require("../assets/images/svg/Leidos1.svg"),
+              // imagen: require("../assets/images/svg/Leidos1.svg"),
+              imagen: undefined, // Temporalmente comentado
               color: "#FF6B6B",
             },
             {
@@ -128,7 +143,8 @@ export default function LogrosScreen() {
               nombre: "Lector Novato",
               descripcion: "Completa 5 lecturas",
               requerido: 5,
-              imagen: require("../assets/images/svg/Leidos5.svg"),
+              // imagen: require("../assets/images/svg/Leidos5.svg"),
+              imagen: undefined, // Temporalmente comentado
               color: "#4ECDC4",
             },
             {
@@ -136,7 +152,8 @@ export default function LogrosScreen() {
               nombre: "Lector Intermedio",
               descripcion: "Completa 10 lecturas",
               requerido: 10,
-              imagen: require("../assets/images/svg/Leidos10.svg"),
+              // imagen: require("../assets/images/svg/Leidos10.svg"),
+              imagen: undefined, // Temporalmente comentado
               color: "#45B7D1",
             },
             {
@@ -144,7 +161,8 @@ export default function LogrosScreen() {
               nombre: "Lector Avanzado",
               descripcion: "Completa 20 lecturas",
               requerido: 20,
-              imagen: require("../assets/images/svg/Leidos20.svg"),
+              // imagen: require("../assets/images/svg/Leidos20.svg"),
+              imagen: undefined, // Temporalmente comentado
               color: "#96CEB4",
             },
             {
@@ -152,12 +170,153 @@ export default function LogrosScreen() {
               nombre: "Lector Experto",
               descripcion: "Completa 25 lecturas",
               requerido: 25,
-              imagen: require("../assets/images/svg/Leidos25.svg"),
+              // imagen: require("../assets/images/svg/Leidos25.svg"),
+              imagen: undefined, // Temporalmente comentado
               color: "#FFEAA7",
             },
           ].map((logro) => {
             const desbloqueado = logros.includes(logro.id);
             const progreso = Math.min(librosLeidos / logro.requerido, 1);
+            const porcentaje = Math.round(progreso * 100);
+
+            return (
+              <View
+                key={logro.id}
+                style={[
+                  styles.logroItem,
+                  desbloqueado && styles.logroItemDesbloqueado,
+                ]}
+              >
+                {/* Imagen del logro */}
+                <View
+                  style={[
+                    styles.logroImagen,
+                    !desbloqueado && styles.logroImagenBloqueado,
+                    { backgroundColor: logro.color },
+                  ]}
+                >
+                  {logro.imagen ? (
+                    <Image
+                      source={logro.imagen}
+                      style={styles.logroImagenInner}
+                    />
+                  ) : (
+                    <Text style={styles.logroIconoTexto}>📚</Text>
+                  )}
+                  {!desbloqueado && (
+                    <View style={styles.logroBloqueado}>
+                      <Text style={styles.logroBloqueadoText}>🔒</Text>
+                    </View>
+                  )}
+                  {desbloqueado && (
+                    <View style={styles.logroDesbloqueado}>
+                      <Text style={styles.logroDesbloqueadoText}>✓</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Información del logro */}
+                <View style={styles.logroInfo}>
+                  <Text
+                    style={[
+                      styles.logroNombre,
+                      !desbloqueado && styles.logroNombreBloqueado,
+                    ]}
+                  >
+                    {logro.nombre}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.logroDescripcion,
+                      !desbloqueado && styles.logroDescripcionBloqueado,
+                    ]}
+                  >
+                    {logro.descripcion}
+                  </Text>
+
+                  {/* Progreso */}
+                  <View style={styles.progressContainer}>
+                    <Text
+                      style={[
+                        styles.progressText,
+                        !desbloqueado && styles.progressTextBloqueado,
+                      ]}
+                    >
+                      {Math.min(librosLeidos, logro.requerido)}/
+                      {logro.requerido} libros ({porcentaje}%)
+                    </Text>
+                    <View style={styles.progressBar}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${progreso * 100}%`,
+                            backgroundColor: desbloqueado ? "#4CAF50" : "#ddd",
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Título de la sección de logros de venta */}
+        <Text style={styles.sectionTitle}>Logros de Venta</Text>
+
+        {/* Grid de logros de venta */}
+        <View style={styles.logrosGrid}>
+          {[
+            {
+              id: "Vendido1",
+              nombre: "Primera Venta",
+              descripcion: "Completa tu primera venta",
+              requerido: 1,
+              // imagen: require("../assets/images/svg/Vendido1.svg"),
+              imagen: undefined, // Temporalmente comentado
+              color: "#FF8A65",
+            },
+            {
+              id: "Vendido5",
+              nombre: "Vendedor Novato",
+              descripcion: "Completa 5 ventas",
+              requerido: 5,
+              // imagen: require("../assets/images/svg/Vendido5.svg"),
+              imagen: undefined, // Temporalmente comentado
+              color: "#81C784",
+            },
+            {
+              id: "Vendido10",
+              nombre: "Vendedor Intermedio",
+              descripcion: "Completa 10 ventas",
+              requerido: 10,
+              // imagen: require("../assets/images/svg/Vendido5.svg"),
+              imagen: undefined, // Temporalmente comentado
+              color: "#64B5F6",
+            },
+            {
+              id: "Vendido20",
+              nombre: "Vendedor Avanzado",
+              descripcion: "Completa 20 ventas",
+              requerido: 20,
+              // imagen: require("../assets/images/svg/Vendido20.svg"),
+              imagen: undefined, // Temporalmente comentado
+              color: "#BA68C8",
+            },
+            {
+              id: "Vendido40",
+              nombre: "Vendedor Experto",
+              descripcion: "Completa 40 ventas",
+              requerido: 40,
+              // imagen: require("../assets/images/svg/Vendido40.svg"),
+              imagen: undefined, // Temporalmente comentado
+              color: "#FFD54F",
+            },
+          ].map((logro) => {
+            const desbloqueado = logros.includes(logro.id);
+            const progreso = Math.min(librosVendidos / logro.requerido, 1);
             const porcentaje = Math.round(progreso * 100);
 
             return (
@@ -219,7 +378,143 @@ export default function LogrosScreen() {
                         !desbloqueado && styles.progressTextBloqueado,
                       ]}
                     >
-                      {Math.min(librosLeidos, logro.requerido)}/
+                      {Math.min(librosVendidos, logro.requerido)}/
+                      {logro.requerido} libros ({porcentaje}%)
+                    </Text>
+                    <View style={styles.progressBar}>
+                      <View
+                        style={[
+                          styles.progressFill,
+                          {
+                            width: `${progreso * 100}%`,
+                            backgroundColor: desbloqueado ? "#4CAF50" : "#ddd",
+                          },
+                        ]}
+                      />
+                    </View>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+
+        {/* Título de la sección de logros de compra */}
+        <Text style={styles.sectionTitle}>Logros de Compra</Text>
+
+        {/* Grid de logros de compra */}
+        <View style={styles.logrosGrid}>
+          {[
+            {
+              id: "Comprado1",
+              nombre: "Primera Compra",
+              descripcion: "Completa tu primera compra",
+              requerido: 1,
+              // imagen: require("../assets/images/svg/Compras1.svg"),
+              imagen: undefined, // Temporalmente comentado
+              color: "#FF9800",
+            },
+            {
+              id: "Comprado5",
+              nombre: "Comprador Novato",
+              descripcion: "Completa 5 compras",
+              requerido: 5,
+              // imagen: require("../assets/images/svg/Compras5.svg"),
+              imagen: undefined, // Temporalmente comentado
+              color: "#9C27B0",
+            },
+            {
+              id: "Comprado10",
+              nombre: "Comprador Intermedio",
+              descripcion: "Completa 10 compras",
+              requerido: 10,
+              // imagen: require("../assets/images/svg/Compras10.svg"),
+              imagen: undefined, // Temporalmente comentado
+              color: "#2196F3",
+            },
+            {
+              id: "Comprado20",
+              nombre: "Comprador Avanzado",
+              descripcion: "Completa 20 compras",
+              requerido: 20,
+              // imagen: require("../assets/images/svg/Compras20.svg"),
+              imagen: undefined, // Temporalmente comentado
+              color: "#4CAF50",
+            },
+            {
+              id: "Comprado30",
+              nombre: "Comprador Experto",
+              descripcion: "Completa 30 compras",
+              requerido: 30,
+              // imagen: require("../assets/images/svg/Compras30.svg"),
+              imagen: undefined, // Temporalmente comentado
+              color: "#F44336",
+            },
+          ].map((logro) => {
+            const desbloqueado = logros.includes(logro.id);
+            const progreso = Math.min(librosComprados / logro.requerido, 1);
+            const porcentaje = Math.round(progreso * 100);
+
+            return (
+              <View
+                key={logro.id}
+                style={[
+                  styles.logroItem,
+                  desbloqueado && styles.logroItemDesbloqueado,
+                ]}
+              >
+                {/* Imagen del logro */}
+                <View
+                  style={[
+                    styles.logroImagen,
+                    !desbloqueado && styles.logroImagenBloqueado,
+                    { backgroundColor: logro.color },
+                  ]}
+                >
+                  <Image
+                    source={logro.imagen}
+                    style={styles.logroImagenInner}
+                  />
+                  {!desbloqueado && (
+                    <View style={styles.logroBloqueado}>
+                      <Text style={styles.logroBloqueadoText}>🔒</Text>
+                    </View>
+                  )}
+                  {desbloqueado && (
+                    <View style={styles.logroDesbloqueado}>
+                      <Text style={styles.logroDesbloqueadoText}>✓</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Información del logro */}
+                <View style={styles.logroInfo}>
+                  <Text
+                    style={[
+                      styles.logroNombre,
+                      !desbloqueado && styles.logroNombreBloqueado,
+                    ]}
+                  >
+                    {logro.nombre}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.logroDescripcion,
+                      !desbloqueado && styles.logroDescripcionBloqueado,
+                    ]}
+                  >
+                    {logro.descripcion}
+                  </Text>
+
+                  {/* Progreso */}
+                  <View style={styles.progressContainer}>
+                    <Text
+                      style={[
+                        styles.progressText,
+                        !desbloqueado && styles.progressTextBloqueado,
+                      ]}
+                    >
+                      {Math.min(librosComprados, logro.requerido)}/
                       {logro.requerido} libros ({porcentaje}%)
                     </Text>
                     <View style={styles.progressBar}>
@@ -242,10 +537,12 @@ export default function LogrosScreen() {
 
         {/* Mensaje motivacional */}
         <View style={styles.motivacionSection}>
-          <Text style={styles.motivacionTitle}>¡Sigue leyendo!</Text>
+          <Text style={styles.motivacionTitle}>¡Sigue creciendo!</Text>
           <Text style={styles.motivacionText}>
-            Cada libro que completes te acerca más a nuevos logros. ¡Descubre
-            historias increíbles y construye tu biblioteca personal!
+            Cada libro que leas, cada venta que completes y cada compra que
+            hagas te acerca más a nuevos logros. ¡Descubre historias increíbles,
+            construye tu biblioteca personal y comparte el amor por la lectura
+            con otros!
           </Text>
         </View>
       </ScrollView>
@@ -316,13 +613,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     marginTop: 20,
     marginBottom: 30,
+    flexWrap: "wrap",
+    gap: 8,
   },
   statsCard: {
     backgroundColor: "#fff4e4",
     borderRadius: 16,
-    padding: 20,
+    padding: 12,
     alignItems: "center",
-    minWidth: 120,
+    minWidth: 80,
+    flex: 1,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -330,7 +630,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   statsNumber: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: "bold",
     color: "#3B2412",
     marginBottom: 4,
@@ -504,5 +804,9 @@ const styles = StyleSheet.create({
     color: "#7c4a2d",
     textAlign: "center",
     lineHeight: 24,
+  },
+  logroIconoTexto: {
+    fontSize: 40,
+    textAlign: "center",
   },
 });
