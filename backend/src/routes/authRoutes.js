@@ -22,6 +22,24 @@ router.post(
   authController.login
 );
 
+router.post(
+  "/forgot-password",
+  (req, res, next) => {
+    console.log("Ruta /forgot-password accedida");
+    next();
+  },
+  authController.forgotPassword
+);
+
+router.post(
+  "/reset-password",
+  (req, res, next) => {
+    console.log("Ruta /reset-password accedida");
+    next();
+  },
+  authController.resetPassword
+);
+
 console.log("Rutas de autenticación cargadas");
 
 module.exports = router;

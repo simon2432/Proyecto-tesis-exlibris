@@ -107,3 +107,107 @@ exports.login = async (req, res) => {
       .json({ error: "Error en el login", details: error.message });
   }
 };
+
+exports.forgotPassword = async (req, res) => {
+  try {
+    console.log("Forgot password attempt for email:", req.body.email);
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: "El email es obligatorio" });
+    }
+
+    // Verificar si el usuario existe
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ error: "No se encontró un usuario con ese email" });
+    }
+
+    // Generar un token temporal para reset de contraseña (válido por 1 hora)
+    const resetToken = jwt.sign(
+      { userId: user.id, type: "password_reset" },
+      JWT_SECRET,
+      { expiresIn: "1h" }
+    );
+
+    console.log("Password reset token generated for user:", email);
+    return res.json({
+      message: "Se ha enviado un enlace de recuperación a tu email",
+      resetToken,
+      userId: user.id,
+    });
+  } catch (error) {
+    console.error("Forgot password error:", error);
+    return res
+      .status(500)
+      .json({
+        error: "Error al procesar la solicitud",
+        details: error.message,
+      });
+  }
+};
+
+exports.resetPassword = async (req, res) => {
+  try {
+    console.log("Reset password attempt");
+    const { resetToken, newPassword, confirmPassword } = req.body;
+
+    if (!resetToken || !newPassword || !confirmPassword) {
+      return res
+        .status(400)
+        .json({ error: "Todos los campos son obligatorios" });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: "Las contraseñas no coinciden" });
+    }
+
+    // Validar que la contraseña tenga al menos 6 caracteres
+    if (newPassword.length < 6) {
+      return res
+        .status(400)
+        .json({ error: "La contraseña debe tener al menos 6 caracteres" });
+    }
+
+    try {
+      // Verificar el token
+      const decoded = jwt.verify(resetToken, JWT_SECRET);
+
+      if (decoded.type !== "password_reset") {
+        return res.status(400).json({ error: "Token inválido" });
+      }
+
+      const userId = decoded.userId;
+
+      // Verificar que el usuario existe
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
+
+      // Hashear la nueva contraseña
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+      // Actualizar la contraseña del usuario
+      await prisma.user.update({
+        where: { id: userId },
+        data: { password: hashedPassword },
+      });
+
+      console.log("Password reset successful for user ID:", userId);
+      return res.json({ message: "Contraseña actualizada correctamente" });
+    } catch (jwtError) {
+      return res.status(400).json({ error: "Token expirado o inválido" });
+    }
+  } catch (error) {
+    console.error("Reset password error:", error);
+    return res
+      .status(500)
+      .json({
+        error: "Error al actualizar la contraseña",
+        details: error.message,
+      });
+  }
+};
