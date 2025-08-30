@@ -8,6 +8,7 @@ import {
   TextInput,
   Modal,
   Image,
+  Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -39,6 +40,20 @@ export default function SoporteScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Image
+          source={require("../assets/images/logoLechuza.png")}
+          style={styles.logo}
+        />
+        <Text style={styles.logoText}>EXLIBRIS</Text>
+      </View>
+
+      {/* Botón Volver */}
+      <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+        <Text style={styles.backButtonText}>Volver</Text>
+      </TouchableOpacity>
+
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -113,8 +128,42 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#FFF9F2",
   },
+  header: {
+    backgroundColor: "#fff4e4",
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    paddingTop: Platform.OS === "android" ? 50 : 40,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e0d3c2",
+  },
+  logo: {
+    width: 30,
+    height: 30,
+    marginRight: 8,
+  },
+  logoText: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#3B2412",
+  },
+  backButton: {
+    backgroundColor: "#3B2412",
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    marginTop: 12,
+    marginLeft: 18,
+    alignSelf: "flex-start",
+  },
+  backButtonText: {
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: 16,
+  },
   scrollContent: {
-    paddingTop: 40,
+    paddingTop: 20,
     paddingBottom: 32,
     paddingHorizontal: 18,
   },

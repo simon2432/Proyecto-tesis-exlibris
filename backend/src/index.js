@@ -81,6 +81,10 @@ app.use(chatRoutes);
 
 const userRoutes = require("./routes/userRoutes");
 app.use("/usuarios", userRoutes);
+
+const recommendationsRoutes = require("./routes/recommendationsRoutes");
+app.use("/api/recommendations", recommendationsRoutes);
+
 app.use(
   "/assets/fotosPerfil",
   express.static(path.join(__dirname, "../assets/fotosPerfil"))
