@@ -1,6 +1,7 @@
 const {
   getHomeRecommendations,
   invalidateRecommendationsCache,
+  checkCacheStatus,
 } = require("../services/recs/homeRecs");
 
 /**
@@ -106,6 +107,43 @@ exports.getHealth = async (req, res) => {
     res.status(500).json({
       status: "unhealthy",
       error: error.message,
+    });
+  }
+};
+
+/**
+ * GET /api/recommendations/cache-status
+ * Verifica el estado del caché para un usuario específico
+ */
+exports.getCacheStatus = async (req, res) => {
+  try {
+    const { userId } = req.query;
+
+    if (!userId) {
+      return res.status(400).json({
+        error: "userId es requerido como query parameter",
+      });
+    }
+
+    if (isNaN(parseInt(userId))) {
+      return res.status(400).json({
+        error: "userId debe ser un número válido",
+      });
+    }
+
+    console.log(
+      `[Recommendations] Verificando estado del caché para usuario ${userId}`
+    );
+
+    const cacheStatus = checkCacheStatus(userId);
+
+    res.json(cacheStatus);
+  } catch (error) {
+    console.error("[Recommendations] Error al verificar caché:", error);
+    res.status(500).json({
+      error: "Error interno del servidor al verificar caché",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };

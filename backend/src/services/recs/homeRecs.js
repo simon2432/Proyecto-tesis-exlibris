@@ -8,7 +8,10 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
 // Cache persistente por sesión (solo se invalida al relogear)
 const recommendationsCache = new Map();
-const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 días (prácticamente permanente por sesión)
+const CACHE_DURATION = Infinity; // Caché permanente hasta invalidación explícita
+
+// Cache de timestamps para debugging
+const cacheTimestamps = new Map();
 
 /**
  * Obtiene las señales del usuario (favoritos, historial, likes/dislikes)
@@ -223,23 +226,36 @@ const addToShortlist = (
   favoritos
 ) => {
   for (const book of results) {
+    // Verificar que el libro tenga un volumeId válido
+    if (!book.volumeId || book.volumeId.trim() === "") continue;
+
     // Verificar que el libro no esté ya en la shortlist
     if (seenIds.has(book.volumeId)) continue;
 
-    // Verificar que el libro no esté en el historial de lecturas
-    if (historialCompleto.includes(book.volumeId)) continue;
+    // Verificar que el libro no esté en el historial de lecturas (MÁS ESTRICTO)
+    if (historialCompleto.includes(book.volumeId)) {
+      console.log(
+        `[Filter] Excluyendo libro del historial: ${book.volumeId} - ${book.title}`
+      );
+      continue;
+    }
 
-    // Verificar que el libro no esté en favoritos
-    if (favoritos.some((fav) => fav.volumeId === book.volumeId)) continue;
-
-    // Verificar que el libro tenga un volumeId válido
-    if (!book.volumeId || book.volumeId.trim() === "") continue;
+    // Verificar que el libro no esté en favoritos (MÁS ESTRICTO)
+    if (favoritos.some((fav) => fav.volumeId === book.volumeId)) {
+      console.log(
+        `[Filter] Excluyendo libro de favoritos: ${book.volumeId} - ${book.title}`
+      );
+      continue;
+    }
 
     // Verificar que no excedamos el límite
     if (shortlist.length >= 120) break;
 
     seenIds.add(book.volumeId);
     shortlist.push(book);
+    console.log(
+      `[Filter] Agregando libro válido: ${book.volumeId} - ${book.title}`
+    );
   }
 };
 
@@ -463,6 +479,10 @@ const postValidateAndHydrate = (llmResponse, shortlist, listType) => {
  * Fallback local usando scoring simple y MMR para diversidad
  */
 const buildFallbackLocal = (shortlist, signals) => {
+  console.log(
+    `[Fallback] Iniciando con shortlist de ${shortlist.length} libros`
+  );
+
   // Scoring simple basado en afinidad
   const scoredBooks = shortlist.map((book) => {
     let score = 0;
@@ -517,11 +537,16 @@ const buildFallbackLocal = (shortlist, signals) => {
 
   // Ordenar por score
   scoredBooks.sort((a, b) => b.score - a.score);
+  console.log(`[Fallback] Libros con scoring: ${scoredBooks.length}`);
 
-  // Garantizar que tengamos suficientes libros
+  // Garantizar que tengamos suficientes libros para ambas listas
   if (scoredBooks.length < 24) {
-    // Si no hay suficientes, duplicar algunos libros con diferentes razones
     const needed = 24 - scoredBooks.length;
+    console.log(
+      `[Fallback] Necesitamos ${needed} libros más, duplicando con variaciones`
+    );
+
+    // Si no hay suficientes, duplicar algunos libros con diferentes razones
     for (let i = 0; i < needed; i++) {
       const book = scoredBooks[i % scoredBooks.length];
       scoredBooks.push({
@@ -543,9 +568,13 @@ const buildFallbackLocal = (shortlist, signals) => {
     reason: book.reason || `Recomendado por afinidad (score: ${book.score})`,
   }));
 
+  console.log(`[Fallback] tePodrianGustar: ${tePodrianGustar.length} libros`);
+
   // MMR para "descubri nuevas lecturas" (diversidad)
   const descubriNuevasLecturas = [];
   const remainingBooks = scoredBooks.slice(12);
+
+  console.log(`[Fallback] Libros restantes para MMR: ${remainingBooks.length}`);
 
   // Garantizar que tengamos exactamente 12 libros para la segunda lista
   let booksToSelect = 12;
@@ -626,6 +655,10 @@ const buildFallbackLocal = (shortlist, signals) => {
     }
   }
 
+  console.log(
+    `[Fallback] descubriNuevasLecturas antes de completar: ${descubriNuevasLecturas.length} libros`
+  );
+
   // Si aún no tenemos 12 libros, completar con los que falten
   while (descubriNuevasLecturas.length < 12) {
     const remainingIndex = descubriNuevasLecturas.length + 11;
@@ -653,6 +686,10 @@ const buildFallbackLocal = (shortlist, signals) => {
     }
   }
 
+  console.log(
+    `[Fallback] Final: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
+  );
+
   return [...tePodrianGustar, ...descubriNuevasLecturas];
 };
 
@@ -661,12 +698,32 @@ const buildFallbackLocal = (shortlist, signals) => {
  */
 const getHomeRecommendations = async (userId) => {
   try {
-    // Verificar cache
+    // Verificar cache - Caché persistente por sesión
     const cacheKey = `home_recs_${userId}`;
     const cached = recommendationsCache.get(cacheKey);
-    if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+
+    if (cached) {
       console.log(`[Cache] Hit para usuario ${userId}, usando cache existente`);
-      return cached.data;
+      console.log(
+        `[Cache] Cache generado: ${new Date(cached.timestamp).toLocaleString()}`
+      );
+      console.log(`[Cache] Estrategia usada: ${cached.data.metadata.strategy}`);
+
+      // Verificar integridad del caché
+      if (
+        cached.data.tePodrianGustar &&
+        cached.data.descubriNuevasLecturas &&
+        cached.data.tePodrianGustar.length === 12 &&
+        cached.data.descubriNuevasLecturas.length === 12
+      ) {
+        console.log(
+          `[Cache] Caché válido: ${cached.data.tePodrianGustar.length} + ${cached.data.descubriNuevasLecturas.length} libros`
+        );
+        return cached.data;
+      } else {
+        console.log(`[Cache] Caché corrupto, regenerando...`);
+        recommendationsCache.delete(cacheKey);
+      }
     }
 
     console.log(
@@ -765,15 +822,26 @@ const getHomeRecommendations = async (userId) => {
           },
         };
 
-        recommendationsCache.set(cacheKey, {
-          data: result,
-          timestamp: Date.now(),
-        });
-        return result;
+        // Validar que no se incluyan libros del historial o favoritos
+        if (!validateRecommendations(result, signals)) {
+          console.error(
+            `[VALIDATION] LLM devolvió libros inválidos, usando fallback local`
+          );
+          // No usar break, continuar con el fallback local
+        } else {
+          recommendationsCache.set(cacheKey, {
+            data: result,
+            timestamp: Date.now(),
+          });
+          return result;
+        }
       }
 
       // Si el LLM no devolvió 12+12, completar con fallback local
-      console.log("[LLM] Respuesta incompleta, completando con fallback local");
+      console.log(
+        `[LLM] Respuesta incompleta: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
+      );
+      console.log("[LLM] Completando con fallback local");
     } else {
       console.log("[Recommendations] LLM falló, usando fallback local");
     }
@@ -815,6 +883,22 @@ const getHomeRecommendations = async (userId) => {
       ];
     }
 
+    // Validación CRÍTICA: asegurar que tengamos exactamente 12+12
+    if (tePodrianGustar.length !== 12 || descubriNuevasLecturas.length !== 12) {
+      console.error(
+        `[ERROR] Validación falló: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
+      );
+
+      // Forzar a que tengamos exactamente 12+12 usando defaults
+      const defaults = getDefaultRecommendations();
+      tePodrianGustar = defaults.tePodrianGustar.slice(0, 12);
+      descubriNuevasLecturas = defaults.descubriNuevasLecturas.slice(0, 12);
+
+      console.log(
+        `[Recommendations] Forzando uso de defaults para garantizar 12+12`
+      );
+    }
+
     console.log(
       `[Recommendations] Final: ${tePodrianGustar.length} + ${descubriNuevasLecturas.length} libros`
     );
@@ -832,6 +916,48 @@ const getHomeRecommendations = async (userId) => {
 
     recommendationsCache.set(cacheKey, { data: result, timestamp: Date.now() });
     console.log(`[Cache] Cacheado resultado para usuario ${userId}`);
+
+    // Validación FINAL antes de retornar
+    if (
+      result.tePodrianGustar.length !== 12 ||
+      result.descubriNuevasLecturas.length !== 12
+    ) {
+      console.error(
+        `[ERROR CRÍTICO] Resultado final inválido: tePodrianGustar=${result.tePodrianGustar.length}, descubriNuevasLecturas=${result.descubriNuevasLecturas.length}`
+      );
+
+      // Último recurso: usar defaults
+      const defaults = getDefaultRecommendations();
+      return {
+        tePodrianGustar: defaults.tePodrianGustar.slice(0, 12),
+        descubriNuevasLecturas: defaults.descubriNuevasLecturas.slice(0, 12),
+        metadata: {
+          userId,
+          generatedAt: new Date().toISOString(),
+          strategy: "fallback-defaults-critical",
+          shortlistSize: 0,
+        },
+      };
+    }
+
+    // Validar que no se incluyan libros del historial o favoritos
+    if (!validateRecommendations(result, signals)) {
+      console.error(
+        `[VALIDATION] Se encontraron libros inválidos, usando defaults`
+      );
+      const defaults = getDefaultRecommendations();
+      return {
+        tePodrianGustar: defaults.tePodrianGustar.slice(0, 12),
+        descubriNuevasLecturas: defaults.descubriNuevasLecturas.slice(0, 12),
+        metadata: {
+          userId,
+          generatedAt: new Date().toISOString(),
+          strategy: "fallback-defaults-validation",
+          shortlistSize: 0,
+        },
+      };
+    }
+
     return result;
   } catch (error) {
     console.error("Error getting home recommendations:", error);
@@ -852,12 +978,31 @@ const getHomeRecommendations = async (userId) => {
 };
 
 /**
- * Invalidar cache de recomendaciones (solo al relogear)
+ * Invalida el caché de recomendaciones para un usuario específico
+ * USAR SOLO cuando el usuario se desloguea o cambia significativamente
  */
 const invalidateRecommendationsCache = (userId) => {
   const cacheKey = `home_recs_${userId}`;
+  const wasCached = recommendationsCache.has(cacheKey);
+
+  if (wasCached) {
+    const cached = recommendationsCache.get(cacheKey);
+    console.log(`[Cache] Invalidando caché para usuario ${userId}`);
+    console.log(
+      `[Cache] Caché existía desde: ${new Date(
+        cached.timestamp
+      ).toLocaleString()}`
+    );
+    console.log(`[Cache] Estrategia usada: ${cached.data.metadata.strategy}`);
+  }
+
   recommendationsCache.delete(cacheKey);
-  console.log(`[Cache] Invalidado cache para usuario ${userId} (relogear)`);
+  cacheTimestamps.delete(cacheKey);
+
+  console.log(`[Cache] Caché invalidado para usuario ${userId} (relogear)`);
+  console.log(
+    `[Cache] El usuario verá nuevas recomendaciones en su próxima visita`
+  );
 };
 
 /**
@@ -879,9 +1024,95 @@ const getCacheStats = () => {
   };
 };
 
+/**
+ * Valida que las recomendaciones no incluyan libros del historial o favoritos
+ */
+const validateRecommendations = (recommendations, signals) => {
+  const historialCompleto = signals.historialCompleto;
+  const favoritos = signals.favoritos;
+
+  let hasInvalidBooks = false;
+
+  // Verificar tePodrianGustar
+  for (const book of recommendations.tePodrianGustar) {
+    if (historialCompleto.includes(book.volumeId)) {
+      console.error(
+        `[VALIDATION] ERROR: Libro del historial en tePodrianGustar: ${book.volumeId} - ${book.title}`
+      );
+      hasInvalidBooks = true;
+    }
+    if (favoritos.some((fav) => fav.volumeId === book.volumeId)) {
+      console.error(
+        `[VALIDATION] ERROR: Libro de favoritos en tePodrianGustar: ${book.volumeId} - ${book.title}`
+      );
+      hasInvalidBooks = true;
+    }
+  }
+
+  // Verificar descubriNuevasLecturas
+  for (const book of recommendations.descubriNuevasLecturas) {
+    if (historialCompleto.includes(book.volumeId)) {
+      console.error(
+        `[VALIDATION] ERROR: Libro del historial en descubriNuevasLecturas: ${book.volumeId} - ${book.title}`
+      );
+      hasInvalidBooks = true;
+    }
+    if (favoritos.some((fav) => fav.volumeId === book.volumeId)) {
+      console.error(
+        `[VALIDATION] ERROR: Libro de favoritos en descubriNuevasLecturas: ${book.volumeId} - ${book.title}`
+      );
+      hasInvalidBooks = true;
+    }
+  }
+
+  if (hasInvalidBooks) {
+    console.error(
+      `[VALIDATION] Se encontraron libros inválidos en las recomendaciones`
+    );
+    return false;
+  }
+
+  console.log(`[VALIDATION] Todas las recomendaciones son válidas`);
+  return true;
+};
+
+/**
+ * Verifica el estado del caché para un usuario sin invalidarlo
+ * Útil para debugging y monitoreo
+ */
+const checkCacheStatus = (userId) => {
+  const cacheKey = `home_recs_${userId}`;
+  const cached = recommendationsCache.get(cacheKey);
+
+  if (!cached) {
+    return {
+      userId,
+      hasCache: false,
+      message: "No hay caché para este usuario",
+    };
+  }
+
+  const age = Date.now() - cached.timestamp;
+  const ageHours = Math.floor(age / (1000 * 60 * 60));
+  const ageMinutes = Math.floor((age % (1000 * 60 * 60)) / (1000 * 60));
+
+  return {
+    userId,
+    hasCache: true,
+    timestamp: cached.timestamp,
+    age: `${ageHours}h ${ageMinutes}m`,
+    strategy: cached.data.metadata.strategy,
+    tePodrianGustar: cached.data.tePodrianGustar.length,
+    descubriNuevasLecturas: cached.data.descubriNuevasLecturas.length,
+    message: `Caché válido con ${cached.data.tePodrianGustar.length} + ${cached.data.descubriNuevasLecturas.length} libros`,
+  };
+};
+
 module.exports = {
   getHomeRecommendations,
   invalidateRecommendationsCache,
   invalidateAllRecommendationsCache,
   getCacheStats,
+  validateRecommendations,
+  checkCacheStatus,
 };

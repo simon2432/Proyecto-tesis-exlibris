@@ -15,6 +15,12 @@ router.get("/home", recommendationsController.getHomeRecommendations);
 router.post("/invalidate", recommendationsController.invalidateRecommendations);
 
 /**
+ * GET /api/recommendations/cache-status?userId={userId}
+ * Verifica el estado del caché para un usuario específico
+ */
+router.get("/cache-status", recommendationsController.getCacheStatus);
+
+/**
  * GET /api/recommendations/health
  * Endpoint de salud para verificar el estado del servicio
  */

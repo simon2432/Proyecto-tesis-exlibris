@@ -1,178 +1,113 @@
-# Sistema de Recomendaciones - Exlibris
+# Sistema de Recomendaciones - Home
 
 ## Descripción
 
-Este sistema proporciona recomendaciones personalizadas de libros para el home de la aplicación Exlibris, utilizando una combinación de:
+Sistema inteligente de recomendaciones de libros para la pantalla de inicio, que combina señales del usuario con IA (ChatGPT) y fallbacks locales.
 
-- **Señales del usuario**: Favoritos, historial de lecturas con ratings
-- **Google Books API**: Para buscar candidatos de libros
-- **OpenAI GPT-3.5**: Para seleccionar las mejores recomendaciones
-- **Algoritmos de fallback**: Cuando las APIs externas no están disponibles
+## Características del Caché
 
-## Arquitectura
+### 🚀 **Caché Persistente por Sesión**
 
-```
-┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│   Frontend      │    │   Backend        │    │   APIs Externas │
-│                 │    │                  │    │                 │
-│ - Home Screen   │───▶│ - Controller     │───▶│ - Google Books  │
-│ - User Profile  │    │ - Service Layer  │    │ - OpenAI        │
-└─────────────────┘    │ - Cache          │    └─────────────────┘
-                       └──────────────────┘
-```
+- **Duración**: `Infinity` - Las recomendaciones se mantienen hasta que se invaliden explícitamente
+- **Persistencia**: Mientras el usuario esté logueado, verá las mismas recomendaciones
+- **Invalidación**: Solo se regeneran cuando el usuario se desloguea y vuelve a entrar
 
-## Endpoints
+### 📊 **Endpoints de Caché**
 
-### GET `/api/recommendations/home?userId={userId}`
+#### `GET /api/recommendations/cache-status?userId={userId}`
 
-Obtiene recomendaciones personalizadas para el home del usuario.
-
-**Query Parameters:**
-
-- `userId` (required): ID del usuario
-
-**Response:**
+Verifica el estado del caché sin invalidarlo:
 
 ```json
 {
-  "tePodrianGustar": [
-    {
-      "volumeId": "string",
-      "title": "string",
-      "authors": ["string"],
-      "categories": ["string"],
-      "reason": "string"
-    }
-  ],
-  "descubriNuevasLecturas": [...],
-  "metadata": {
-    "userId": "string",
-    "generatedAt": "string",
-    "strategy": "llm+shortlist" | "fallback-defaults" | "fallback-local",
-    "shortlistSize": number
-  }
+  "userId": "123",
+  "hasCache": true,
+  "timestamp": 1703123456789,
+  "age": "2h 15m",
+  "strategy": "llm+shortlist",
+  "tePodrianGustar": 12,
+  "descubriNuevasLecturas": 12,
+  "message": "Caché válido con 12 + 12 libros"
 }
 ```
 
-### POST `/api/recommendations/invalidate`
+#### `POST /api/recommendations/invalidate`
 
-Invalida el cache de recomendaciones para un usuario específico.
-
-**Body:**
+Invalida el caché para regenerar recomendaciones:
 
 ```json
 {
-  "userId": "string"
+  "userId": "123"
 }
 ```
 
-### GET `/api/recommendations/health`
+### 🔄 **Flujo de Caché**
 
-Endpoint de salud para verificar el estado del servicio.
+1. **Primera visita**: Se generan recomendaciones y se cachean
+2. **Visitas posteriores**: Se usan las recomendaciones del caché
+3. **Navegación**: Entre home, perfil, etc. - **MISMAS recomendaciones**
+4. **Deslogueo**: Se invalida el caché
+5. **Relogueo**: Se generan nuevas recomendaciones
 
-## Estrategias de Recomendación
+### 🛡️ **Validaciones del Caché**
 
-### 1. LLM + Shortlist (Estrategia Principal)
+- **Integridad**: Se verifica que tenga exactamente 12+12 libros
+- **Corrupción**: Si el caché está corrupto, se regenera automáticamente
+- **Logging**: Se registra cada hit/miss del caché
 
-- Genera shortlist de 60-150 candidatos usando Google Books API
-- Usa ChatGPT para seleccionar 12+12 libros basándose en señales del usuario
-- Prompt estructurado que garantiza JSON válido
+## Uso del Frontend
 
-### 2. Fallback Local
+### **Para mantener recomendaciones consistentes:**
 
-- Algoritmo de scoring basado en afinidad autor/categoría
-- MMR (Maximal Marginal Relevance) para diversidad en la segunda lista
-- λ = 0.7 (balance entre relevancia y diversidad)
-
-### 3. Fallback Defaults
-
-- Listas predefinidas de libros populares y variados
-- Cubre ficción/no ficción, distintos géneros, clásicos y contemporáneos
-
-## Flujo de Datos
-
-1. **Obtener Señales del Usuario**
-
-   - Top 3 favoritos
-   - Historial de lecturas (LIKES: rating ≥ 3, DISLIKES: rating ≤ 2)
-
-2. **Generar Shortlist**
-
-   - Búsquedas por autor, categoría, palabras clave del título
-   - Filtrado de duplicados y libros ya leídos
-   - Límite máximo de 120 candidatos
-
-3. **Selección con LLM**
-
-   - Prompt estructurado para ChatGPT
-   - Validación de respuesta JSON
-   - Reintento con prompt de corrección si falla
-
-4. **Validación y Cache**
-   - Verificación de estructura y conteo (12+12)
-   - Cache por 24 horas
-   - Invalidación automática al cambiar favoritos o rating ≥ 4
-
-## Variables de Entorno
-
-```bash
-# OpenAI API Key (para ChatGPT)
-OPENAI_API_KEY=sk-your-key-here
-
-# Google Books API Key
-GOOGLE_BOOKS_API_KEY=your-key-here
-
-# Environment
-NODE_ENV=development
+```typescript
+// NO llamar a /api/recommendations/home en cada navegación
+// Solo llamar cuando:
+// 1. Usuario entra por primera vez
+// 2. Usuario se reloguea
+// 3. Se necesita refrescar explícitamente
 ```
 
-## Cache
+### **Para invalidar al desloguear:**
 
-- **Duración**: 24 horas
-- **Invalidación**: Manual o automática
-- **Almacenamiento**: Memoria (en producción usar Redis)
-
-## Manejo de Errores
-
-- **Timeout**: 30 segundos para APIs externas
-- **Fallbacks**: Múltiples niveles de degradación
-- **Logging**: Nivel DEBUG para decisiones del sistema
-- **Validación**: Estructura JSON y conteo exacto
-
-## Testing
-
-### Casos de Prueba
-
-1. **Sin datos del usuario** → Defaults
-2. **Solo favoritos** → 12+12 recomendaciones
-3. **Con historial completo** → No recomendar duplicados
-4. **LIKES vs DISLIKES** → Evitar similitudes con dislikes
-
-### Endpoints de Prueba
-
-```bash
-# Health check
-curl http://localhost:3000/api/recommendations/health
-
-# Recomendaciones para usuario 1
-curl "http://localhost:3000/api/recommendations/home?userId=1"
-
-# Invalidar cache
-curl -X POST http://localhost:3000/api/recommendations/invalidate \
-  -H "Content-Type: application/json" \
-  -d '{"userId": "1"}'
+```typescript
+// Al hacer logout
+await fetch("/api/recommendations/invalidate", {
+  method: "POST",
+  body: JSON.stringify({ userId: currentUserId }),
+});
 ```
 
-## Monitoreo
+## Logs del Sistema
 
-- **Métricas**: Tiempo de respuesta, tasa de éxito por estrategia
-- **Logs**: Decisiones del sistema, errores de APIs externas
-- **Health Checks**: Estado de dependencias (OpenAI, Google Books)
+### **Caché Hit:**
 
-## Consideraciones de Producción
+```
+[Cache] Hit para usuario 123, usando cache existente
+[Cache] Cache generado: 12/21/2024, 3:45:30 PM
+[Cache] Estrategia usada: llm+shortlist
+[Cache] Caché válido: 12 + 12 libros
+```
 
-1. **Rate Limiting**: Implementar para APIs externas
-2. **Redis**: Reemplazar cache en memoria
-3. **Monitoring**: APM, métricas de negocio
-4. **A/B Testing**: Comparar estrategias de recomendación
-5. **Personalización**: Ajustar parámetros por usuario
+### **Caché Miss:**
+
+```
+[Cache] Miss para usuario 123, generando nuevas recomendaciones
+```
+
+### **Invalidación:**
+
+```
+[Cache] Invalidando caché para usuario 123
+[Cache] Caché existía desde: 12/21/2024, 3:45:30 PM
+[Cache] Estrategia usada: llm+shortlist
+[Cache] Caché invalidado para usuario 123 (relogear)
+[Cache] El usuario verá nuevas recomendaciones en su próxima visita
+```
+
+## Beneficios
+
+✅ **Consistencia**: Mismas recomendaciones durante toda la sesión  
+✅ **Performance**: No se regeneran en cada navegación  
+✅ **UX**: Experiencia predecible para el usuario  
+✅ **Control**: Solo se regeneran cuando es necesario  
+✅ **Debugging**: Logs detallados para monitoreo
