@@ -15,12 +15,14 @@ import { useRouter } from "expo-router";
 import axios from "axios";
 import { API_BASE_URL } from "../constants/ApiConfig";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useUser } from "../contexts/UserContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function HomeScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { user } = useUser();
 
   // Estados para los libros de cada sección
   const [recommendedBooks, setRecommendedBooks] = useState<any[]>([]);
@@ -29,29 +31,19 @@ export default function HomeScreen() {
   const [recommendationStrategy, setRecommendationStrategy] =
     useState<string>("");
 
-  // Palabras random para buscar
-  const randomWords = [
-    "amor",
-    "historia",
-    "aventura",
-    "vida",
-    "misterio",
-    "fantasía",
-    "clásico",
-    "familia",
-    "viaje",
-    "secreto",
-  ];
-
   useEffect(() => {
     const fetchRecommendations = async () => {
       try {
         setLoading(true);
 
-        // Obtener userId del contexto o localStorage
-        // Por ahora usamos un ID hardcodeado para testing
-        const userId = 1; // TODO: Obtener del contexto de usuario
+        // Verificar que el usuario esté logueado
+        if (!user?.id) {
+          console.log("[Home] Usuario no logueado, saltando recomendaciones");
+          setLoading(false);
+          return;
+        }
 
+        const userId = user.id;
         console.log(`[Home] Obteniendo recomendaciones para usuario ${userId}`);
 
         const response = await axios.get(
@@ -90,47 +82,22 @@ export default function HomeScreen() {
           );
         } else {
           console.error("[Home] Error: Respuesta de recomendaciones inválida");
-          // Fallback a búsqueda aleatoria si falla
-          await fetchRandomBooks();
+          // Si falla, mostrar arrays vacíos
+          setRecommendedBooks([]);
+          setExploreBooks([]);
         }
       } catch (error) {
         console.error("[Home] Error obteniendo recomendaciones:", error);
-        // Fallback a búsqueda aleatoria si falla
-        await fetchRandomBooks();
+        // Si falla, mostrar arrays vacíos
+        setRecommendedBooks([]);
+        setExploreBooks([]);
       } finally {
         setLoading(false);
       }
     };
 
-    const fetchRandomBooks = async () => {
-      // Fallback: elegir dos palabras random distintas
-      const getTwoRandomWords = () => {
-        const shuffled = randomWords.sort(() => 0.5 - Math.random());
-        return [shuffled[0], shuffled[1]];
-      };
-      const [word1, word2] = getTwoRandomWords();
-
-      const fetchBooks = async (word: string) => {
-        try {
-          const res = await axios.get(`${API_BASE_URL}/books/search`, {
-            params: { q: word },
-          });
-          return res.data.books || [];
-        } catch {
-          return [];
-        }
-      };
-
-      Promise.all([fetchBooks(word1), fetchBooks(word2)]).then(
-        ([books1, books2]) => {
-          setRecommendedBooks(books1.slice(0, 10));
-          setExploreBooks(books2.slice(0, 10));
-        }
-      );
-    };
-
     fetchRecommendations();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [user?.id]); // Se ejecuta cuando cambia el usuario
 
   const handleSearch = (text: string) => {
     // Aquí puedes implementar la lógica de búsqueda
@@ -200,7 +167,7 @@ export default function HomeScreen() {
                   console.log(`[Home] Renderizando libro ${index}:`, book);
                   return (
                     <TouchableOpacity
-                      key={book.volumeId || book.id}
+                      key={`recommended-${book.volumeId || book.id}`}
                       onPress={() => handleBookSelect(book)}
                       style={{ marginRight: 8, marginBottom: 8 }}
                     >
@@ -266,7 +233,7 @@ export default function HomeScreen() {
               ) : (
                 exploreBooks.map((book) => (
                   <TouchableOpacity
-                    key={book.volumeId || book.id}
+                    key={`explore-${book.volumeId || book.id}`}
                     onPress={() => handleBookSelect(book)}
                     style={{ marginRight: 8, marginBottom: 8 }}
                   >

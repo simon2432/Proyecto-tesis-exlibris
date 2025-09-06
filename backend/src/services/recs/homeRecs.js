@@ -2,7 +2,15 @@ const axios = require("axios");
 const { PrismaClient } = require("@prisma/client");
 const { getDefaultRecommendations } = require("./homeDefaults");
 
-const prisma = new PrismaClient();
+// Verificar que PrismaClient esté disponible
+let prisma;
+try {
+  prisma = new PrismaClient();
+  console.log("[Prisma] Cliente inicializado correctamente");
+} catch (error) {
+  console.error("[Prisma] Error inicializando cliente:", error);
+  throw error;
+}
 const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -14,10 +22,48 @@ const CACHE_DURATION = Infinity; // Caché permanente hasta invalidación explí
 const cacheTimestamps = new Map();
 
 /**
+ * Busca información de un libro en Google Books API
+ */
+const searchBookInfo = async (volumeId) => {
+  try {
+    const response = await axios.get(
+      `https://www.googleapis.com/books/v1/volumes/${volumeId}?key=${GOOGLE_BOOKS_API_KEY}`
+    );
+
+    if (response.data && response.data.volumeInfo) {
+      const info = response.data.volumeInfo;
+      return {
+        title: info.title || `Libro ${volumeId}`,
+        authors: info.authors || [],
+        categories: info.categories || [],
+      };
+    }
+  } catch (error) {
+    console.error(
+      `[Signals] Error buscando libro ${volumeId} en Google Books:`,
+      error.message
+    );
+  }
+
+  return {
+    title: `Libro ${volumeId}`,
+    authors: [],
+    categories: [],
+  };
+};
+
+/**
  * Obtiene las señales del usuario (favoritos, historial, likes/dislikes)
  */
 const getUserSignals = async (userId) => {
   try {
+    console.log(`[Signals] Obteniendo señales para usuario ${userId}`);
+
+    // Verificar que prisma esté disponible
+    if (!prisma) {
+      throw new Error("Prisma client no está inicializado");
+    }
+
     // Obtener usuario con favoritos
     const user = await prisma.user.findUnique({
       where: { id: parseInt(userId) },
@@ -27,24 +73,61 @@ const getUserSignals = async (userId) => {
     // Obtener historial de lecturas
     const lecturas = await prisma.lectura.findMany({
       where: { userId: parseInt(userId) },
-      select: {
-        libroId: true,
-        reviewRating: true,
-      },
     });
+
+    console.log(`[Signals] Lecturas encontradas: ${lecturas.length}`);
 
     // Procesar favoritos
     const favoritos = [];
+    console.log("[Signals] Raw librosFavoritos:", user?.librosFavoritos);
+    console.log(
+      "[Signals] Tipo de librosFavoritos:",
+      typeof user?.librosFavoritos
+    );
+
     if (user?.librosFavoritos) {
       try {
-        const favs = JSON.parse(user.librosFavoritos);
+        // Verificar si ya es un objeto o necesita parsing
+        let favs;
+        if (typeof user.librosFavoritos === "string") {
+          console.log("[Signals] Parseando JSON string...");
+          favs = JSON.parse(user.librosFavoritos);
+        } else if (Array.isArray(user.librosFavoritos)) {
+          console.log("[Signals] Ya es un array");
+          favs = user.librosFavoritos;
+        } else {
+          console.log(
+            "[Signals] librosFavoritos no es un array válido:",
+            typeof user.librosFavoritos
+          );
+          favs = [];
+        }
+
+        console.log("[Signals] Favoritos parseados:", favs);
+
         if (Array.isArray(favs)) {
-          favoritos.push(...favs.slice(0, 3)); // Top 3
+          console.log(`[Signals] Procesando ${favs.length} favoritos`);
+          // Solo obtener los títulos de los favoritos (top 3)
+          for (const fav of favs.slice(0, 3)) {
+            if (fav && fav.id && fav.title) {
+              favoritos.push({
+                volumeId: fav.id,
+                title: fav.title,
+                authors: [],
+                categories: [],
+                description: "",
+              });
+              console.log(`[Signals] Favorito agregado: ${fav.title}`);
+            }
+          }
         }
       } catch (e) {
         console.error("Error parsing favoritos:", e);
+        console.log("librosFavoritos raw:", user.librosFavoritos);
       }
     }
+
+    console.log(`[Signals] Favoritos procesados: ${favoritos.length}`);
 
     // Separar historial en likes/dislikes
     const historialLikes = [];
@@ -55,31 +138,97 @@ const getUserSignals = async (userId) => {
       historialCompleto.push(lectura.libroId);
 
       if (lectura.reviewRating) {
-        if (lectura.reviewRating >= 3) {
-          // TODO: Enriquecer con datos de Google Books si es necesario
-          historialLikes.push({
-            volumeId: lectura.libroId,
-            title: `Libro ${lectura.libroId}`,
-            authors: [],
-            categories: [],
+        try {
+          // Buscar información del libro en la tabla Libro
+          const libro = await prisma.libro.findFirst({
+            where: { volumeId: lectura.libroId },
           });
-        } else {
-          historialDislikes.push({
+
+          if (libro) {
+            const libroInfo = {
+              volumeId: libro.volumeId,
+              title: libro.titulo,
+              authors: libro.autores
+                ? libro.autores.split(",").map((a) => a.trim())
+                : [],
+              categories: libro.categorias
+                ? libro.categorias.split(",").map((c) => c.trim())
+                : [],
+              rating: lectura.reviewRating,
+            };
+
+            if (lectura.reviewRating >= 3) {
+              historialLikes.push(libroInfo);
+            } else {
+              historialDislikes.push(libroInfo);
+            }
+          } else {
+            // Si no está en la BD, buscar en Google Books API
+            console.log(
+              `[Signals] Libro ${lectura.libroId} no encontrado en BD, buscando en Google Books...`
+            );
+            const bookInfo = await searchBookInfo(lectura.libroId);
+            const libroInfo = {
+              volumeId: lectura.libroId,
+              title: bookInfo.title,
+              authors: bookInfo.authors,
+              categories: bookInfo.categories,
+              rating: lectura.reviewRating,
+            };
+
+            if (lectura.reviewRating >= 3) {
+              historialLikes.push(libroInfo);
+            } else {
+              historialDislikes.push(libroInfo);
+            }
+          }
+        } catch (error) {
+          console.error(
+            `[Signals] Error procesando lectura ${lectura.libroId}:`,
+            error
+          );
+          // En caso de error, buscar en Google Books API
+          console.log(
+            `[Signals] Error en BD, buscando ${lectura.libroId} en Google Books...`
+          );
+          const bookInfo = await searchBookInfo(lectura.libroId);
+          const libroInfo = {
             volumeId: lectura.libroId,
-            title: `Libro ${lectura.libroId}`,
-            authors: [],
-            categories: [],
-          });
+            title: bookInfo.title,
+            authors: bookInfo.authors,
+            categories: bookInfo.categories,
+            rating: lectura.reviewRating,
+          };
+
+          if (lectura.reviewRating >= 3) {
+            historialLikes.push(libroInfo);
+          } else {
+            historialDislikes.push(libroInfo);
+          }
         }
       }
     }
 
-    return {
+    console.log(
+      `[Signals] Historial LIKES (rating >= 3): ${historialLikes.length} libros`
+    );
+    console.log(
+      `[Signals] Historial DISLIKES (rating <= 2): ${historialDislikes.length} libros`
+    );
+    console.log(
+      `[Signals] Historial completo: ${historialCompleto.length} libros`
+    );
+
+    const signals = {
       favoritos,
       historialLikes,
       historialDislikes,
       historialCompleto,
     };
+
+    console.log(`[Signals] Señales finales:`, JSON.stringify(signals, null, 2));
+
+    return signals;
   } catch (error) {
     console.error("Error getting user signals:", error);
     throw error;
@@ -320,6 +469,32 @@ const callLLMForPicks = async (signals) => {
   try {
     const prompt = buildLLMPrompt(signals);
 
+    // Log detallado del prompt enviado a ChatGPT
+    console.log("=".repeat(80));
+    console.log("🤖 ENVIANDO CONSULTA A CHATGPT");
+    console.log("=".repeat(80));
+    console.log("👤 SEÑALES DEL USUARIO:");
+    console.log("📚 Favoritos:", JSON.stringify(signals.favoritos, null, 2));
+    console.log(
+      "👍 Historial LIKES:",
+      JSON.stringify(signals.historialLikes, null, 2)
+    );
+    console.log(
+      "👎 Historial DISLIKES:",
+      JSON.stringify(signals.historialDislikes, null, 2)
+    );
+    console.log(
+      "📖 Historial Completo:",
+      signals.historialCompleto.length,
+      "libros"
+    );
+    console.log("=".repeat(80));
+    console.log("📝 SYSTEM PROMPT:");
+    console.log(prompt.system);
+    console.log("\n📝 USER PROMPT:");
+    console.log(prompt.user);
+    console.log("=".repeat(80));
+
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
@@ -348,9 +523,21 @@ const callLLMForPicks = async (signals) => {
 
     const content = response.data.choices[0].message.content;
 
+    // Log detallado de la respuesta de ChatGPT
+    console.log("=".repeat(80));
+    console.log("🤖 RESPUESTA DE CHATGPT");
+    console.log("=".repeat(80));
+    console.log("📄 RESPUESTA RAW:");
+    console.log(content);
+    console.log("=".repeat(80));
+
     try {
       // Intentar parsear la respuesta JSON
       const parsed = JSON.parse(content);
+
+      console.log("📊 RESPUESTA PARSEADA:");
+      console.log(JSON.stringify(parsed, null, 2));
+      console.log("=".repeat(80));
 
       // Validar estructura básica
       if (
@@ -359,7 +546,18 @@ const callLLMForPicks = async (signals) => {
         Array.isArray(parsed.te_podrian_gustar) &&
         Array.isArray(parsed.descubri_nuevas_lecturas)
       ) {
+        console.log("✅ RESPUESTA VÁLIDA - Estructura correcta");
+        console.log(
+          `📚 te_podrian_gustar: ${parsed.te_podrian_gustar.length} libros`
+        );
+        console.log(
+          `📚 descubri_nuevas_lecturas: ${parsed.descubri_nuevas_lecturas.length} libros`
+        );
+        console.log("=".repeat(80));
         return parsed;
+      } else {
+        console.log("❌ RESPUESTA INVÁLIDA - Estructura incorrecta");
+        console.log("=".repeat(80));
       }
     } catch (parseError) {
       console.error("Error parsing LLM response:", parseError);
@@ -379,6 +577,16 @@ const callLLMForPicks = async (signals) => {
 const retryLLMWithCorrection = async (signals) => {
   try {
     const correctionPrompt = buildLLMPrompt(signals, true);
+
+    // Log detallado del prompt de corrección
+    console.log("=".repeat(80));
+    console.log("🔄 REINTENTANDO CON CHATGPT (CORRECCIÓN)");
+    console.log("=".repeat(80));
+    console.log("📝 SYSTEM PROMPT (CORRECCIÓN):");
+    console.log(correctionPrompt.system);
+    console.log("\n📝 USER PROMPT (CORRECCIÓN):");
+    console.log(correctionPrompt.user);
+    console.log("=".repeat(80));
 
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
@@ -408,18 +616,43 @@ const retryLLMWithCorrection = async (signals) => {
 
     const content = response.data.choices[0].message.content;
 
+    // Log detallado de la respuesta de corrección
+    console.log("=".repeat(80));
+    console.log("🔄 RESPUESTA DE CHATGPT (CORRECCIÓN)");
+    console.log("=".repeat(80));
+    console.log("📄 RESPUESTA RAW (CORRECCIÓN):");
+    console.log(content);
+    console.log("=".repeat(80));
+
     try {
       const parsed = JSON.parse(content);
+
+      console.log("📊 RESPUESTA PARSEADA (CORRECCIÓN):");
+      console.log(JSON.stringify(parsed, null, 2));
+      console.log("=".repeat(80));
+
       if (
         parsed.te_podrian_gustar &&
         parsed.descubri_nuevas_lecturas &&
         Array.isArray(parsed.te_podrian_gustar) &&
         Array.isArray(parsed.descubri_nuevas_lecturas)
       ) {
+        console.log("✅ CORRECCIÓN EXITOSA - Estructura correcta");
+        console.log(
+          `📚 te_podrian_gustar: ${parsed.te_podrian_gustar.length} libros`
+        );
+        console.log(
+          `📚 descubri_nuevas_lecturas: ${parsed.descubri_nuevas_lecturas.length} libros`
+        );
+        console.log("=".repeat(80));
         return parsed;
+      } else {
+        console.log("❌ CORRECCIÓN FALLÓ - Estructura incorrecta");
+        console.log("=".repeat(80));
       }
     } catch (parseError) {
-      console.error("Error parsing LLM correction response:", parseError);
+      console.error("❌ ERROR PARSING CORRECCIÓN:", parseError);
+      console.log("=".repeat(80));
     }
   } catch (error) {
     console.error("Error in LLM correction attempt:", error);
@@ -957,6 +1190,9 @@ const getHomeRecommendations = async (userId) => {
           },
         };
 
+        // Eliminar duplicados
+        result = removeDuplicates(result);
+
         // Validar que no se incluyan libros del historial o favoritos
         if (!validateRecommendations(result, signals)) {
           console.error(
@@ -1100,6 +1336,9 @@ const getHomeRecommendations = async (userId) => {
       };
     }
 
+    // Eliminar duplicados
+    result = removeDuplicates(result);
+
     // Validar que no se incluyan libros del historial o favoritos
     if (!validateRecommendations(result, signals)) {
       console.error(
@@ -1181,6 +1420,45 @@ const getCacheStats = () => {
     size: recommendationsCache.size,
     keys: Array.from(recommendationsCache.keys()),
     timestamp: new Date().toISOString(),
+  };
+};
+
+/**
+ * Elimina duplicados de las listas de recomendaciones
+ */
+const removeDuplicates = (recommendations) => {
+  const seen = new Set();
+  const tePodrianGustar = [];
+  const descubriNuevasLecturas = [];
+
+  // Procesar tePodrianGustar
+  for (const book of recommendations.tePodrianGustar) {
+    if (!seen.has(book.volumeId)) {
+      seen.add(book.volumeId);
+      tePodrianGustar.push(book);
+    } else {
+      console.log(
+        `[DEDUP] Duplicado eliminado de tePodrianGustar: ${book.volumeId} - ${book.title}`
+      );
+    }
+  }
+
+  // Procesar descubriNuevasLecturas
+  for (const book of recommendations.descubriNuevasLecturas) {
+    if (!seen.has(book.volumeId)) {
+      seen.add(book.volumeId);
+      descubriNuevasLecturas.push(book);
+    } else {
+      console.log(
+        `[DEDUP] Duplicado eliminado de descubriNuevasLecturas: ${book.volumeId} - ${book.title}`
+      );
+    }
+  }
+
+  return {
+    tePodrianGustar,
+    descubriNuevasLecturas,
+    metadata: recommendations.metadata,
   };
 };
 
