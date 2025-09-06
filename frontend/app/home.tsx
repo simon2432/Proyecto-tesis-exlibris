@@ -4,7 +4,6 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Platform,
   ScrollView,
   Dimensions,
   SafeAreaView,
@@ -17,7 +16,7 @@ import axios from "axios";
 import { API_BASE_URL } from "../constants/ApiConfig";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -27,6 +26,8 @@ export default function HomeScreen() {
   const [recommendedBooks, setRecommendedBooks] = useState<any[]>([]);
   const [exploreBooks, setExploreBooks] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [recommendationStrategy, setRecommendationStrategy] =
+    useState<string>("");
 
   // Palabras random para buscar
   const randomWords = [
@@ -43,33 +44,93 @@ export default function HomeScreen() {
   ];
 
   useEffect(() => {
-    // Elegir dos palabras random distintas
-    const getTwoRandomWords = () => {
-      const shuffled = randomWords.sort(() => 0.5 - Math.random());
-      return [shuffled[0], shuffled[1]];
-    };
-    const [word1, word2] = getTwoRandomWords();
-
-    const fetchBooks = async (word: string) => {
+    const fetchRecommendations = async () => {
       try {
-        const res = await axios.get(`${API_BASE_URL}/books/search`, {
-          params: { q: word },
-        });
-        return res.data.books || [];
-      } catch {
-        return [];
-      }
-    };
+        setLoading(true);
 
-    setLoading(true);
-    Promise.all([fetchBooks(word1), fetchBooks(word2)]).then(
-      ([books1, books2]) => {
-        setRecommendedBooks(books1.slice(0, 10));
-        setExploreBooks(books2.slice(0, 10));
+        // Obtener userId del contexto o localStorage
+        // Por ahora usamos un ID hardcodeado para testing
+        const userId = 1; // TODO: Obtener del contexto de usuario
+
+        console.log(`[Home] Obteniendo recomendaciones para usuario ${userId}`);
+
+        const response = await axios.get(
+          `${API_BASE_URL}/api/recommendations/home`,
+          {
+            params: { userId },
+          }
+        );
+
+        console.log(`[Home] Recomendaciones recibidas:`, response.data);
+        console.log(
+          `[Home] Primer libro tePodrianGustar:`,
+          response.data.tePodrianGustar?.[0]
+        );
+        console.log(
+          `[Home] Primer libro descubriNuevasLecturas:`,
+          response.data.descubriNuevasLecturas?.[0]
+        );
+
+        if (
+          response.data.tePodrianGustar &&
+          response.data.descubriNuevasLecturas
+        ) {
+          setRecommendedBooks(response.data.tePodrianGustar);
+          setExploreBooks(response.data.descubriNuevasLecturas);
+          setRecommendationStrategy(
+            response.data.metadata?.strategy || "unknown"
+          );
+          console.log(
+            `[Home] Cargados: ${response.data.tePodrianGustar.length} + ${response.data.descubriNuevasLecturas.length} libros`
+          );
+          console.log(
+            `[Home] Estrategia: ${
+              response.data.metadata?.strategy || "unknown"
+            }`
+          );
+        } else {
+          console.error("[Home] Error: Respuesta de recomendaciones inválida");
+          // Fallback a búsqueda aleatoria si falla
+          await fetchRandomBooks();
+        }
+      } catch (error) {
+        console.error("[Home] Error obteniendo recomendaciones:", error);
+        // Fallback a búsqueda aleatoria si falla
+        await fetchRandomBooks();
+      } finally {
         setLoading(false);
       }
-    );
-  }, []);
+    };
+
+    const fetchRandomBooks = async () => {
+      // Fallback: elegir dos palabras random distintas
+      const getTwoRandomWords = () => {
+        const shuffled = randomWords.sort(() => 0.5 - Math.random());
+        return [shuffled[0], shuffled[1]];
+      };
+      const [word1, word2] = getTwoRandomWords();
+
+      const fetchBooks = async (word: string) => {
+        try {
+          const res = await axios.get(`${API_BASE_URL}/books/search`, {
+            params: { q: word },
+          });
+          return res.data.books || [];
+        } catch {
+          return [];
+        }
+      };
+
+      Promise.all([fetchBooks(word1), fetchBooks(word2)]).then(
+        ([books1, books2]) => {
+          setRecommendedBooks(books1.slice(0, 10));
+          setExploreBooks(books2.slice(0, 10));
+        }
+      );
+    };
+
+    fetchRecommendations();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleSearch = (text: string) => {
     // Aquí puedes implementar la lógica de búsqueda
@@ -85,7 +146,7 @@ export default function HomeScreen() {
     router.push({
       pathname: "/libro/[id]",
       params: {
-        id: book.id,
+        id: book.volumeId || book.id, // Usar volumeId del nuevo sistema
         title: book.title,
         authors: Array.isArray(book.authors)
           ? book.authors.join(", ")
@@ -100,6 +161,7 @@ export default function HomeScreen() {
         language: book.language || "",
         image: book.image || "",
         descriptionGenerated: book.descriptionGenerated || false,
+        reason: book.reason || "", // Nueva propiedad del sistema de recomendaciones
       },
     });
   };
@@ -121,43 +183,78 @@ export default function HomeScreen() {
           showsVerticalScrollIndicator={false}
         >
           <View style={styles.sectionBox}>
-            <Text style={styles.sectionTitle}>Te podría gustar</Text>
+            <Text style={styles.sectionTitle}>
+              Te podría gustar
+              {recommendationStrategy && (
+                <Text style={styles.strategyIndicator}>
+                  {" "}
+                  ({recommendationStrategy})
+                </Text>
+              )}
+            </Text>
             <View style={styles.booksRow}>
               {loading ? (
                 <Text>Cargando...</Text>
               ) : (
-                recommendedBooks.map((book) => (
-                  <TouchableOpacity
-                    key={book.id}
-                    onPress={() => handleBookSelect(book)}
-                    style={{ marginRight: 8, marginBottom: 8 }}
-                  >
-                    <View
-                      style={{
-                        width: 90,
-                        height: 130,
-                        borderRadius: 10,
-                        overflow: "hidden",
-                        backgroundColor: "#f3e8da",
-                        shadowColor: "#000",
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.08,
-                        shadowRadius: 4,
-                        elevation: 2,
-                      }}
+                recommendedBooks.map((book, index) => {
+                  console.log(`[Home] Renderizando libro ${index}:`, book);
+                  return (
+                    <TouchableOpacity
+                      key={book.volumeId || book.id}
+                      onPress={() => handleBookSelect(book)}
+                      style={{ marginRight: 8, marginBottom: 8 }}
                     >
-                      <Image
-                        source={{ uri: book.image }}
-                        accessibilityLabel={book.title}
+                      <View
                         style={{
-                          width: "100%",
-                          height: "100%",
-                          resizeMode: "cover",
+                          width: 90,
+                          height: 130,
+                          borderRadius: 10,
+                          overflow: "hidden",
+                          backgroundColor: "#f3e8da",
+                          shadowColor: "#000",
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.08,
+                          shadowRadius: 4,
+                          elevation: 2,
                         }}
-                      />
-                    </View>
-                  </TouchableOpacity>
-                ))
+                      >
+                        {book.image ? (
+                          <Image
+                            source={{ uri: book.image }}
+                            accessibilityLabel={book.title}
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              resizeMode: "cover",
+                            }}
+                          />
+                        ) : (
+                          <View
+                            style={{
+                              width: "100%",
+                              height: "100%",
+                              backgroundColor: "#e0e0e0",
+                              justifyContent: "center",
+                              alignItems: "center",
+                            }}
+                          >
+                            <Text
+                              style={{
+                                fontSize: 10,
+                                textAlign: "center",
+                                color: "#666",
+                                padding: 4,
+                              }}
+                              numberOfLines={2}
+                            >
+                              {book.title}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })
               )}
             </View>
           </View>
@@ -169,7 +266,7 @@ export default function HomeScreen() {
               ) : (
                 exploreBooks.map((book) => (
                   <TouchableOpacity
-                    key={book.id}
+                    key={book.volumeId || book.id}
                     onPress={() => handleBookSelect(book)}
                     style={{ marginRight: 8, marginBottom: 8 }}
                   >
@@ -187,15 +284,39 @@ export default function HomeScreen() {
                         elevation: 2,
                       }}
                     >
-                      <Image
-                        source={{ uri: book.image }}
-                        accessibilityLabel={book.title}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          resizeMode: "cover",
-                        }}
-                      />
+                      {book.image ? (
+                        <Image
+                          source={{ uri: book.image }}
+                          accessibilityLabel={book.title}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            resizeMode: "cover",
+                          }}
+                        />
+                      ) : (
+                        <View
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            backgroundColor: "#e0e0e0",
+                            justifyContent: "center",
+                            alignItems: "center",
+                          }}
+                        >
+                          <Text
+                            style={{
+                              fontSize: 10,
+                              textAlign: "center",
+                              color: "#666",
+                              padding: 4,
+                            }}
+                            numberOfLines={2}
+                          >
+                            {book.title}
+                          </Text>
+                        </View>
+                      )}
                     </View>
                   </TouchableOpacity>
                 ))
@@ -296,5 +417,10 @@ const styles = StyleSheet.create({
     color: "#f3e8da",
     fontWeight: "bold",
     fontSize: 15,
+  },
+  strategyIndicator: {
+    fontSize: 12,
+    color: "#999",
+    fontWeight: "normal",
   },
 });

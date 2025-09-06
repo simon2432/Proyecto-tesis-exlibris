@@ -208,10 +208,59 @@ const searchGoogleBooks = async (query, maxResults = 20) => {
         language: item.volumeInfo.language,
         pageCount: item.volumeInfo.pageCount,
         averageRating: item.volumeInfo.averageRating,
+        image:
+          item.volumeInfo.imageLinks?.thumbnail ||
+          item.volumeInfo.imageLinks?.smallThumbnail ||
+          "",
       }));
   } catch (error) {
     console.error(`Error searching Google Books with query "${query}":`, error);
     return [];
+  }
+};
+
+/**
+ * Busca un libro específico en Google Books por título (más eficiente)
+ */
+const searchSpecificBook = async (titulo, autor) => {
+  try {
+    // Buscar solo por título para ser más eficiente
+    const query = `intitle:"${encodeURIComponent(titulo)}"`;
+
+    const response = await axios.get(
+      `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3&key=${GOOGLE_BOOKS_API_KEY}`
+    );
+
+    if (!response.data.items || response.data.items.length === 0) {
+      console.log(`[Search] No se encontró: "${titulo}"`);
+      return null;
+    }
+
+    // Tomar el primer resultado (más relevante)
+    const bestMatch = response.data.items[0];
+
+    const book = {
+      volumeId: bestMatch.id,
+      title: bestMatch.volumeInfo.title,
+      authors: bestMatch.volumeInfo.authors || [],
+      categories: bestMatch.volumeInfo.categories || [],
+      description: bestMatch.volumeInfo.description,
+      language: bestMatch.volumeInfo.language,
+      pageCount: bestMatch.volumeInfo.pageCount,
+      averageRating: bestMatch.volumeInfo.averageRating,
+      image:
+        bestMatch.volumeInfo.imageLinks?.thumbnail ||
+        bestMatch.volumeInfo.imageLinks?.smallThumbnail ||
+        "",
+    };
+
+    console.log(
+      `[Search] ✅ Encontrado: "${book.title}" por ${book.authors.join(", ")}`
+    );
+    return book;
+  } catch (error) {
+    console.error(`Error searching book "${titulo}":`, error);
+    return null;
   }
 };
 
@@ -262,14 +311,14 @@ const addToShortlist = (
 /**
  * Llama a ChatGPT para seleccionar los libros recomendados
  */
-const callLLMForPicks = async (shortlist, signals) => {
+const callLLMForPicks = async (signals) => {
   if (!OPENAI_API_KEY) {
     console.warn("OpenAI API key no configurada");
     return null;
   }
 
   try {
-    const prompt = buildLLMPrompt(shortlist, signals);
+    const prompt = buildLLMPrompt(signals);
 
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
@@ -317,7 +366,7 @@ const callLLMForPicks = async (shortlist, signals) => {
     }
 
     // Si falla, intentar una vez más con prompt de corrección
-    return await retryLLMWithCorrection(shortlist, signals);
+    return await retryLLMWithCorrection(signals);
   } catch (error) {
     console.error("Error calling LLM:", error);
     return null;
@@ -327,9 +376,9 @@ const callLLMForPicks = async (shortlist, signals) => {
 /**
  * Reintenta con un prompt de corrección si falla la primera vez
  */
-const retryLLMWithCorrection = async (shortlist, signals) => {
+const retryLLMWithCorrection = async (signals) => {
   try {
-    const correctionPrompt = buildLLMPrompt(shortlist, signals, true);
+    const correctionPrompt = buildLLMPrompt(signals, true);
 
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
@@ -382,24 +431,30 @@ const retryLLMWithCorrection = async (shortlist, signals) => {
 /**
  * Construye el prompt para ChatGPT
  */
-const buildLLMPrompt = (shortlist, signals, isCorrection = false) => {
+const buildLLMPrompt = (signals, isCorrection = false) => {
   const systemPrompt = isCorrection
-    ? `Sos un recomendador de libros **preciso**. Debés devolver **JSON ESTRICTO** con exactamente 12 items por lista, y **SOLO** podés elegir libros de la **shortlist** provista (identificados por \`volumeId\` de Google Books). No inventes IDs ni títulos.
+    ? `Sos un recomendador de libros **experto**. Debés devolver **JSON ESTRICTO** con exactamente 24 recomendaciones de libros específicos (título + autor) que existan en Google Books.
 
 IMPORTANTE: Tu respuesta anterior no fue válida. Ahora debés devolver EXACTAMENTE este formato JSON:
 {
   "te_podrian_gustar": [
-    { "volumeId": "xxx", "razon": "..." },
+    { "titulo": "Título del Libro", "autor": "Nombre del Autor", "razon": "..." },
     ... (12 items en total)
   ],
   "descubri_nuevas_lecturas": [
-    { "volumeId": "yyy", "razon": "..." },
+    { "titulo": "Título del Libro", "autor": "Nombre del Autor", "razon": "..." },
     ... (12 items en total)
   ]
 }
 
 NO agregues texto adicional, solo el JSON.`
-    : `Sos un recomendador de libros **preciso**. Debés devolver **JSON ESTRICTO** con exactamente 12 items por lista, y **SOLO** podés elegir libros de la **shortlist** provista (identificados por \`volumeId\` de Google Books). No inventes IDs ni títulos.
+    : `Sos un recomendador de libros **experto**. Debés devolver **JSON ESTRICTO** con exactamente 24 recomendaciones de libros específicos (título + autor) que existan en Google Books.
+
+**IMPORTANTE**: 
+- Recomendá libros REALES que existan en Google Books
+- Usá títulos y autores EXACTOS
+- No inventes libros que no existen
+- Enfocate en libros populares y conocidos
 
 Objetivo:
 - Lista A: "te_podrian_gustar" → lo más cercano a los 3 favoritos y a las lecturas bien valoradas (rating ≥ 3).
@@ -409,16 +464,17 @@ Reglas:
 - **No** incluyas libros ya leídos por el usuario (historial completo).
 - **Evitar** similitudes fuertes con lecturas mal valoradas (rating ≤ 2), salvo que la conexión con favoritos/LIKES sea muy sólida y no haya alternativas.
 - Respetá diversidad en la Lista B (no repitas autor si hay opciones, variá subgéneros/temáticas).
-- Cada item debe incluir \`volumeId\` y una \`razon\` breve ("mismo autor", "tema afín", "deriva de X género hacia Y", etc.).
+- Cada item debe incluir \`titulo\`, \`autor\` y una \`razon\` breve ("mismo autor", "tema afín", "deriva de X género hacia Y", etc.).
+- **CRÍTICO**: Solo recomendá libros que existan en Google Books (libros populares, clásicos, bestsellers).
 
 Devolvé **únicamente** este JSON:
 {
   "te_podrian_gustar": [
-    { "volumeId": "xxx", "razon": "..." },
+    { "titulo": "Título del Libro", "autor": "Nombre del Autor", "razon": "..." },
     ... (12 items en total)
   ],
   "descubri_nuevas_lecturas": [
-    { "volumeId": "yyy", "razon": "..." },
+    { "titulo": "Título del Libro", "autor": "Nombre del Autor", "razon": "..." },
     ... (12 items en total)
   ]
 }`;
@@ -434,14 +490,12 @@ ${JSON.stringify(signals.historialLikes)}
 ${JSON.stringify(signals.historialDislikes)}
 
 IMPORTANTE:
-- No recomendar ningún volumeId dentro de FAVORITOS ni HISTORIAL (ambos grupos).
+- No recomendar ningún libro ya leído por el usuario (historial completo).
 - Evitar parecidos fuertes con DISLIKES si hay alternativas.
-
-SHORTLIST (candidatos válidos — SOLO podés elegir de acá):
-${JSON.stringify(shortlist)}
+- Recomendá libros REALES que existan en Google Books (libros populares, clásicos, bestsellers).
 
 Necesito exactamente 12 items en "te_podrian_gustar" y 12 en "descubri_nuevas_lecturas".
-Recordatorio: SOLO elegí \`volumeId\` de la shortlist.`;
+Cada recomendación debe tener título y autor EXACTOS.`;
 
   return { system: systemPrompt, user: userPrompt };
 };
@@ -449,30 +503,125 @@ Recordatorio: SOLO elegí \`volumeId\` de la shortlist.`;
 /**
  * Valida y completa la respuesta del LLM con datos de la shortlist
  */
-const postValidateAndHydrate = (llmResponse, shortlist, listType) => {
-  const shortlistMap = new Map(shortlist.map((book) => [book.volumeId, book]));
-  const result = [];
+/**
+ * Procesa las recomendaciones del LLM y busca cada libro en Google Books
+ */
+const processLLMRecommendations = async (llmResponse, signals) => {
+  console.log(`[Process] Procesando recomendaciones del LLM...`);
+  console.log(`[Process] LLM Response:`, JSON.stringify(llmResponse, null, 2));
 
-  // Determinar qué lista procesar
-  const sourceList =
-    listType === "te_podrian_gustar"
-      ? llmResponse.te_podrian_gustar
-      : llmResponse.descubri_nuevas_lecturas;
+  const tePodrianGustar = [];
+  const descubriNuevasLecturas = [];
 
-  for (const item of sourceList) {
-    const book = shortlistMap.get(item.volumeId);
+  // Procesar "te_podrian_gustar"
+  console.log(
+    `[Process] Buscando ${llmResponse.te_podrian_gustar.length} libros para "te_podrian_gustar"...`
+  );
+  for (const item of llmResponse.te_podrian_gustar) {
+    console.log(`[Process] Buscando: "${item.titulo}" por "${item.autor}"`);
+    const book = await searchSpecificBook(item.titulo, item.autor);
     if (book) {
-      result.push({
-        volumeId: item.volumeId,
-        title: book.title,
-        authors: book.authors,
-        categories: book.categories,
-        reason: item.razon,
-      });
+      // Verificar que no esté en historial o favoritos
+      if (
+        !signals.historialCompleto.includes(book.volumeId) &&
+        !signals.favoritos.some((fav) => fav.volumeId === book.volumeId)
+      ) {
+        tePodrianGustar.push({
+          volumeId: book.volumeId,
+          title: book.title,
+          authors: book.authors,
+          categories: book.categories,
+          description: book.description,
+          language: book.language,
+          pageCount: book.pageCount,
+          averageRating: book.averageRating,
+          image: book.image,
+          reason: item.razon,
+        });
+        console.log(`[Process] ✅ Agregado a te_podrian_gustar: ${book.title}`);
+      } else {
+        console.log(`[Process] ❌ Excluido (ya leído/favorito): ${book.title}`);
+      }
     }
   }
 
-  return result;
+  // Procesar "descubri_nuevas_lecturas"
+  console.log(
+    `[Process] Buscando ${llmResponse.descubri_nuevas_lecturas.length} libros para "descubri_nuevas_lecturas"...`
+  );
+  for (const item of llmResponse.descubri_nuevas_lecturas) {
+    console.log(`[Process] Buscando: "${item.titulo}" por "${item.autor}"`);
+    const book = await searchSpecificBook(item.titulo, item.autor);
+    if (book) {
+      // Verificar que no esté en historial o favoritos
+      if (
+        !signals.historialCompleto.includes(book.volumeId) &&
+        !signals.favoritos.some((fav) => fav.volumeId === book.volumeId)
+      ) {
+        descubriNuevasLecturas.push({
+          volumeId: book.volumeId,
+          title: book.title,
+          authors: book.authors,
+          categories: book.categories,
+          description: book.description,
+          language: book.language,
+          pageCount: book.pageCount,
+          averageRating: book.averageRating,
+          image: book.image,
+          reason: item.razon,
+        });
+        console.log(
+          `[Process] ✅ Agregado a descubri_nuevas_lecturas: ${book.title}`
+        );
+      } else {
+        console.log(`[Process] ❌ Excluido (ya leído/favorito): ${book.title}`);
+      }
+    }
+  }
+
+  console.log(
+    `[Process] Resultado: te_podrian_gustar=${tePodrianGustar.length}, descubri_nuevas_lecturas=${descubriNuevasLecturas.length}`
+  );
+
+  // Si no tenemos suficientes libros, completar con defaults
+  if (tePodrianGustar.length < 12 || descubriNuevasLecturas.length < 12) {
+    console.log(
+      `[Process] Completando con defaults: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
+    );
+    const defaults = getDefaultRecommendations();
+
+    // Completar tePodrianGustar
+    while (tePodrianGustar.length < 12) {
+      const defaultBook =
+        defaults.tePodrianGustar[
+          tePodrianGustar.length % defaults.tePodrianGustar.length
+        ];
+      tePodrianGustar.push({
+        ...defaultBook,
+        reason: `Recomendación por defecto (${tePodrianGustar.length + 1})`,
+      });
+    }
+
+    // Completar descubriNuevasLecturas
+    while (descubriNuevasLecturas.length < 12) {
+      const defaultBook =
+        defaults.descubriNuevasLecturas[
+          descubriNuevasLecturas.length % defaults.descubriNuevasLecturas.length
+        ];
+      descubriNuevasLecturas.push({
+        ...defaultBook,
+        reason: `Recomendación por defecto (${
+          descubriNuevasLecturas.length + 1
+        })`,
+      });
+    }
+
+    console.log(
+      `[Process] Completado: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
+    );
+  }
+
+  return { tePodrianGustar, descubriNuevasLecturas };
 };
 
 /**
@@ -565,6 +714,11 @@ const buildFallbackLocal = (shortlist, signals) => {
     title: book.title,
     authors: book.authors,
     categories: book.categories,
+    description: book.description,
+    language: book.language,
+    pageCount: book.pageCount,
+    averageRating: book.averageRating,
+    image: book.image,
     reason: book.reason || `Recomendado por afinidad (score: ${book.score})`,
   }));
 
@@ -648,6 +802,11 @@ const buildFallbackLocal = (shortlist, signals) => {
           title: bestBook.title,
           authors: bestBook.authors,
           categories: bestBook.categories,
+          description: bestBook.description,
+          language: bestBook.language,
+          pageCount: bestBook.pageCount,
+          averageRating: bestBook.averageRating,
+          image: bestBook.image,
           reason: bestBook.reason || "Diversificación de lecturas",
         });
         selectedIds.add(bestBook.volumeId);
@@ -669,6 +828,11 @@ const buildFallbackLocal = (shortlist, signals) => {
         title: book.title,
         authors: book.authors,
         categories: book.categories,
+        description: book.description,
+        language: book.language,
+        pageCount: book.pageCount,
+        averageRating: book.averageRating,
+        image: book.image,
         reason: book.reason || "Completando recomendaciones",
       });
     } else {
@@ -759,47 +923,18 @@ const getHomeRecommendations = async (userId) => {
       return result;
     }
 
-    // Caso B/C: Con favoritos o historial
-    const shortlist = await fetchShortlistFromGoogleBooks(signals);
-    console.log(
-      `[Recommendations] Shortlist generada: ${shortlist.length} libros`
-    );
-
-    if (shortlist.length === 0) {
-      // Fallback a defaults si no hay shortlist
-      console.log("[Recommendations] Shortlist vacía, usando defaults");
-      const defaults = getDefaultRecommendations();
-      const result = {
-        ...defaults,
-        metadata: {
-          ...defaults.metadata,
-          userId,
-        },
-      };
-
-      recommendationsCache.set(cacheKey, {
-        data: result,
-        timestamp: Date.now(),
-      });
-      return result;
-    }
+    // Caso B/C: Con favoritos o historial - Generar recomendaciones con LLM
 
     // Intentar con LLM
     console.log("[Recommendations] Intentando con LLM...");
-    const llmResponse = await callLLMForPicks(shortlist, signals);
+    const llmResponse = await callLLMForPicks(signals);
 
     if (llmResponse) {
-      console.log("[Recommendations] LLM exitoso, validando respuesta...");
-      const tePodrianGustar = postValidateAndHydrate(
-        llmResponse,
-        shortlist,
-        "te_podrian_gustar"
+      console.log(
+        "[Recommendations] LLM exitoso, procesando recomendaciones..."
       );
-      const descubriNuevasLecturas = postValidateAndHydrate(
-        llmResponse,
-        shortlist,
-        "descubri_nuevas_lecturas"
-      );
+      const { tePodrianGustar, descubriNuevasLecturas } =
+        await processLLMRecommendations(llmResponse, signals);
 
       console.log(
         `[Recommendations] LLM devolvió: ${tePodrianGustar.length} + ${descubriNuevasLecturas.length} libros`
@@ -817,8 +952,8 @@ const getHomeRecommendations = async (userId) => {
           metadata: {
             userId,
             generatedAt: new Date().toISOString(),
-            strategy: "llm+shortlist",
-            shortlistSize: shortlist.length,
+            strategy: "llm+googlebooks",
+            shortlistSize: 0,
           },
         };
 
@@ -846,7 +981,32 @@ const getHomeRecommendations = async (userId) => {
       console.log("[Recommendations] LLM falló, usando fallback local");
     }
 
-    // Fallback local
+    // Fallback local - Generar shortlist básica para fallback
+    console.log(
+      "[Recommendations] LLM falló, generando shortlist para fallback local"
+    );
+    const shortlist = await fetchShortlistFromGoogleBooks(signals);
+    console.log(
+      `[Recommendations] Shortlist para fallback: ${shortlist.length} libros`
+    );
+
+    if (shortlist.length === 0) {
+      console.log("[Recommendations] No hay shortlist, usando defaults");
+      const defaults = getDefaultRecommendations();
+      const result = {
+        ...defaults,
+        metadata: {
+          ...defaults.metadata,
+          userId,
+        },
+      };
+      recommendationsCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+      });
+      return result;
+    }
+
     console.log("[Recommendations] Usando fallback local");
     const fallbackItems = buildFallbackLocal(shortlist, signals);
 
