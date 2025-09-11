@@ -34,6 +34,7 @@ model Lectura {
   id           Int      @id @default(autoincrement())
   userId       Int
   libroId      String   // ID de Google Books
+  titulo       String   // Título del libro
   fechaInicio  DateTime
   fechaFin     DateTime?
   reviewComment  String?   // Máx 300 caracteres

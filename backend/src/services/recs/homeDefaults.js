@@ -2,13 +2,15 @@
 const HOME_DEFAULTS = {
   tePodrianGustar: [
     {
-      volumeId: "PGR2EAAAQBAJ",
+      volumeId: "DqIPAAAACAAJ",
       title: "El Señor de los Anillos",
       authors: ["J.R.R. Tolkien"],
       categories: ["Fiction", "Fantasy"],
       description:
         "Una épica aventura de fantasía que ha cautivado a generaciones de lectores.",
       reason: "Clásico de fantasía épica",
+      image:
+        "https://books.google.com/books/publisher/content/images/frontcover/DqIPAAAACAAJ?fife=w400-h600&source=gbs_api",
     },
     {
       volumeId: "5PQEAAAAMAAJ",
@@ -18,6 +20,8 @@ const HOME_DEFAULTS = {
       description:
         "Una distopía clásica que explora temas de vigilancia y control totalitario.",
       reason: "Distopía clásica del siglo XX",
+      image:
+        "https://books.google.com/books/publisher/content/images/frontcover/5PQEAAAAMAAJ?fife=w400-h600&source=gbs_api",
     },
     {
       volumeId: "hFfhrCWiLSMC",
@@ -27,6 +31,9 @@ const HOME_DEFAULTS = {
       description:
         "Obra maestra del realismo mágico que narra la historia de la familia Buendía.",
       reason: "Realismo mágico latinoamericano",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=Cien%20a%C3%B1os%20de%20soledad",
     },
     {
       volumeId: "4iMZAAAAYAAJ",
@@ -36,6 +43,9 @@ const HOME_DEFAULTS = {
       description:
         "Un cuento poético que aborda temas universales como el amor y la amistad.",
       reason: "Fábula filosófica universal",
+
+      image:
+        "https://books.google.com/books/content?id=4iMZAAAAYAAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
     },
     {
       volumeId: "7X2lYx8CfjIC",
@@ -45,6 +55,9 @@ const HOME_DEFAULTS = {
       description:
         "El inicio de la saga que introdujo a millones de lectores al mundo de la magia.",
       reason: "Fantasy juvenil contemporánea",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=Harry%20Potter%20y%20la%20piedra%20filosofal",
     },
     {
       volumeId: "YwFvEAAAQBAJ",
@@ -54,6 +67,9 @@ const HOME_DEFAULTS = {
       description:
         "Una comedia romántica que satiriza la sociedad británica del siglo XIX.",
       reason: "Romance clásico británico",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=Orgullo%20y%20prejuicio",
     },
     {
       volumeId: "8iMZAAAAYAAJ",
@@ -63,6 +79,9 @@ const HOME_DEFAULTS = {
       description:
         "Una aventura fantástica que precede a El Señor de los Anillos.",
       reason: "Aventura fantástica preludio",
+
+      image:
+        "https://books.google.com/books/content?id=7X2lYx8CfjIC&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
     },
     {
       volumeId: "9iMZAAAAYAAJ",
@@ -72,6 +91,9 @@ const HOME_DEFAULTS = {
       description:
         "La primera novela moderna que parodia las novelas de caballerías.",
       reason: "Primera novela moderna",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=Don%20Quijote%20de%20la%20Mancha",
     },
     {
       volumeId: "1iMZAAAAYAAJ",
@@ -81,6 +103,9 @@ const HOME_DEFAULTS = {
       description:
         "Una epopeya que retrata la sociedad francesa del siglo XIX.",
       reason: "Epopeya histórica francesa",
+
+      image:
+        "https://books.google.com/books/publisher/content/images/frontcover/7X2lYx8CfjIC?fife=w400-h600&source=gbs_api",
     },
     {
       volumeId: "2iMZAAAAYAAJ",
@@ -90,6 +115,8 @@ const HOME_DEFAULTS = {
       description:
         "Una novela realista que critica la sociedad burguesa francesa.",
       reason: "Realismo literario francés",
+
+      image: "https://placehold.co/160x230/FFF4E4/3B2412?text=Madame%20Bovary",
     },
     {
       volumeId: "3iMZAAAAYAAJ",
@@ -99,6 +126,8 @@ const HOME_DEFAULTS = {
       description:
         "Una tragedia romántica que explora temas de moral y sociedad.",
       reason: "Realismo ruso del siglo XIX",
+
+      image: "https://placehold.co/160x230/FFF4E4/3B2412?text=Anna%20Karenina",
     },
     {
       volumeId: "4iMZAAAAYAAJ",
@@ -108,6 +137,9 @@ const HOME_DEFAULTS = {
       description:
         "Una novela psicológica que explora la culpa y la redención.",
       reason: "Novela psicológica rusa",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=Crimen%20y%20castigo",
     },
   ],
   descubriNuevasLecturas: [
@@ -119,6 +151,9 @@ const HOME_DEFAULTS = {
       description:
         "Una historia de formación mágica con un sistema de magia único.",
       reason: "Fantasy contemporánea innovadora",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=El%20nombre%20del%20viento",
     },
     {
       volumeId: "6iMZAAAAYAAJ",
@@ -127,6 +162,9 @@ const HOME_DEFAULTS = {
       categories: ["Fiction", "Mystery"],
       description: "Una novela gótica ambientada en la Barcelona de posguerra.",
       reason: "Misterio gótico español",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=La%20sombra%20del%20viento",
     },
     {
       volumeId: "7iMZAAAAYAAJ",
@@ -136,6 +174,9 @@ const HOME_DEFAULTS = {
       description:
         "Un thriller que combina arte, religión y misterio histórico.",
       reason: "Thriller histórico-artístico",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=El%20c%C3%B3digo%20Da%20Vinci",
     },
     {
       volumeId: "8iMZAAAAYAAJ",
@@ -144,6 +185,9 @@ const HOME_DEFAULTS = {
       categories: ["Fiction", "Young Adult"],
       description: "Una distopía que critica la sociedad del espectáculo.",
       reason: "Distopía juvenil contemporánea",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=Los%20juegos%20del%20hambre",
     },
     {
       volumeId: "9iMZAAAAYAAJ",
@@ -152,6 +196,9 @@ const HOME_DEFAULTS = {
       categories: ["Fiction", "Philosophy"],
       description: "Una fábula sobre la búsqueda del tesoro personal.",
       reason: "Fábula filosófica brasileña",
+
+      image:
+        "https://books.google.com/books/content?id=4iMZAAAAYAAJ&printsec=frontcover&img=1&zoom=1&edge=curl&source=gbs_api",
     },
     {
       volumeId: "10iMZAAAAYAAJ",
@@ -161,6 +208,9 @@ const HOME_DEFAULTS = {
       description:
         "Una historia conmovedora narrada por la Muerte durante la Segunda Guerra Mundial.",
       reason: "Narrativa histórica única",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=La%20ladrona%20de%20libros",
     },
     {
       volumeId: "11iMZAAAAYAAJ",
@@ -170,6 +220,9 @@ const HOME_DEFAULTS = {
       description:
         "Una novela única narrada desde la perspectiva de un joven con autismo.",
       reason: "Misterio con perspectiva única",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=El%20curioso%20incidente%20del%20perro%20a%20medianoche",
     },
     {
       volumeId: "12iMZAAAAYAAJ",
@@ -179,6 +232,9 @@ const HOME_DEFAULTS = {
       description:
         "Una historia de supervivencia que cuestiona la realidad y la fe.",
       reason: "Aventura filosófica",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=La%20vida%20de%20Pi",
     },
     {
       volumeId: "13iMZAAAAYAAJ",
@@ -188,6 +244,9 @@ const HOME_DEFAULTS = {
       description:
         "Un clásico de la literatura juvenil que retrata la alienación adolescente.",
       reason: "Coming of age clásico",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=El%20guardi%C3%A1n%20entre%20el%20centeno",
     },
     {
       volumeId: "14iMZAAAAYAAJ",
@@ -197,6 +256,9 @@ const HOME_DEFAULTS = {
       description:
         "Una distopía que critica la censura y la sociedad del entretenimiento.",
       reason: "Ciencia ficción distópica",
+
+      image:
+        "https://books.google.com/books/publisher/content/images/frontcover/4iMZAAAAYAAJ?fife=w400-h600&source=gbs_api",
     },
     {
       volumeId: "15iMZAAAAYAAJ",
@@ -206,6 +268,9 @@ const HOME_DEFAULTS = {
       description:
         "Una novela gótica que explora temas de belleza, moralidad y decadencia.",
       reason: "Gótico victoriano",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=El%20retrato%20de%20Dorian%20Gray",
     },
     {
       volumeId: "16iMZAAAAYAAJ",
@@ -215,6 +280,9 @@ const HOME_DEFAULTS = {
       description:
         "Una sátira política que critica el totalitarismo a través de una fábula animal.",
       reason: "Alegoría política animal",
+
+      image:
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=Rebeli%C3%B3n%20en%20la%20granja",
     },
   ],
 };

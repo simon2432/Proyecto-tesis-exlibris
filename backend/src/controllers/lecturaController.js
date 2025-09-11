@@ -103,6 +103,47 @@ const getPortadaGoogleBooks = async (libroId) => {
   }
 };
 
+const getLibroInfoGoogleBooks = async (libroId) => {
+  try {
+    const libroRes = await axios.get(
+      `https://www.googleapis.com/books/v1/volumes/${libroId}?key=${GOOGLE_BOOKS_API_KEY}`,
+      { timeout: 5000 }
+    );
+
+    const titulo = libroRes.data.volumeInfo?.title || "Título no disponible";
+
+    let imageUrl =
+      libroRes.data.volumeInfo?.imageLinks?.thumbnail ||
+      libroRes.data.volumeInfo?.imageLinks?.smallThumbnail ||
+      "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen";
+
+    // Mejorar la calidad de la imagen de Google Books
+    if (
+      imageUrl &&
+      imageUrl !== "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen"
+    ) {
+      if (imageUrl.includes("zoom=1")) {
+        imageUrl = imageUrl.replace("zoom=1", "zoom=2");
+      } else if (!imageUrl.includes("zoom=")) {
+        const separator = imageUrl.includes("?") ? "&" : "?";
+        imageUrl = `${imageUrl}${separator}zoom=2`;
+      }
+
+      // Asegurar que la URL sea HTTPS
+      if (imageUrl.startsWith("http://")) {
+        imageUrl = imageUrl.replace("http://", "https://");
+      }
+    }
+
+    return { titulo, portada: imageUrl };
+  } catch {
+    return {
+      titulo: "Título no disponible",
+      portada: "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen",
+    };
+  }
+};
+
 // Obtener lecturas del usuario autenticado con portadas
 exports.getMisLecturas = async (req, res) => {
   try {
@@ -128,13 +169,14 @@ exports.crearLectura = async (req, res) => {
     const { libroId, fechaInicio, fechaFin } = req.body;
     if (!libroId) return res.status(400).json({ error: "Falta libroId" });
 
-    // Buscar portada al crear la lectura
-    const portada = await getPortadaGoogleBooks(libroId);
+    // Buscar información del libro (título y portada) al crear la lectura
+    const { titulo, portada } = await getLibroInfoGoogleBooks(libroId);
 
     const lectura = await prisma.lectura.create({
       data: {
         userId: req.userId,
         libroId,
+        titulo, // Guardar el título del libro
         fechaInicio: fechaInicio ? new Date(fechaInicio) : new Date(),
         fechaFin: fechaFin ? new Date(fechaFin) : null,
         portada, // Guardar la portada
@@ -164,7 +206,7 @@ exports.getLectura = async (req, res) => {
 exports.actualizarLectura = async (req, res) => {
   try {
     const { id } = req.params;
-    const { fechaInicio, fechaFin, resenaTexto, valoracion } = req.body;
+    const { fechaInicio, fechaFin, reviewComment, reviewRating } = req.body;
 
     // Obtener la lectura actual para verificar si se está completando
     const lecturaActual = await prisma.lectura.findUnique({
@@ -183,8 +225,8 @@ exports.actualizarLectura = async (req, res) => {
       data: {
         ...(fechaInicio && { fechaInicio: new Date(fechaInicio) }),
         ...(fechaFin && { fechaFin: new Date(fechaFin) }),
-        ...(resenaTexto !== undefined && { resenaTexto }),
-        ...(valoracion !== undefined && { valoracion }),
+        ...(reviewComment !== undefined && { reviewComment }),
+        ...(reviewRating !== undefined && { reviewRating }),
       },
     });
 

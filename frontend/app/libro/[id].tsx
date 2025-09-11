@@ -188,7 +188,7 @@ export default function LibroDetalleScreen() {
           )}
 
           <Text style={styles.sectionTitle}>
-            Reseñas {total > 0 ? total : null}
+            Reseñas{total > 0 ? ` (${total})` : ""}
           </Text>
           {total === 0 && (
             <View style={styles.reviewsPlaceholder}>

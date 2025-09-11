@@ -11,6 +11,36 @@ try {
   console.error("[Prisma] Error inicializando cliente:", error);
   throw error;
 }
+
+// Función para obtener o reinicializar Prisma
+const getPrismaClient = () => {
+  console.log(
+    `[Prisma] Estado actual: prisma = ${prisma ? "disponible" : "undefined"}`
+  );
+
+  try {
+    if (!prisma) {
+      console.log("[Prisma] Creando nuevo cliente...");
+      prisma = new PrismaClient();
+      console.log("[Prisma] Cliente creado correctamente");
+    }
+
+    console.log(`[Prisma] Devolviendo cliente: ${prisma ? "OK" : "ERROR"}`);
+    return prisma;
+  } catch (error) {
+    console.error("[Prisma] Error creando cliente:", error);
+    // Intentar crear un cliente fresco
+    try {
+      console.log("[Prisma] Intentando crear cliente fresco...");
+      const freshClient = new PrismaClient();
+      console.log("[Prisma] Cliente fresco creado correctamente");
+      return freshClient;
+    } catch (freshError) {
+      console.error("[Prisma] Error creando cliente fresco:", freshError);
+      throw freshError;
+    }
+  }
+};
 const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
@@ -20,6 +50,39 @@ const CACHE_DURATION = Infinity; // Caché permanente hasta invalidación explí
 
 // Cache de timestamps para debugging
 const cacheTimestamps = new Map();
+
+/**
+ * Detecta si una respuesta JSON está cortada
+ */
+const isJSONTruncated = (jsonString) => {
+  const trimmed = jsonString.trim();
+  return (
+    !trimmed.endsWith("}") ||
+    !trimmed.includes('"descubri_nuevas_lecturas"') ||
+    (trimmed.match(/"descubri_nuevas_lecturas"/g) || []).length === 0
+  );
+};
+
+/**
+ * Intenta reparar un JSON mal formateado
+ */
+const tryRepairJSON = (jsonString) => {
+  try {
+    // Intentar reparar comillas sin cerrar
+    let repaired = jsonString
+      .replace(/"([^"]*?)(?=\s*[,}\]])/g, '"$1"') // Cerrar comillas antes de , } ]
+      .replace(/(?<=[,{\[])\s*"([^"]*?)(?=\s*[,}\]])/g, '"$1"') // Cerrar comillas después de , { [
+      .replace(/(?<=[^\\])\\(?=[^"\\\/bfnrt])/g, "\\\\") // Escapar backslashes
+      .replace(/(?<!\\)"(?=[^"]*"[^"]*:)/g, '\\"'); // Escapar comillas en valores
+
+    // Intentar parsear
+    JSON.parse(repaired);
+    return repaired;
+  } catch (error) {
+    console.log("❌ No se pudo reparar el JSON:", error.message);
+    return null;
+  }
+};
 
 /**
  * Busca información de un libro en Google Books API
@@ -64,14 +127,17 @@ const getUserSignals = async (userId) => {
       throw new Error("Prisma client no está inicializado");
     }
 
+    // Obtener cliente de Prisma
+    const prismaClient = getPrismaClient();
+
     // Obtener usuario con favoritos
-    const user = await prisma.user.findUnique({
+    const user = await prismaClient.user.findUnique({
       where: { id: parseInt(userId) },
       select: { librosFavoritos: true },
     });
 
     // Obtener historial de lecturas
-    const lecturas = await prisma.lectura.findMany({
+    const lecturas = await prismaClient.lectura.findMany({
       where: { userId: parseInt(userId) },
     });
 
@@ -138,73 +204,13 @@ const getUserSignals = async (userId) => {
       historialCompleto.push(lectura.libroId);
 
       if (lectura.reviewRating) {
-        try {
-          // Buscar información del libro en la tabla Libro
-          const libro = await prisma.libro.findFirst({
-            where: { volumeId: lectura.libroId },
-          });
+        // Solo guardar el título del libro
+        const titulo = lectura.titulo || "Título no disponible";
 
-          if (libro) {
-            const libroInfo = {
-              volumeId: libro.volumeId,
-              title: libro.titulo,
-              authors: libro.autores
-                ? libro.autores.split(",").map((a) => a.trim())
-                : [],
-              categories: libro.categorias
-                ? libro.categorias.split(",").map((c) => c.trim())
-                : [],
-              rating: lectura.reviewRating,
-            };
-
-            if (lectura.reviewRating >= 3) {
-              historialLikes.push(libroInfo);
-            } else {
-              historialDislikes.push(libroInfo);
-            }
-          } else {
-            // Si no está en la BD, buscar en Google Books API
-            console.log(
-              `[Signals] Libro ${lectura.libroId} no encontrado en BD, buscando en Google Books...`
-            );
-            const bookInfo = await searchBookInfo(lectura.libroId);
-            const libroInfo = {
-              volumeId: lectura.libroId,
-              title: bookInfo.title,
-              authors: bookInfo.authors,
-              categories: bookInfo.categories,
-              rating: lectura.reviewRating,
-            };
-
-            if (lectura.reviewRating >= 3) {
-              historialLikes.push(libroInfo);
-            } else {
-              historialDislikes.push(libroInfo);
-            }
-          }
-        } catch (error) {
-          console.error(
-            `[Signals] Error procesando lectura ${lectura.libroId}:`,
-            error
-          );
-          // En caso de error, buscar en Google Books API
-          console.log(
-            `[Signals] Error en BD, buscando ${lectura.libroId} en Google Books...`
-          );
-          const bookInfo = await searchBookInfo(lectura.libroId);
-          const libroInfo = {
-            volumeId: lectura.libroId,
-            title: bookInfo.title,
-            authors: bookInfo.authors,
-            categories: bookInfo.categories,
-            rating: lectura.reviewRating,
-          };
-
-          if (lectura.reviewRating >= 3) {
-            historialLikes.push(libroInfo);
-          } else {
-            historialDislikes.push(libroInfo);
-          }
+        if (lectura.reviewRating >= 3) {
+          historialLikes.push(titulo);
+        } else {
+          historialDislikes.push(titulo);
         }
       }
     }
@@ -219,6 +225,16 @@ const getUserSignals = async (userId) => {
       `[Signals] Historial completo: ${historialCompleto.length} libros`
     );
 
+    // Log detallado de títulos
+    if (historialLikes.length > 0) {
+      console.log(`[Signals] LIKES títulos:`, historialLikes);
+    }
+    if (historialDislikes.length > 0) {
+      console.log(`[Signals] DISLIKES títulos:`, historialDislikes);
+    } else {
+      console.log(`[Signals] No hay libros con rating <= 2 (dislikes)`);
+    }
+
     const signals = {
       favoritos,
       historialLikes,
@@ -227,6 +243,15 @@ const getUserSignals = async (userId) => {
     };
 
     console.log(`[Signals] Señales finales:`, JSON.stringify(signals, null, 2));
+    console.log(`[Signals] RESUMEN FINAL:`);
+    console.log(`- Favoritos: ${signals.favoritos.length} libros`);
+    console.log(`- Historial LIKES: ${signals.historialLikes.length} libros`);
+    console.log(
+      `- Historial DISLIKES: ${signals.historialDislikes.length} libros`
+    );
+    console.log(
+      `- Historial completo: ${signals.historialCompleto.length} libros`
+    );
 
     return signals;
   } catch (error) {
@@ -360,7 +385,7 @@ const searchGoogleBooks = async (query, maxResults = 20) => {
         image:
           item.volumeInfo.imageLinks?.thumbnail ||
           item.volumeInfo.imageLinks?.smallThumbnail ||
-          "",
+          "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen",
       }));
   } catch (error) {
     console.error(`Error searching Google Books with query "${query}":`, error);
@@ -373,20 +398,62 @@ const searchGoogleBooks = async (query, maxResults = 20) => {
  */
 const searchSpecificBook = async (titulo, autor) => {
   try {
-    // Buscar solo por título para ser más eficiente
-    const query = `intitle:"${encodeURIComponent(titulo)}"`;
+    // Buscar por título y autor para ser más preciso
+    let query;
+    if (autor && autor.trim() !== "") {
+      query = `intitle:"${encodeURIComponent(
+        titulo
+      )}" inauthor:"${encodeURIComponent(autor)}"`;
+    } else {
+      query = `intitle:"${encodeURIComponent(titulo)}"`;
+    }
 
     const response = await axios.get(
-      `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=3&key=${GOOGLE_BOOKS_API_KEY}`
+      `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=5&key=${GOOGLE_BOOKS_API_KEY}`
     );
 
     if (!response.data.items || response.data.items.length === 0) {
-      console.log(`[Search] No se encontró: "${titulo}"`);
+      console.log(`[Search] No se encontró: "${titulo}" por "${autor}"`);
       return null;
     }
 
-    // Tomar el primer resultado (más relevante)
-    const bestMatch = response.data.items[0];
+    // Buscar el mejor match por similitud de título
+    let bestMatch = response.data.items[0];
+    let bestScore = 0;
+
+    for (const item of response.data.items) {
+      const itemTitle = item.volumeInfo.title.toLowerCase();
+      const searchTitle = titulo.toLowerCase();
+
+      // Calcular similitud simple
+      let score = 0;
+      if (itemTitle === searchTitle) {
+        score = 100; // Coincidencia exacta
+      } else if (itemTitle.includes(searchTitle)) {
+        score = 80; // Contiene el título
+      } else if (searchTitle.includes(itemTitle)) {
+        score = 60; // El título contiene la búsqueda
+      } else {
+        // Calcular similitud por palabras
+        const searchWords = searchTitle.split(" ");
+        const itemWords = itemTitle.split(" ");
+        const commonWords = searchWords.filter((word) =>
+          itemWords.some(
+            (itemWord) => itemWord.includes(word) || word.includes(itemWord)
+          )
+        );
+        score = (commonWords.length / searchWords.length) * 50;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = item;
+      }
+    }
+
+    console.log(
+      `[Search] Mejor match para "${titulo}": "${bestMatch.volumeInfo.title}" (score: ${bestScore})`
+    );
 
     const book = {
       volumeId: bestMatch.id,
@@ -400,7 +467,7 @@ const searchSpecificBook = async (titulo, autor) => {
       image:
         bestMatch.volumeInfo.imageLinks?.thumbnail ||
         bestMatch.volumeInfo.imageLinks?.smallThumbnail ||
-        "",
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen",
     };
 
     console.log(
@@ -475,13 +542,10 @@ const callLLMForPicks = async (signals) => {
     console.log("=".repeat(80));
     console.log("👤 SEÑALES DEL USUARIO:");
     console.log("📚 Favoritos:", JSON.stringify(signals.favoritos, null, 2));
+    console.log("👍 Historial LIKES:", signals.historialLikes);
+    console.log("👎 Historial DISLIKES:", signals.historialDislikes);
     console.log(
-      "👍 Historial LIKES:",
-      JSON.stringify(signals.historialLikes, null, 2)
-    );
-    console.log(
-      "👎 Historial DISLIKES:",
-      JSON.stringify(signals.historialDislikes, null, 2)
+      `[LLM] Enviando ${signals.historialDislikes.length} dislikes al chat`
     );
     console.log(
       "📖 Historial Completo:",
@@ -531,9 +595,79 @@ const callLLMForPicks = async (signals) => {
     console.log(content);
     console.log("=".repeat(80));
 
+    // Análisis detallado del contenido
+    console.log("🔍 ANÁLISIS DETALLADO:");
+    console.log(`- Longitud total: ${content.length} caracteres`);
+    console.log(`- Primeros 200 caracteres: ${content.substring(0, 200)}`);
+    console.log(
+      `- Últimos 200 caracteres: ${content.substring(
+        Math.max(0, content.length - 200)
+      )}`
+    );
+    console.log(`- Contiene { al inicio: ${content.trim().startsWith("{")}`);
+    console.log(`- Contiene } al final: ${content.trim().endsWith("}")}`);
+    console.log("=".repeat(80));
+
     try {
+      // Limpiar la respuesta antes de parsear
+      let cleanContent = content.trim();
+
+      // Buscar el JSON válido en la respuesta
+      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanContent = jsonMatch[0];
+      }
+
+      console.log("🧹 CONTENIDO LIMPIO:");
+      console.log(cleanContent);
+      console.log("=".repeat(80));
+
+      // Análisis del JSON antes de parsear
+      console.log("🔍 ANÁLISIS DEL JSON:");
+      console.log(
+        `- Longitud del JSON limpio: ${cleanContent.length} caracteres`
+      );
+
+      // Detectar si está cortado
+      if (isJSONTruncated(cleanContent)) {
+        console.log("⚠️  ADVERTENCIA: JSON parece estar cortado");
+        console.log("🔄 Intentando usar fallback local...");
+        throw new Error("JSON truncado - usando fallback local");
+      }
+
+      // Mostrar la parte problemática del JSON si es muy largo
+      if (cleanContent.length > 2000) {
+        const problemStart = Math.max(0, 1000);
+        const problemEnd = Math.min(cleanContent.length, 1200);
+        console.log(`- Área central (${problemStart}-${problemEnd}):`);
+        console.log(cleanContent.substring(problemStart, problemEnd));
+      }
+      console.log("=".repeat(80));
+
       // Intentar parsear la respuesta JSON
-      const parsed = JSON.parse(content);
+      let parsed;
+      try {
+        parsed = JSON.parse(cleanContent);
+      } catch (parseError) {
+        console.log("❌ ERROR PARSING JSON:");
+        console.log(`- Error: ${parseError.message}`);
+        console.log(
+          `- Posición: ${
+            parseError.message.match(/position (\d+)/)?.[1] || "desconocida"
+          }`
+        );
+
+        // Intentar reparar el JSON
+        console.log("🔧 INTENTANDO REPARAR JSON...");
+        const repairedContent = tryRepairJSON(cleanContent);
+        if (repairedContent) {
+          console.log("✅ JSON REPARADO:");
+          console.log(repairedContent);
+          parsed = JSON.parse(repairedContent);
+        } else {
+          throw parseError;
+        }
+      }
 
       console.log("📊 RESPUESTA PARSEADA:");
       console.log(JSON.stringify(parsed, null, 2));
@@ -602,7 +736,7 @@ const retryLLMWithCorrection = async (signals) => {
             content: correctionPrompt.user,
           },
         ],
-        max_tokens: 800,
+        max_tokens: 2000,
         temperature: 0.1,
       },
       {
@@ -624,8 +758,71 @@ const retryLLMWithCorrection = async (signals) => {
     console.log(content);
     console.log("=".repeat(80));
 
+    // Análisis detallado del contenido
+    console.log("🔍 ANÁLISIS DETALLADO:");
+    console.log(`- Longitud total: ${content.length} caracteres`);
+    console.log(`- Primeros 200 caracteres: ${content.substring(0, 200)}`);
+    console.log(
+      `- Últimos 200 caracteres: ${content.substring(
+        Math.max(0, content.length - 200)
+      )}`
+    );
+    console.log(`- Contiene { al inicio: ${content.trim().startsWith("{")}`);
+    console.log(`- Contiene } al final: ${content.trim().endsWith("}")}`);
+    console.log("=".repeat(80));
+
     try {
-      const parsed = JSON.parse(content);
+      // Limpiar la respuesta antes de parsear
+      let cleanContent = content.trim();
+
+      // Buscar el JSON válido en la respuesta
+      const jsonMatch = cleanContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        cleanContent = jsonMatch[0];
+      }
+
+      console.log("🧹 CONTENIDO LIMPIO (CORRECCIÓN):");
+      console.log(cleanContent);
+      console.log("=".repeat(80));
+
+      // Análisis del JSON antes de parsear
+      console.log("🔍 ANÁLISIS DEL JSON:");
+      console.log(
+        `- Longitud del JSON limpio: ${cleanContent.length} caracteres`
+      );
+      console.log(`- Posición del error: 2473 (línea 23, columna 114)`);
+
+      // Mostrar la parte problemática del JSON
+      const problemStart = Math.max(0, 2400);
+      const problemEnd = Math.min(cleanContent.length, 2500);
+      console.log(`- Área problemática (${problemStart}-${problemEnd}):`);
+      console.log(cleanContent.substring(problemStart, problemEnd));
+      console.log("=".repeat(80));
+
+      // Intentar parsear la respuesta JSON
+      let parsed;
+      try {
+        parsed = JSON.parse(cleanContent);
+      } catch (parseError) {
+        console.log("❌ ERROR PARSING JSON (CORRECCIÓN):");
+        console.log(`- Error: ${parseError.message}`);
+        console.log(
+          `- Posición: ${
+            parseError.message.match(/position (\d+)/)?.[1] || "desconocida"
+          }`
+        );
+
+        // Intentar reparar el JSON
+        console.log("🔧 INTENTANDO REPARAR JSON (CORRECCIÓN)...");
+        const repairedContent = tryRepairJSON(cleanContent);
+        if (repairedContent) {
+          console.log("✅ JSON REPARADO (CORRECCIÓN):");
+          console.log(repairedContent);
+          parsed = JSON.parse(repairedContent);
+        } else {
+          throw parseError;
+        }
+      }
 
       console.log("📊 RESPUESTA PARSEADA (CORRECCIÓN):");
       console.log(JSON.stringify(parsed, null, 2));
@@ -671,11 +868,11 @@ const buildLLMPrompt = (signals, isCorrection = false) => {
 IMPORTANTE: Tu respuesta anterior no fue válida. Ahora debés devolver EXACTAMENTE este formato JSON:
 {
   "te_podrian_gustar": [
-    { "titulo": "Título del Libro", "autor": "Nombre del Autor", "razon": "..." },
+    { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
     ... (12 items en total)
   ],
   "descubri_nuevas_lecturas": [
-    { "titulo": "Título del Libro", "autor": "Nombre del Autor", "razon": "..." },
+    { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
     ... (12 items en total)
   ]
 }
@@ -697,38 +894,38 @@ Reglas:
 - **No** incluyas libros ya leídos por el usuario (historial completo).
 - **Evitar** similitudes fuertes con lecturas mal valoradas (rating ≤ 2), salvo que la conexión con favoritos/LIKES sea muy sólida y no haya alternativas.
 - Respetá diversidad en la Lista B (no repitas autor si hay opciones, variá subgéneros/temáticas).
-- Cada item debe incluir \`titulo\`, \`autor\` y una \`razon\` breve ("mismo autor", "tema afín", "deriva de X género hacia Y", etc.).
+- **NO DUPLICADOS**: Cada libro debe ser único. No repitas el mismo título en ninguna lista ni entre las dos listas.
 - **CRÍTICO**: Solo recomendá libros que existan en Google Books (libros populares, clásicos, bestsellers).
 
 Devolvé **únicamente** este JSON:
 {
   "te_podrian_gustar": [
-    { "titulo": "Título del Libro", "autor": "Nombre del Autor", "razon": "..." },
+    { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
     ... (12 items en total)
   ],
   "descubri_nuevas_lecturas": [
-    { "titulo": "Título del Libro", "autor": "Nombre del Autor", "razon": "..." },
+    { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
     ... (12 items en total)
   ]
 }`;
 
-  const userPrompt = `FAVORITOS (0–3):
-${JSON.stringify(signals.favoritos)}
+  const userPrompt = `FAVORITOS: ${signals.favoritos.length} libros
+LIKES: ${signals.historialLikes.length} libros (rating >= 3)
+DISLIKES: ${signals.historialDislikes.length} libros (rating <= 2)
 
-HISTORIAL — LEÍDOS CON RATING:
-- LIKES (rating >= 3): 
-${JSON.stringify(signals.historialLikes)}
+Datos:
+Favoritos: ${JSON.stringify(
+    signals.favoritos.map((f) => ({ title: f.title, authors: f.authors }))
+  )}
+Likes: ${JSON.stringify(signals.historialLikes)}
+Dislikes: ${JSON.stringify(signals.historialDislikes)}
 
-- DISLIKES (rating <= 2): 
-${JSON.stringify(signals.historialDislikes)}
-
-IMPORTANTE:
-- No recomendar ningún libro ya leído por el usuario (historial completo).
-- Evitar parecidos fuertes con DISLIKES si hay alternativas.
-- Recomendá libros REALES que existan en Google Books (libros populares, clásicos, bestsellers).
-
-Necesito exactamente 12 items en "te_podrian_gustar" y 12 en "descubri_nuevas_lecturas".
-Cada recomendación debe tener título y autor EXACTOS.`;
+Reglas:
+- No recomendar libros ya leídos
+- Evitar similares a dislikes
+- Libros reales de Google Books
+- NO DUPLICADOS: Cada libro debe ser único (no repetir títulos)
+- 12 + 12 recomendaciones exactas`;
 
   return { system: systemPrompt, user: userPrompt };
 };
@@ -753,6 +950,9 @@ const processLLMRecommendations = async (llmResponse, signals) => {
   for (const item of llmResponse.te_podrian_gustar) {
     console.log(`[Process] Buscando: "${item.titulo}" por "${item.autor}"`);
     const book = await searchSpecificBook(item.titulo, item.autor);
+
+    // Delay de 1 segundo entre consultas para evitar rate limit
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     if (book) {
       // Verificar que no esté en historial o favoritos
       if (
@@ -769,7 +969,7 @@ const processLLMRecommendations = async (llmResponse, signals) => {
           pageCount: book.pageCount,
           averageRating: book.averageRating,
           image: book.image,
-          reason: item.razon,
+          reason: "Recomendado por IA",
         });
         console.log(`[Process] ✅ Agregado a te_podrian_gustar: ${book.title}`);
       } else {
@@ -785,6 +985,9 @@ const processLLMRecommendations = async (llmResponse, signals) => {
   for (const item of llmResponse.descubri_nuevas_lecturas) {
     console.log(`[Process] Buscando: "${item.titulo}" por "${item.autor}"`);
     const book = await searchSpecificBook(item.titulo, item.autor);
+
+    // Delay de 1 segundo entre consultas para evitar rate limit
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     if (book) {
       // Verificar que no esté en historial o favoritos
       if (
@@ -801,7 +1004,7 @@ const processLLMRecommendations = async (llmResponse, signals) => {
           pageCount: book.pageCount,
           averageRating: book.averageRating,
           image: book.image,
-          reason: item.razon,
+          reason: "Recomendado por IA",
         });
         console.log(
           `[Process] ✅ Agregado a descubri_nuevas_lecturas: ${book.title}`
@@ -1099,8 +1302,18 @@ const getHomeRecommendations = async (userId) => {
     const cacheKey = `home_recs_${userId}`;
     const cached = recommendationsCache.get(cacheKey);
 
+    console.log(`[Cache] Verificando caché para usuario ${userId}`);
+    console.log(
+      `[Cache] Tamaño del caché: ${recommendationsCache.size} entradas`
+    );
+    console.log(
+      `[Cache] Claves en caché: ${Array.from(recommendationsCache.keys())}`
+    );
+
     if (cached) {
-      console.log(`[Cache] Hit para usuario ${userId}, usando cache existente`);
+      console.log(
+        `[Cache] ✅ HIT para usuario ${userId}, usando cache existente`
+      );
       console.log(
         `[Cache] Cache generado: ${new Date(cached.timestamp).toLocaleString()}`
       );
@@ -1139,6 +1352,17 @@ const getHomeRecommendations = async (userId) => {
       signals.historialCompleto.length === 0
     ) {
       console.log("[Recommendations] Caso A: Sin datos, usando defaults");
+      console.log(
+        `[Recommendations] DEBUG - Favoritos: ${signals.favoritos.length}, Historial: ${signals.historialCompleto.length}`
+      );
+      console.log(
+        `[Recommendations] DEBUG - Favoritos detalle:`,
+        JSON.stringify(signals.favoritos, null, 2)
+      );
+      console.log(
+        `[Recommendations] DEBUG - Historial detalle:`,
+        signals.historialCompleto
+      );
       const defaults = getDefaultRecommendations();
       const result = {
         ...defaults,
@@ -1149,10 +1373,17 @@ const getHomeRecommendations = async (userId) => {
       };
 
       // Cachear
+      console.log(
+        `[Cache] 💾 Guardando fallback local en caché para usuario ${userId}`
+      );
+      console.log(`[Cache] Estrategia: ${result.metadata.strategy}`);
       recommendationsCache.set(cacheKey, {
         data: result,
         timestamp: Date.now(),
       });
+      console.log(
+        `[Cache] ✅ Caché guardado. Tamaño actual: ${recommendationsCache.size}`
+      );
       return result;
     }
 
@@ -1173,13 +1404,10 @@ const getHomeRecommendations = async (userId) => {
         `[Recommendations] LLM devolvió: ${tePodrianGustar.length} + ${descubriNuevasLecturas.length} libros`
       );
 
-      // Validar que tengamos 12+12 items
-      if (
-        tePodrianGustar.length === 12 &&
-        descubriNuevasLecturas.length === 12
-      ) {
+      // Validar que tengamos al menos 12+12 items
+      if (tePodrianGustar.length >= 12 && descubriNuevasLecturas.length >= 12) {
         console.log("[Recommendations] LLM válido, usando respuesta");
-        const result = {
+        let result = {
           tePodrianGustar: tePodrianGustar.slice(0, 12),
           descubriNuevasLecturas: descubriNuevasLecturas.slice(0, 12),
           metadata: {
@@ -1193,364 +1421,261 @@ const getHomeRecommendations = async (userId) => {
         // Eliminar duplicados
         result = removeDuplicates(result);
 
-        // Validar que no se incluyan libros del historial o favoritos
-        if (!validateRecommendations(result, signals)) {
-          console.error(
-            `[VALIDATION] LLM devolvió libros inválidos, usando fallback local`
+        // Validar y corregir libros inválidos
+        const correctedResult = await validateAndCorrectRecommendations(
+          result,
+          signals
+        );
+        if (correctedResult) {
+          console.log(
+            `[VALIDATION] ✅ Recomendaciones corregidas exitosamente`
           );
-          // No usar break, continuar con el fallback local
-        } else {
+          result = correctedResult;
+          console.log(`[Cache] 💾 Guardando en caché para usuario ${userId}`);
+          console.log(`[Cache] Estrategia: ${result.metadata.strategy}`);
           recommendationsCache.set(cacheKey, {
             data: result,
             timestamp: Date.now(),
           });
+          console.log(
+            `[Cache] ✅ Caché guardado. Tamaño actual: ${recommendationsCache.size}`
+          );
           return result;
         }
       }
 
-      // Si el LLM no devolvió 12+12, completar con fallback local
+      // Si el LLM no devolvió al menos 12+12, completar con fallback local
       console.log(
-        `[LLM] Respuesta incompleta: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
+        `[LLM] Respuesta insuficiente: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
       );
       console.log("[LLM] Completando con fallback local");
     } else {
       console.log("[Recommendations] LLM falló, usando fallback local");
     }
 
-    // Fallback local - Generar shortlist básica para fallback
+    // Fallback local - Usar defaults directamente (sin consultas a Google Books)
     console.log(
-      "[Recommendations] LLM falló, generando shortlist para fallback local"
-    );
-    const shortlist = await fetchShortlistFromGoogleBooks(signals);
-    console.log(
-      `[Recommendations] Shortlist para fallback: ${shortlist.length} libros`
-    );
-
-    if (shortlist.length === 0) {
-      console.log("[Recommendations] No hay shortlist, usando defaults");
-      const defaults = getDefaultRecommendations();
-      const result = {
-        ...defaults,
-        metadata: {
-          ...defaults.metadata,
-          userId,
-        },
-      };
-      recommendationsCache.set(cacheKey, {
-        data: result,
-        timestamp: Date.now(),
-      });
-      return result;
-    }
-
-    console.log("[Recommendations] Usando fallback local");
-    const fallbackItems = buildFallbackLocal(shortlist, signals);
-
-    // Validación final: asegurar que siempre tengamos 12+12 libros
-    let tePodrianGustar = fallbackItems.slice(0, 12);
-    let descubriNuevasLecturas = fallbackItems.slice(12, 24);
-
-    console.log(
-      `[Recommendations] Fallback local: ${tePodrianGustar.length} + ${descubriNuevasLecturas.length} libros`
-    );
-
-    // Si no tenemos suficientes libros, completar con defaults
-    if (tePodrianGustar.length < 12) {
-      const defaults = getDefaultRecommendations();
-      const needed = 12 - tePodrianGustar.length;
-      console.log(
-        `[Recommendations] Completando tePodrianGustar con ${needed} defaults`
-      );
-      tePodrianGustar = [
-        ...tePodrianGustar,
-        ...defaults.tePodrianGustar.slice(0, needed),
-      ];
-    }
-
-    if (descubriNuevasLecturas.length < 12) {
-      const defaults = getDefaultRecommendations();
-      const needed = 12 - descubriNuevasLecturas.length;
-      console.log(
-        `[Recommendations] Completando descubriNuevasLecturas con ${needed} defaults`
-      );
-      descubriNuevasLecturas = [
-        ...descubriNuevasLecturas,
-        ...defaults.descubriNuevasLecturas.slice(0, needed),
-      ];
-    }
-
-    // Validación CRÍTICA: asegurar que tengamos exactamente 12+12
-    if (tePodrianGustar.length !== 12 || descubriNuevasLecturas.length !== 12) {
-      console.error(
-        `[ERROR] Validación falló: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
-      );
-
-      // Forzar a que tengamos exactamente 12+12 usando defaults
-      const defaults = getDefaultRecommendations();
-      tePodrianGustar = defaults.tePodrianGustar.slice(0, 12);
-      descubriNuevasLecturas = defaults.descubriNuevasLecturas.slice(0, 12);
-
-      console.log(
-        `[Recommendations] Forzando uso de defaults para garantizar 12+12`
-      );
-    }
-
-    console.log(
-      `[Recommendations] Final: ${tePodrianGustar.length} + ${descubriNuevasLecturas.length} libros`
-    );
-
-    const result = {
-      tePodrianGustar: tePodrianGustar.slice(0, 12),
-      descubriNuevasLecturas: descubriNuevasLecturas.slice(0, 12),
-      metadata: {
-        userId,
-        generatedAt: new Date().toISOString(),
-        strategy: "fallback-local",
-        shortlistSize: shortlist.length,
-      },
-    };
-
-    recommendationsCache.set(cacheKey, { data: result, timestamp: Date.now() });
-    console.log(`[Cache] Cacheado resultado para usuario ${userId}`);
-
-    // Validación FINAL antes de retornar
-    if (
-      result.tePodrianGustar.length !== 12 ||
-      result.descubriNuevasLecturas.length !== 12
-    ) {
-      console.error(
-        `[ERROR CRÍTICO] Resultado final inválido: tePodrianGustar=${result.tePodrianGustar.length}, descubriNuevasLecturas=${result.descubriNuevasLecturas.length}`
-      );
-
-      // Último recurso: usar defaults
-      const defaults = getDefaultRecommendations();
-      return {
-        tePodrianGustar: defaults.tePodrianGustar.slice(0, 12),
-        descubriNuevasLecturas: defaults.descubriNuevasLecturas.slice(0, 12),
-        metadata: {
-          userId,
-          generatedAt: new Date().toISOString(),
-          strategy: "fallback-defaults-critical",
-          shortlistSize: 0,
-        },
-      };
-    }
-
-    // Eliminar duplicados
-    result = removeDuplicates(result);
-
-    // Validar que no se incluyan libros del historial o favoritos
-    if (!validateRecommendations(result, signals)) {
-      console.error(
-        `[VALIDATION] Se encontraron libros inválidos, usando defaults`
-      );
-      const defaults = getDefaultRecommendations();
-      return {
-        tePodrianGustar: defaults.tePodrianGustar.slice(0, 12),
-        descubriNuevasLecturas: defaults.descubriNuevasLecturas.slice(0, 12),
-        metadata: {
-          userId,
-          generatedAt: new Date().toISOString(),
-          strategy: "fallback-defaults-validation",
-          shortlistSize: 0,
-        },
-      };
-    }
-
-    return result;
-  } catch (error) {
-    console.error("Error getting home recommendations:", error);
-
-    // Fallback final a defaults
-    console.log(
-      "[Recommendations] Error crítico, usando defaults como último recurso"
+      "[Recommendations] LLM falló, usando defaults sin consultas adicionales"
     );
     const defaults = getDefaultRecommendations();
-    return {
+    const result = {
       ...defaults,
       metadata: {
         ...defaults.metadata,
         userId,
+        strategy: "fallback-defaults",
       },
     };
-  }
-};
-
-/**
- * Invalida el caché de recomendaciones para un usuario específico
- * USAR SOLO cuando el usuario se desloguea o cambia significativamente
- */
-const invalidateRecommendationsCache = (userId) => {
-  const cacheKey = `home_recs_${userId}`;
-  const wasCached = recommendationsCache.has(cacheKey);
-
-  if (wasCached) {
-    const cached = recommendationsCache.get(cacheKey);
-    console.log(`[Cache] Invalidando caché para usuario ${userId}`);
     console.log(
-      `[Cache] Caché existía desde: ${new Date(
-        cached.timestamp
-      ).toLocaleString()}`
+      `[Cache] 💾 Guardando fallback local en caché para usuario ${userId}`
     );
-    console.log(`[Cache] Estrategia usada: ${cached.data.metadata.strategy}`);
+    console.log(`[Cache] Estrategia: ${result.metadata.strategy}`);
+    recommendationsCache.set(cacheKey, {
+      data: result,
+      timestamp: Date.now(),
+    });
+    console.log(
+      `[Cache] ✅ Caché guardado. Tamaño actual: ${recommendationsCache.size}`
+    );
+    return result;
+  } catch (error) {
+    console.error("Error getting home recommendations:", error);
+    console.log(
+      "[Recommendations] Error crítico, usando defaults como último recurso"
+    );
+    const defaults = getDefaultRecommendations();
+    const result = {
+      ...defaults,
+      metadata: {
+        ...defaults.metadata,
+        userId,
+        strategy: "fallback-defaults",
+      },
+    };
+    console.log(
+      "[Recommendations] Recomendaciones generadas con estrategia: fallback-defaults"
+    );
+    return result;
   }
+};
 
-  recommendationsCache.delete(cacheKey);
-  cacheTimestamps.delete(cacheKey);
+/**
+ * Elimina duplicados de las recomendaciones
+ */
+const removeDuplicates = (result) => {
+  const seenIds = new Set();
 
-  console.log(`[Cache] Caché invalidado para usuario ${userId} (relogear)`);
-  console.log(
-    `[Cache] El usuario verá nuevas recomendaciones en su próxima visita`
+  // Filtrar tePodrianGustar
+  result.tePodrianGustar = result.tePodrianGustar.filter((book) => {
+    if (seenIds.has(book.volumeId)) {
+      return false;
+    }
+    seenIds.add(book.volumeId);
+    return true;
+  });
+
+  // Filtrar descubriNuevasLecturas
+  result.descubriNuevasLecturas = result.descubriNuevasLecturas.filter(
+    (book) => {
+      if (seenIds.has(book.volumeId)) {
+        return false;
+      }
+      seenIds.add(book.volumeId);
+      return true;
+    }
   );
-};
 
-/**
- * Invalidar cache de recomendaciones para todos los usuarios (mantenimiento)
- */
-const invalidateAllRecommendationsCache = () => {
-  recommendationsCache.clear();
-  console.log("[Cache] Invalidado cache completo de recomendaciones");
-};
-
-/**
- * Obtener estadísticas del cache
- */
-const getCacheStats = () => {
-  return {
-    size: recommendationsCache.size,
-    keys: Array.from(recommendationsCache.keys()),
-    timestamp: new Date().toISOString(),
-  };
-};
-
-/**
- * Elimina duplicados de las listas de recomendaciones
- */
-const removeDuplicates = (recommendations) => {
-  const seen = new Set();
-  const tePodrianGustar = [];
-  const descubriNuevasLecturas = [];
-
-  // Procesar tePodrianGustar
-  for (const book of recommendations.tePodrianGustar) {
-    if (!seen.has(book.volumeId)) {
-      seen.add(book.volumeId);
-      tePodrianGustar.push(book);
-    } else {
-      console.log(
-        `[DEDUP] Duplicado eliminado de tePodrianGustar: ${book.volumeId} - ${book.title}`
-      );
-    }
-  }
-
-  // Procesar descubriNuevasLecturas
-  for (const book of recommendations.descubriNuevasLecturas) {
-    if (!seen.has(book.volumeId)) {
-      seen.add(book.volumeId);
-      descubriNuevasLecturas.push(book);
-    } else {
-      console.log(
-        `[DEDUP] Duplicado eliminado de descubriNuevasLecturas: ${book.volumeId} - ${book.title}`
-      );
-    }
-  }
-
-  return {
-    tePodrianGustar,
-    descubriNuevasLecturas,
-    metadata: recommendations.metadata,
-  };
+  return result;
 };
 
 /**
  * Valida que las recomendaciones no incluyan libros del historial o favoritos
  */
-const validateRecommendations = (recommendations, signals) => {
-  const historialCompleto = signals.historialCompleto;
-  const favoritos = signals.favoritos;
-
-  let hasInvalidBooks = false;
+const validateRecommendations = (result, signals) => {
+  const historialIds = new Set(signals.historialCompleto);
+  const favoritoIds = new Set(signals.favoritos.map((fav) => fav.volumeId));
 
   // Verificar tePodrianGustar
-  for (const book of recommendations.tePodrianGustar) {
-    if (historialCompleto.includes(book.volumeId)) {
-      console.error(
-        `[VALIDATION] ERROR: Libro del historial en tePodrianGustar: ${book.volumeId} - ${book.title}`
+  for (const book of result.tePodrianGustar) {
+    if (historialIds.has(book.volumeId) || favoritoIds.has(book.volumeId)) {
+      console.log(
+        `[Validation] ❌ Libro inválido en tePodrianGustar: ${book.title}`
       );
-      hasInvalidBooks = true;
-    }
-    if (favoritos.some((fav) => fav.volumeId === book.volumeId)) {
-      console.error(
-        `[VALIDATION] ERROR: Libro de favoritos en tePodrianGustar: ${book.volumeId} - ${book.title}`
-      );
-      hasInvalidBooks = true;
+      return false;
     }
   }
 
   // Verificar descubriNuevasLecturas
-  for (const book of recommendations.descubriNuevasLecturas) {
-    if (historialCompleto.includes(book.volumeId)) {
-      console.error(
-        `[VALIDATION] ERROR: Libro del historial en descubriNuevasLecturas: ${book.volumeId} - ${book.title}`
+  for (const book of result.descubriNuevasLecturas) {
+    if (historialIds.has(book.volumeId) || favoritoIds.has(book.volumeId)) {
+      console.log(
+        `[Validation] ❌ Libro inválido en descubriNuevasLecturas: ${book.title}`
       );
-      hasInvalidBooks = true;
-    }
-    if (favoritos.some((fav) => fav.volumeId === book.volumeId)) {
-      console.error(
-        `[VALIDATION] ERROR: Libro de favoritos en descubriNuevasLecturas: ${book.volumeId} - ${book.title}`
-      );
-      hasInvalidBooks = true;
+      return false;
     }
   }
 
-  if (hasInvalidBooks) {
-    console.error(
-      `[VALIDATION] Se encontraron libros inválidos en las recomendaciones`
-    );
-    return false;
-  }
-
-  console.log(`[VALIDATION] Todas las recomendaciones son válidas`);
   return true;
 };
 
 /**
- * Verifica el estado del caché para un usuario sin invalidarlo
- * Útil para debugging y monitoreo
+ * Valida y corrige recomendaciones reemplazando libros inválidos
  */
-const checkCacheStatus = (userId) => {
-  const cacheKey = `home_recs_${userId}`;
-  const cached = recommendationsCache.get(cacheKey);
+const validateAndCorrectRecommendations = async (result, signals) => {
+  const historialIds = new Set(signals.historialCompleto);
+  const favoritoIds = new Set(signals.favoritos.map((fav) => fav.volumeId));
+  let hasInvalidBooks = false;
 
-  if (!cached) {
-    return {
-      userId,
-      hasCache: false,
-      message: "No hay caché para este usuario",
-    };
+  // Corregir tePodrianGustar
+  for (let i = 0; i < result.tePodrianGustar.length; i++) {
+    const book = result.tePodrianGustar[i];
+    if (historialIds.has(book.volumeId) || favoritoIds.has(book.volumeId)) {
+      console.log(
+        `[Validation] ❌ Reemplazando libro inválido en tePodrianGustar: ${book.title}`
+      );
+
+      // Buscar un libro de reemplazo
+      const replacementBook = await findReplacementBook(
+        signals,
+        result.tePodrianGustar
+      );
+      if (replacementBook) {
+        result.tePodrianGustar[i] = replacementBook;
+        console.log(
+          `[Validation] ✅ Reemplazado con: ${replacementBook.title}`
+        );
+        hasInvalidBooks = true;
+      } else {
+        console.log(
+          `[Validation] ❌ No se pudo encontrar reemplazo para: ${book.title}`
+        );
+        return null;
+      }
+    }
   }
 
-  const age = Date.now() - cached.timestamp;
-  const ageHours = Math.floor(age / (1000 * 60 * 60));
-  const ageMinutes = Math.floor((age % (1000 * 60 * 60)) / (1000 * 60));
+  // Corregir descubriNuevasLecturas
+  for (let i = 0; i < result.descubriNuevasLecturas.length; i++) {
+    const book = result.descubriNuevasLecturas[i];
+    if (historialIds.has(book.volumeId) || favoritoIds.has(book.volumeId)) {
+      console.log(
+        `[Validation] ❌ Reemplazando libro inválido en descubriNuevasLecturas: ${book.title}`
+      );
 
-  return {
-    userId,
-    hasCache: true,
-    timestamp: cached.timestamp,
-    age: `${ageHours}h ${ageMinutes}m`,
-    strategy: cached.data.metadata.strategy,
-    tePodrianGustar: cached.data.tePodrianGustar.length,
-    descubriNuevasLecturas: cached.data.descubriNuevasLecturas.length,
-    message: `Caché válido con ${cached.data.tePodrianGustar.length} + ${cached.data.descubriNuevasLecturas.length} libros`,
-  };
+      // Buscar un libro de reemplazo
+      const replacementBook = await findReplacementBook(
+        signals,
+        result.descubriNuevasLecturas
+      );
+      if (replacementBook) {
+        result.descubriNuevasLecturas[i] = replacementBook;
+        console.log(
+          `[Validation] ✅ Reemplazado con: ${replacementBook.title}`
+        );
+        hasInvalidBooks = true;
+      } else {
+        console.log(
+          `[Validation] ❌ No se pudo encontrar reemplazo para: ${book.title}`
+        );
+        return null;
+      }
+    }
+  }
+
+  if (hasInvalidBooks) {
+    console.log(`[Validation] ✅ Se corrigieron libros inválidos exitosamente`);
+  }
+
+  return result;
+};
+
+/**
+ * Busca un libro de reemplazo que no esté en el historial o favoritos
+ */
+const findReplacementBook = async (signals, existingBooks) => {
+  const historialIds = new Set(signals.historialCompleto);
+  const favoritoIds = new Set(signals.favoritos.map((fav) => fav.volumeId));
+  const existingIds = new Set(existingBooks.map((book) => book.volumeId));
+
+  // Lista de libros de reemplazo populares
+  const replacementBooks = [
+    { title: "1984", author: "George Orwell" },
+    { title: "El Gran Gatsby", author: "F. Scott Fitzgerald" },
+    { title: "Matar a un ruiseñor", author: "Harper Lee" },
+    { title: "El señor de los anillos", author: "J.R.R. Tolkien" },
+    { title: "Orgullo y prejuicio", author: "Jane Austen" },
+    { title: "Cien años de soledad", author: "Gabriel García Márquez" },
+    { title: "El hobbit", author: "J.R.R. Tolkien" },
+    { title: "Fahrenheit 451", author: "Ray Bradbury" },
+    { title: "Don Quijote de la Mancha", author: "Miguel de Cervantes" },
+    { title: "Los miserables", author: "Victor Hugo" },
+  ];
+
+  for (const book of replacementBooks) {
+    try {
+      const foundBook = await searchSpecificBook(book.title, book.author);
+      if (
+        foundBook &&
+        !historialIds.has(foundBook.volumeId) &&
+        !favoritoIds.has(foundBook.volumeId) &&
+        !existingIds.has(foundBook.volumeId)
+      ) {
+        return {
+          ...foundBook,
+          reason: "Reemplazo por libro inválido",
+        };
+      }
+    } catch (error) {
+      console.log(`[Replacement] Error buscando ${book.title}:`, error.message);
+    }
+  }
+
+  return null;
 };
 
 module.exports = {
   getHomeRecommendations,
-  invalidateRecommendationsCache,
-  invalidateAllRecommendationsCache,
-  getCacheStats,
-  validateRecommendations,
-  checkCacheStatus,
+  getUserSignals,
+  searchSpecificBook,
+  searchGoogleBooks,
 };

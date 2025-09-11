@@ -185,7 +185,7 @@ export default function HomeScreen() {
                           elevation: 2,
                         }}
                       >
-                        {book.image ? (
+                        {book.image && !book.image.includes("placehold.co") ? (
                           <Image
                             source={{ uri: book.image }}
                             accessibilityLabel={book.title}
@@ -251,7 +251,7 @@ export default function HomeScreen() {
                         elevation: 2,
                       }}
                     >
-                      {book.image ? (
+                      {book.image && !book.image.includes("placehold.co") ? (
                         <Image
                           source={{ uri: book.image }}
                           accessibilityLabel={book.title}
