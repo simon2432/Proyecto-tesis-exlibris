@@ -409,7 +409,7 @@ const searchSpecificBook = async (titulo, autor) => {
     }
 
     const response = await axios.get(
-      `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=5&key=${GOOGLE_BOOKS_API_KEY}`
+      `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=10&key=${GOOGLE_BOOKS_API_KEY}`
     );
 
     if (!response.data.items || response.data.items.length === 0) {
@@ -417,61 +417,46 @@ const searchSpecificBook = async (titulo, autor) => {
       return null;
     }
 
-    // Buscar el mejor match por similitud de título
-    let bestMatch = response.data.items[0];
-    let bestScore = 0;
+    // Convertir a formato estándar
+    const allBooks = response.data.items.map((item) => ({
+      id: item.id,
+      title: item.volumeInfo.title,
+      authors: item.volumeInfo.authors || [],
+      categories: item.volumeInfo.categories || [],
+      description: item.volumeInfo.description,
+      language: item.volumeInfo.language,
+      pageCount: item.volumeInfo.pageCount,
+      averageRating: item.volumeInfo.averageRating,
+      image:
+        item.volumeInfo.imageLinks?.thumbnail ||
+        item.volumeInfo.imageLinks?.smallThumbnail ||
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen",
+    }));
 
-    for (const item of response.data.items) {
-      const itemTitle = item.volumeInfo.title.toLowerCase();
-      const searchTitle = titulo.toLowerCase();
-
-      // Calcular similitud simple
-      let score = 0;
-      if (itemTitle === searchTitle) {
-        score = 100; // Coincidencia exacta
-      } else if (itemTitle.includes(searchTitle)) {
-        score = 80; // Contiene el título
-      } else if (searchTitle.includes(itemTitle)) {
-        score = 60; // El título contiene la búsqueda
-      } else {
-        // Calcular similitud por palabras
-        const searchWords = searchTitle.split(" ");
-        const itemWords = itemTitle.split(" ");
-        const commonWords = searchWords.filter((word) =>
-          itemWords.some(
-            (itemWord) => itemWord.includes(word) || word.includes(itemWord)
-          )
-        );
-        score = (commonWords.length / searchWords.length) * 50;
-      }
-
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = item;
-      }
+    // Tomar el primer resultado (como funcionaba antes)
+    const firstBook = allBooks[0];
+    if (!firstBook) {
+      console.log(`[Search] No se encontró ningún libro para "${titulo}"`);
+      return null;
     }
 
-    console.log(
-      `[Search] Mejor match para "${titulo}": "${bestMatch.volumeInfo.title}" (score: ${bestScore})`
-    );
-
+    // Convertir al formato esperado
     const book = {
-      volumeId: bestMatch.id,
-      title: bestMatch.volumeInfo.title,
-      authors: bestMatch.volumeInfo.authors || [],
-      categories: bestMatch.volumeInfo.categories || [],
-      description: bestMatch.volumeInfo.description,
-      language: bestMatch.volumeInfo.language,
-      pageCount: bestMatch.volumeInfo.pageCount,
-      averageRating: bestMatch.volumeInfo.averageRating,
-      image:
-        bestMatch.volumeInfo.imageLinks?.thumbnail ||
-        bestMatch.volumeInfo.imageLinks?.smallThumbnail ||
-        "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen",
+      volumeId: firstBook.id,
+      title: firstBook.title,
+      authors: firstBook.authors,
+      categories: firstBook.categories,
+      description: firstBook.description,
+      language: firstBook.language,
+      pageCount: firstBook.pageCount,
+      averageRating: firstBook.averageRating,
+      image: firstBook.image,
     };
 
     console.log(
-      `[Search] ✅ Encontrado: "${book.title}" por ${book.authors.join(", ")}`
+      `[Search] ✅ Libro encontrado: "${book.title}" por ${book.authors.join(
+        ", "
+      )}`
     );
     return book;
   } catch (error) {
@@ -954,6 +939,10 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     // Delay de 1 segundo entre consultas para evitar rate limit
     await new Promise((resolve) => setTimeout(resolve, 1000));
     if (book) {
+      // Guardar en cache para uso futuro en búsquedas
+      const { saveRecommendedVersion } = require("./recommendationCache");
+      saveRecommendedVersion(item.titulo, item.autor, book);
+
       // Verificar que no esté en historial o favoritos
       if (
         !signals.historialCompleto.includes(book.volumeId) &&
@@ -989,6 +978,10 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     // Delay de 1 segundo entre consultas para evitar rate limit
     await new Promise((resolve) => setTimeout(resolve, 1000));
     if (book) {
+      // Guardar en cache para uso futuro en búsquedas
+      const { saveRecommendedVersion } = require("./recommendationCache");
+      saveRecommendedVersion(item.titulo, item.autor, book);
+
       // Verificar que no esté en historial o favoritos
       if (
         !signals.historialCompleto.includes(book.volumeId) &&

@@ -38,7 +38,7 @@ const generateDescription = async (bookInfo) => {
   }
 };
 
-// Función para verificar si el título contiene las palabras de búsqueda de forma flexible
+// Función para verificar si el título contiene las palabras de búsqueda de forma muy flexible
 const titleMatchesSearch = (title, searchQuery) => {
   if (!title || !searchQuery) return false;
 
@@ -46,17 +46,31 @@ const titleMatchesSearch = (title, searchQuery) => {
   const searchWords = searchQuery
     .toLowerCase()
     .split(" ")
-    .filter((word) => word.length > 0);
+    .filter((word) => word.length > 2); // Solo palabras de más de 2 caracteres
 
-  // Si solo hay una palabra, buscar coincidencias parciales
-  if (searchWords.length === 1) {
-    const searchWord = searchWords[0];
-    // Buscar la palabra completa o como parte de otra palabra
-    return titleLower.includes(searchWord);
-  }
+  // Si no hay palabras significativas, no hacer match
+  if (searchWords.length === 0) return false;
 
-  // Si hay múltiples palabras, al menos una debe estar en el título
-  return searchWords.some((word) => titleLower.includes(word));
+  // Normalizar títulos para comparación más precisa
+  const normalizeTitle = (title) =>
+    title
+      .toLowerCase()
+      .replace(/[^\w\s]/g, " ") // Reemplazar puntuación con espacios
+      .replace(/\s+/g, " ") // Normalizar espacios múltiples
+      .trim();
+
+  const normalizedTitle = normalizeTitle(titleLower);
+  const normalizedSearch = normalizeTitle(searchQuery.toLowerCase());
+
+  // MUY FLEXIBLE: si al menos una palabra importante coincide, incluir el libro
+  const hasImportantMatch = searchWords.some(
+    (word) => normalizedTitle.includes(word) && word.length >= 3
+  );
+
+  // También verificar si el título contiene la búsqueda completa
+  const containsFullSearch = normalizedTitle.includes(normalizedSearch);
+
+  return hasImportantMatch || containsFullSearch;
 };
 
 // Función para verificar si un autor coincide con la búsqueda
@@ -105,8 +119,10 @@ exports.searchGoogleBooks = async (req, res) => {
       searchQuery = q;
     } else if (filter === "genero") {
       searchQuery = `subject:"${q}"`;
+    } else {
+      // Para búsqueda de libros, usar intitle para ser más específico con títulos
+      searchQuery = `intitle:"${q}"`;
     }
-    // Para "libro" o cualquier otro valor, usar búsqueda general
 
     // Búsqueda más amplia para obtener más opciones
     const maxResults = 40; // Máximo permitido por la API de Google Books
@@ -121,7 +137,6 @@ exports.searchGoogleBooks = async (req, res) => {
         params: {
           q: searchQuery, // Búsqueda específica según filtro
           maxResults: maxResults, // Más resultados para autores
-          langRestrict: "es",
           printType: "books",
           orderBy: "relevance", // Ordenar por relevancia
         },
@@ -133,20 +148,21 @@ exports.searchGoogleBooks = async (req, res) => {
       response.data.items?.length || 0
     );
 
-    const allBooks = (response.data.items || [])
-      .filter((item) => item.volumeInfo.imageLinks?.thumbnail)
-      .map((item) => ({
-        id: item.id,
-        title: item.volumeInfo.title,
-        authors: item.volumeInfo.authors || [],
-        publisher: item.volumeInfo.publisher || "",
-        publishedDate: item.volumeInfo.publishedDate || "",
-        description: item.volumeInfo.description || "",
-        pageCount: item.volumeInfo.pageCount || "",
-        categories: item.volumeInfo.categories || [],
-        language: item.volumeInfo.language || "",
-        image: item.volumeInfo.imageLinks.thumbnail,
-      }));
+    const allBooks = (response.data.items || []).map((item) => ({
+      id: item.id,
+      title: item.volumeInfo.title,
+      authors: item.volumeInfo.authors || [],
+      publisher: item.volumeInfo.publisher || "",
+      publishedDate: item.volumeInfo.publishedDate || "",
+      description: item.volumeInfo.description || "",
+      pageCount: item.volumeInfo.pageCount || "",
+      categories: item.volumeInfo.categories || [],
+      language: item.volumeInfo.language || "",
+      image:
+        item.volumeInfo.imageLinks?.thumbnail ||
+        item.volumeInfo.imageLinks?.smallThumbnail ||
+        "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen",
+    }));
 
     // Filtrar libros según el tipo de búsqueda
     let matchingBooks = allBooks;
@@ -155,6 +171,51 @@ exports.searchGoogleBooks = async (req, res) => {
       matchingBooks = allBooks.filter((book) =>
         titleMatchesSearch(book.title, q)
       );
+
+      // Ordenar: libros CON imagen primero, libros SIN imagen al final
+      matchingBooks.sort((a, b) => {
+        const aHasImage = a.image && !a.image.includes("placehold.co");
+        const bHasImage = b.image && !b.image.includes("placehold.co");
+
+        if (aHasImage && !bHasImage) return -1; // a va primero
+        if (!aHasImage && bHasImage) return 1; // b va primero
+        return 0; // mantener orden original si ambos tienen o no tienen imagen
+      });
+
+      // Verificar si hay una versión recomendada en cache
+      const {
+        getRecommendedVersion,
+      } = require("../services/recs/recommendationCache");
+      const cachedVersion = getRecommendedVersion(q);
+
+      if (cachedVersion) {
+        // Buscar si la versión del cache está en los resultados
+        const cachedBook = matchingBooks.find(
+          (book) => book.id === cachedVersion.volumeId
+        );
+        if (cachedBook) {
+          // Mover la versión del cache al inicio
+          matchingBooks = matchingBooks.filter(
+            (book) => book.id !== cachedVersion.volumeId
+          );
+          matchingBooks.unshift(cachedBook);
+          console.log(
+            `[GoogleBooks] Priorizando versión del cache: ${cachedBook.title} (ID: ${cachedBook.id})`
+          );
+        } else {
+          console.log(
+            `[GoogleBooks] Versión del cache no encontrada en resultados actuales`
+          );
+        }
+      } else {
+        // Aplicar sistema inteligente de priorización por calidad solo si no hay cache
+        const {
+          prioritizeBooksByQuality,
+        } = require("../services/recs/preferredBooks");
+        matchingBooks = prioritizeBooksByQuality(matchingBooks, q);
+        console.log(`[GoogleBooks] Priorizando por calidad (sin cache)`);
+      }
+
       console.log(
         `[GoogleBooks] Filtro libro: ${matchingBooks.length} libros encontrados`
       );

@@ -166,24 +166,38 @@ exports.getMisLecturas = async (req, res) => {
 exports.crearLectura = async (req, res) => {
   try {
     if (!req.userId) return res.status(401).json({ error: "No autenticado" });
-    const { libroId, fechaInicio, fechaFin } = req.body;
+    const { libroId, fechaInicio, fechaFin, titulo, portada } = req.body;
     if (!libroId) return res.status(400).json({ error: "Falta libroId" });
 
-    // Buscar información del libro (título y portada) al crear la lectura
-    const { titulo, portada } = await getLibroInfoGoogleBooks(libroId);
+    let tituloFinal = titulo;
+    let portadaFinal = portada;
+
+    // Si no se proporcionan título y portada, buscarlos en Google Books
+    if (!titulo || !portada) {
+      console.log(`[Lectura] Buscando info para libroId: ${libroId}`);
+      const { titulo: tituloGoogle, portada: portadaGoogle } =
+        await getLibroInfoGoogleBooks(libroId);
+      tituloFinal = titulo || tituloGoogle;
+      portadaFinal = portada || portadaGoogle;
+    } else {
+      console.log(
+        `[Lectura] Usando info proporcionada - Título: ${titulo}, Portada: ${portada}`
+      );
+    }
 
     const lectura = await prisma.lectura.create({
       data: {
         userId: req.userId,
         libroId,
-        titulo, // Guardar el título del libro
+        titulo: tituloFinal, // Guardar el título del libro
         fechaInicio: fechaInicio ? new Date(fechaInicio) : new Date(),
         fechaFin: fechaFin ? new Date(fechaFin) : null,
-        portada, // Guardar la portada
+        portada: portadaFinal, // Guardar la portada
       },
     });
     res.json(lectura);
   } catch (err) {
+    console.error("Error en crearLectura:", err);
     res.status(500).json({ error: "Error al crear lectura" });
   }
 };

@@ -104,6 +104,8 @@ export default function LibroDetalleScreen() {
         `${API_BASE_URL}/lecturas`,
         {
           libroId: libro.id,
+          titulo: libro.title,
+          portada: libro.image,
           fechaInicio: new Date(),
         },
         {
@@ -116,6 +118,7 @@ export default function LibroDetalleScreen() {
         Alert.alert("Error", "No se pudo agregar la lectura.");
       }
     } catch (err) {
+      console.error("Error agregando lectura:", err);
       Alert.alert("Error", "No se pudo agregar la lectura.");
     }
   };
