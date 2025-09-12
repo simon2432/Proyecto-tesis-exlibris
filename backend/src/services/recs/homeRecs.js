@@ -179,11 +179,15 @@ const getUserSignals = async (userId) => {
               favoritos.push({
                 volumeId: fav.id,
                 title: fav.title,
-                authors: [],
+                authors: fav.authors || [],
                 categories: [],
                 description: "",
               });
-              console.log(`[Signals] Favorito agregado: ${fav.title}`);
+              console.log(
+                `[Signals] Favorito agregado: ${fav.title} por ${(
+                  fav.authors || []
+                ).join(", ")}`
+              );
             }
           }
         }
@@ -398,18 +402,25 @@ const searchGoogleBooks = async (query, maxResults = 20) => {
  */
 const searchSpecificBook = async (titulo, autor) => {
   try {
-    // Buscar por título y autor para ser más preciso
-    let query;
+    // Usar búsqueda flexible como la barra de búsqueda
+    let searchQuery;
     if (autor && autor.trim() !== "") {
-      query = `intitle:"${encodeURIComponent(
-        titulo
-      )}" inauthor:"${encodeURIComponent(autor)}"`;
+      searchQuery = `${titulo} ${autor}`;
     } else {
-      query = `intitle:"${encodeURIComponent(titulo)}"`;
+      searchQuery = titulo;
     }
 
     const response = await axios.get(
-      `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=10&key=${GOOGLE_BOOKS_API_KEY}`
+      `https://www.googleapis.com/books/v1/volumes?key=${GOOGLE_BOOKS_API_KEY}`,
+      {
+        params: {
+          q: searchQuery,
+          maxResults: 20,
+          printType: "books",
+          orderBy: "relevance",
+        },
+        timeout: 10000,
+      }
     );
 
     if (!response.data.items || response.data.items.length === 0) {
@@ -433,8 +444,12 @@ const searchSpecificBook = async (titulo, autor) => {
         "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen",
     }));
 
-    // Tomar el primer resultado (como funcionaba antes)
-    const firstBook = allBooks[0];
+    // Usar la misma lógica de priorización que la barra de búsqueda
+    const { prioritizeBooksByQuality } = require("./preferredBooks");
+    const prioritizedBooks = prioritizeBooksByQuality(allBooks, titulo);
+
+    // Tomar el primer resultado priorizado
+    const firstBook = prioritizedBooks[0];
     if (!firstBook) {
       console.log(`[Search] No se encontró ningún libro para "${titulo}"`);
       return null;
@@ -460,7 +475,69 @@ const searchSpecificBook = async (titulo, autor) => {
     );
     return book;
   } catch (error) {
-    console.error(`Error searching book "${titulo}":`, error);
+    if (error.response?.status === 429) {
+      console.log(
+        `[Search] Rate limit alcanzado para "${titulo}", esperando 5 segundos...`
+      );
+      await new Promise((resolve) => setTimeout(resolve, 5000));
+      // Intentar una vez más después del delay
+      try {
+        const retryResponse = await axios.get(
+          `https://www.googleapis.com/books/v1/volumes?key=${GOOGLE_BOOKS_API_KEY}`,
+          {
+            params: {
+              q: searchQuery,
+              maxResults: 20,
+              printType: "books",
+              orderBy: "relevance",
+            },
+            timeout: 10000,
+          }
+        );
+
+        if (retryResponse.data.items && retryResponse.data.items.length > 0) {
+          const allBooks = retryResponse.data.items.map((item) => ({
+            id: item.id,
+            title: item.volumeInfo.title,
+            authors: item.volumeInfo.authors || [],
+            categories: item.volumeInfo.categories || [],
+            description: item.volumeInfo.description,
+            language: item.volumeInfo.language,
+            pageCount: item.volumeInfo.pageCount,
+            averageRating: item.volumeInfo.averageRating,
+            image:
+              item.volumeInfo.imageLinks?.thumbnail ||
+              item.volumeInfo.imageLinks?.smallThumbnail ||
+              "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen",
+          }));
+
+          const { prioritizeBooksByQuality } = require("./preferredBooks");
+          const prioritizedBooks = prioritizeBooksByQuality(allBooks, titulo);
+          const firstBook = prioritizedBooks[0];
+
+          if (firstBook) {
+            return {
+              volumeId: firstBook.id,
+              title: firstBook.title,
+              authors: firstBook.authors,
+              categories: firstBook.categories,
+              description: firstBook.description,
+              language: firstBook.language,
+              pageCount: firstBook.pageCount,
+              averageRating: firstBook.averageRating,
+              image: firstBook.image,
+            };
+          }
+        }
+      } catch (retryError) {
+        console.log(
+          `[Search] Retry falló para "${titulo}":`,
+          retryError.message
+        );
+      }
+    } else {
+      console.error(`Error searching book "${titulo}":`, error.message);
+    }
     return null;
   }
 };
@@ -848,69 +925,88 @@ const retryLLMWithCorrection = async (signals) => {
  */
 const buildLLMPrompt = (signals, isCorrection = false) => {
   const systemPrompt = isCorrection
-    ? `Sos un recomendador de libros **experto**. Debés devolver **JSON ESTRICTO** con exactamente 24 recomendaciones de libros específicos (título + autor) que existan en Google Books.
+    ? `Sos un recomendador de libros **experto y creativo**. Debés devolver **JSON ESTRICTO** con recomendaciones de libros específicos (título + autor) que existan en Google Books.
 
 IMPORTANTE: Tu respuesta anterior no fue válida. Ahora debés devolver EXACTAMENTE este formato JSON:
 {
   "te_podrian_gustar": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (12 items en total)
+    ... (exactamente 20 items)
   ],
   "descubri_nuevas_lecturas": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (12 items en total)
+    ... (exactamente 20 items)
   ]
 }
 
 NO agregues texto adicional, solo el JSON.`
-    : `Sos un recomendador de libros **experto**. Debés devolver **JSON ESTRICTO** con exactamente 24 recomendaciones de libros específicos (título + autor) que existan en Google Books.
+    : `Sos un recomendador de libros **experto y creativo**. Tu misión es crear recomendaciones ÚNICAS y PERSONALIZADAS basándote en los gustos específicos del usuario.
 
-**IMPORTANTE**: 
-- Recomendá libros REALES que existan en Google Books
-- Usá títulos y autores EXACTOS
-- No inventes libros que no existen
-- Enfocate en libros populares y conocidos
+**OBJETIVO ESPECÍFICO**:
+- **Lista A "te_podrian_gustar"**: Libros SIMILARES a los favoritos y likes del usuario. Busca conexiones directas: mismo autor, género, tema, estilo, época. Deben ser "seguros" pero con variedad.
+- **Lista B "descubri_nuevas_lecturas"**: Recomendaciones MÁS ATREVIDAS pero que puedan capturar al lector. Nuevos géneros, autores emergentes, clásicos olvidados, libros menos conocidos pero de calidad.
 
-Objetivo:
-- Lista A: "te_podrian_gustar" → lo más cercano a los 3 favoritos y a las lecturas bien valoradas (rating ≥ 3).
-- Lista B: "descubri_nuevas_lecturas" → opciones conectadas pero más exploratorias/diversas (nuevos géneros/temas/autores plausibles).
+**ESTRATEGIA DE DIVERSIFICACIÓN**:
+- **ANALIZA CADA FAVORITO INDIVIDUALMENTE**: Para cada favorito, identifica su género, autor, época, tema y busca 2-3 libros similares pero DIFERENTES
+- **CONEXIONES ESPECÍFICAS**: Mismo autor (pero libros menos conocidos), mismo género (pero subgéneros diferentes), mismo tema (pero enfoques únicos)
+- **DIVERSIDAD OBLIGATORIA**: No repitas autor en la misma lista, varía géneros, épocas, culturas, estilos narrativos
+- **CREATIVIDAD PROFUNDA**: Busca libros que el usuario probablemente NO conozca pero que le gustarían
+- **PERSONALIZACIÓN EXTREMA**: Cada recomendación debe tener una conexión clara y específica con los favoritos/likes
 
-Reglas:
-- **No** incluyas libros ya leídos por el usuario (historial completo).
-- **Evitar** similitudes fuertes con lecturas mal valoradas (rating ≤ 2), salvo que la conexión con favoritos/LIKES sea muy sólida y no haya alternativas.
-- Respetá diversidad en la Lista B (no repitas autor si hay opciones, variá subgéneros/temáticas).
-- **NO DUPLICADOS**: Cada libro debe ser único. No repitas el mismo título en ninguna lista ni entre las dos listas.
-- **CRÍTICO**: Solo recomendá libros que existan en Google Books (libros populares, clásicos, bestsellers).
+**TÉCNICAS DE DIVERSIFICACIÓN**:
+- Si el favorito es un clásico → busca clásicos menos conocidos del mismo período
+- Si el favorito es contemporáneo → busca autores emergentes del mismo género
+- Si el favorito es de un autor específico → busca otros libros del autor o autores similares
+- Si el favorito es de un género → explora subgéneros y variaciones del género
+- Si el favorito es de una cultura → busca libros de culturas similares o contrastantes
+
+**REGLAS ESTRICTAS**:
+- **NO DUPLICADOS**: Cada libro debe ser único en ambas listas
+- **NO HISTORIAL**: No incluyas libros ya leídos por el usuario
+- **EVITAR DISLIKES**: No recomendar similares a libros mal valorados
+- **VARIEDAD TEMPORAL**: Incluye libros de diferentes épocas (clásicos, contemporáneos, recientes)
+- **VARIEDAD CULTURAL**: Incluye autores de diferentes países y culturas
+- **VARIEDAD DE GÉNEROS**: Si el usuario lee un género, explora subgéneros y géneros relacionados
 
 Devolvé **únicamente** este JSON:
 {
   "te_podrian_gustar": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (12 items en total)
+    ... (exactamente 20 items)
   ],
   "descubri_nuevas_lecturas": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (12 items en total)
+    ... (exactamente 20 items)
   ]
 }`;
 
-  const userPrompt = `FAVORITOS: ${signals.favoritos.length} libros
-LIKES: ${signals.historialLikes.length} libros (rating >= 3)
-DISLIKES: ${signals.historialDislikes.length} libros (rating <= 2)
+  const userPrompt = `**ANÁLISIS DETALLADO DEL USUARIO**:
 
-Datos:
-Favoritos: ${JSON.stringify(
-    signals.favoritos.map((f) => ({ title: f.title, authors: f.authors }))
-  )}
-Likes: ${JSON.stringify(signals.historialLikes)}
-Dislikes: ${JSON.stringify(signals.historialDislikes)}
+FAVORITOS (${signals.favoritos.length} libros):
+${signals.favoritos
+  .map((f, i) => `${i + 1}. "${f.title}" por ${f.authors.join(", ")}`)
+  .join("\n")}
 
-Reglas:
-- No recomendar libros ya leídos
-- Evitar similares a dislikes
+LIKES (${signals.historialLikes.length} libros - rating >= 3):
+${signals.historialLikes.map((l, i) => `${i + 1}. "${l}"`).join("\n")}
+
+DISLIKES (${signals.historialDislikes.length} libros - rating <= 2):
+${signals.historialDislikes.map((d, i) => `${i + 1}. "${d}"`).join("\n")}
+
+**INSTRUCCIONES ESPECÍFICAS**:
+1. **ANALIZA CADA FAVORITO**: Identifica género, autor, época, tema de cada favorito
+2. **Lista A**: Para cada favorito, busca 2-3 libros similares pero DIFERENTES (mismo autor pero menos conocidos, mismo género pero subgéneros, etc.)
+3. **Lista B**: Recomendaciones atrevidas basadas en los favoritos (nuevos géneros relacionados, autores emergentes, clásicos olvidados)
+4. **DIVERSIFICA**: Varía épocas, culturas, estilos narrativos, subgéneros
+5. **CONECTA**: Cada recomendación debe tener una conexión específica con los favoritos
+6. **EXPLORA**: Busca libros que el usuario probablemente NO conozca pero que le gustarían
+
+**REGLAS FINALES**:
 - Libros reales de Google Books
-- NO DUPLICADOS: Cada libro debe ser único (no repetir títulos)
-- 12 + 12 recomendaciones exactas`;
+- NO DUPLICADOS: Cada libro único
+- Exactamente 20 + 20 recomendaciones
+- Conexiones específicas con favoritos
+- Máxima diversidad y creatividad`;
 
   return { system: systemPrompt, user: userPrompt };
 };
@@ -918,6 +1014,46 @@ Reglas:
 /**
  * Valida y completa la respuesta del LLM con datos de la shortlist
  */
+/**
+ * Selecciona los mejores libros de una lista, priorizando los que tienen imagen
+ */
+const selectBestBooks = (books, maxCount = 10) => {
+  if (books.length <= maxCount) {
+    return books;
+  }
+
+  // Separar libros con y sin imagen
+  const booksWithImage = books.filter(
+    (book) => book.image && !book.image.includes("placehold.co")
+  );
+  const booksWithoutImage = books.filter(
+    (book) => !book.image || book.image.includes("placehold.co")
+  );
+
+  console.log(
+    `[Selection] Libros con imagen: ${booksWithImage.length}, sin imagen: ${booksWithoutImage.length}`
+  );
+
+  // Si hay suficientes libros con imagen, priorizar esos
+  if (booksWithImage.length >= maxCount) {
+    console.log(`[Selection] Priorizando ${maxCount} libros con imagen`);
+    return booksWithImage.slice(0, maxCount);
+  }
+
+  // Si no hay suficientes con imagen, completar con los sin imagen
+  const selectedBooks = [...booksWithImage];
+  const remaining = maxCount - booksWithImage.length;
+
+  if (remaining > 0) {
+    selectedBooks.push(...booksWithoutImage.slice(0, remaining));
+    console.log(
+      `[Selection] Seleccionados: ${booksWithImage.length} con imagen + ${remaining} sin imagen`
+    );
+  }
+
+  return selectedBooks;
+};
+
 /**
  * Procesa las recomendaciones del LLM y busca cada libro en Google Books
  */
@@ -936,8 +1072,8 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     console.log(`[Process] Buscando: "${item.titulo}" por "${item.autor}"`);
     const book = await searchSpecificBook(item.titulo, item.autor);
 
-    // Delay de 1 segundo entre consultas para evitar rate limit
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // Delay de 2 segundos entre consultas para evitar rate limit (100 queries/min = 1.67s entre consultas)
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     if (book) {
       // Guardar en cache para uso futuro en búsquedas
       const { saveRecommendedVersion } = require("./recommendationCache");
@@ -975,8 +1111,8 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     console.log(`[Process] Buscando: "${item.titulo}" por "${item.autor}"`);
     const book = await searchSpecificBook(item.titulo, item.autor);
 
-    // Delay de 1 segundo entre consultas para evitar rate limit
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // Delay de 2 segundos entre consultas para evitar rate limit (100 queries/min = 1.67s entre consultas)
+    await new Promise((resolve) => setTimeout(resolve, 2000));
     if (book) {
       // Guardar en cache para uso futuro en búsquedas
       const { saveRecommendedVersion } = require("./recommendationCache");
@@ -1009,48 +1145,68 @@ const processLLMRecommendations = async (llmResponse, signals) => {
   }
 
   console.log(
-    `[Process] Resultado: te_podrian_gustar=${tePodrianGustar.length}, descubri_nuevas_lecturas=${descubriNuevasLecturas.length}`
+    `[Process] Resultado inicial: te_podrian_gustar=${tePodrianGustar.length}, descubri_nuevas_lecturas=${descubriNuevasLecturas.length}`
+  );
+
+  // Seleccionar los mejores 10 libros de cada lista, priorizando los que tienen imagen
+  const selectedTePodrianGustar = selectBestBooks(tePodrianGustar, 10);
+  const selectedDescubriNuevasLecturas = selectBestBooks(
+    descubriNuevasLecturas,
+    10
+  );
+
+  console.log(
+    `[Process] Selección final: te_podrian_gustar=${selectedTePodrianGustar.length}, descubri_nuevas_lecturas=${selectedDescubriNuevasLecturas.length}`
   );
 
   // Si no tenemos suficientes libros, completar con defaults
-  if (tePodrianGustar.length < 12 || descubriNuevasLecturas.length < 12) {
+  if (
+    selectedTePodrianGustar.length < 10 ||
+    selectedDescubriNuevasLecturas.length < 10
+  ) {
     console.log(
-      `[Process] Completando con defaults: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
+      `[Process] Completando con defaults: tePodrianGustar=${selectedTePodrianGustar.length}, descubriNuevasLecturas=${selectedDescubriNuevasLecturas.length}`
     );
     const defaults = getDefaultRecommendations();
 
     // Completar tePodrianGustar
-    while (tePodrianGustar.length < 12) {
+    while (selectedTePodrianGustar.length < 10) {
       const defaultBook =
         defaults.tePodrianGustar[
-          tePodrianGustar.length % defaults.tePodrianGustar.length
+          selectedTePodrianGustar.length % defaults.tePodrianGustar.length
         ];
-      tePodrianGustar.push({
+      selectedTePodrianGustar.push({
         ...defaultBook,
-        reason: `Recomendación por defecto (${tePodrianGustar.length + 1})`,
+        reason: `Recomendación por defecto (${
+          selectedTePodrianGustar.length + 1
+        })`,
       });
     }
 
     // Completar descubriNuevasLecturas
-    while (descubriNuevasLecturas.length < 12) {
+    while (selectedDescubriNuevasLecturas.length < 10) {
       const defaultBook =
         defaults.descubriNuevasLecturas[
-          descubriNuevasLecturas.length % defaults.descubriNuevasLecturas.length
+          selectedDescubriNuevasLecturas.length %
+            defaults.descubriNuevasLecturas.length
         ];
-      descubriNuevasLecturas.push({
+      selectedDescubriNuevasLecturas.push({
         ...defaultBook,
         reason: `Recomendación por defecto (${
-          descubriNuevasLecturas.length + 1
+          selectedDescubriNuevasLecturas.length + 1
         })`,
       });
     }
 
     console.log(
-      `[Process] Completado: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
+      `[Process] Completado: tePodrianGustar=${selectedTePodrianGustar.length}, descubriNuevasLecturas=${selectedDescubriNuevasLecturas.length}`
     );
   }
 
-  return { tePodrianGustar, descubriNuevasLecturas };
+  return {
+    tePodrianGustar: selectedTePodrianGustar,
+    descubriNuevasLecturas: selectedDescubriNuevasLecturas,
+  };
 };
 
 /**
@@ -1137,8 +1293,8 @@ const buildFallbackLocal = (shortlist, signals) => {
     }
   }
 
-  // Seleccionar top 12 para "te podrian gustar"
-  const tePodrianGustar = scoredBooks.slice(0, 12).map((book) => ({
+  // Seleccionar top 10 para "te podrian gustar"
+  const tePodrianGustar = scoredBooks.slice(0, 10).map((book) => ({
     volumeId: book.volumeId,
     title: book.title,
     authors: book.authors,
@@ -1155,12 +1311,12 @@ const buildFallbackLocal = (shortlist, signals) => {
 
   // MMR para "descubri nuevas lecturas" (diversidad)
   const descubriNuevasLecturas = [];
-  const remainingBooks = scoredBooks.slice(12);
+  const remainingBooks = scoredBooks.slice(10);
 
   console.log(`[Fallback] Libros restantes para MMR: ${remainingBooks.length}`);
 
-  // Garantizar que tengamos exactamente 12 libros para la segunda lista
-  let booksToSelect = 12;
+  // Garantizar que tengamos exactamente 10 libros para la segunda lista
+  let booksToSelect = 10;
 
   if (remainingBooks.length > 0) {
     descubriNuevasLecturas.push({
@@ -1247,9 +1403,9 @@ const buildFallbackLocal = (shortlist, signals) => {
     `[Fallback] descubriNuevasLecturas antes de completar: ${descubriNuevasLecturas.length} libros`
   );
 
-  // Si aún no tenemos 12 libros, completar con los que falten
-  while (descubriNuevasLecturas.length < 12) {
-    const remainingIndex = descubriNuevasLecturas.length + 11;
+  // Si aún no tenemos 10 libros, completar con los que falten
+  while (descubriNuevasLecturas.length < 10) {
+    const remainingIndex = descubriNuevasLecturas.length + 9;
     if (remainingIndex < scoredBooks.length) {
       const book = scoredBooks[remainingIndex];
       descubriNuevasLecturas.push({
@@ -1302,6 +1458,7 @@ const getHomeRecommendations = async (userId) => {
     console.log(
       `[Cache] Claves en caché: ${Array.from(recommendationsCache.keys())}`
     );
+    console.log(`[Cache] Buscando clave: ${cacheKey}`);
 
     if (cached) {
       console.log(
@@ -1313,20 +1470,63 @@ const getHomeRecommendations = async (userId) => {
       console.log(`[Cache] Estrategia usada: ${cached.data.metadata.strategy}`);
 
       // Verificar integridad del caché
+      console.log(`[Cache] Verificando integridad del caché...`);
+      console.log(
+        `[Cache] tePodrianGustar existe: ${!!cached.data.tePodrianGustar}`
+      );
+      console.log(
+        `[Cache] descubriNuevasLecturas existe: ${!!cached.data
+          .descubriNuevasLecturas}`
+      );
+      console.log(
+        `[Cache] tePodrianGustar length: ${
+          cached.data.tePodrianGustar?.length || 0
+        }`
+      );
+      console.log(
+        `[Cache] descubriNuevasLecturas length: ${
+          cached.data.descubriNuevasLecturas?.length || 0
+        }`
+      );
+
       if (
         cached.data.tePodrianGustar &&
         cached.data.descubriNuevasLecturas &&
-        cached.data.tePodrianGustar.length === 12 &&
-        cached.data.descubriNuevasLecturas.length === 12
+        cached.data.tePodrianGustar.length > 0 &&
+        cached.data.descubriNuevasLecturas.length > 0
       ) {
         console.log(
           `[Cache] Caché válido: ${cached.data.tePodrianGustar.length} + ${cached.data.descubriNuevasLecturas.length} libros`
         );
+
+        // Si el caché tiene más de 10 libros, tomar solo los primeros 10
+        if (
+          cached.data.tePodrianGustar.length > 10 ||
+          cached.data.descubriNuevasLecturas.length > 10
+        ) {
+          console.log(`[Cache] Ajustando caché a 10+10 libros`);
+          cached.data.tePodrianGustar = cached.data.tePodrianGustar.slice(
+            0,
+            10
+          );
+          cached.data.descubriNuevasLecturas =
+            cached.data.descubriNuevasLecturas.slice(0, 10);
+        }
+
         return cached.data;
       } else {
-        console.log(`[Cache] Caché corrupto, regenerando...`);
+        console.log(`[Cache] ❌ Caché corrupto, regenerando...`);
+        console.log(
+          `[Cache] Razón: tePodrianGustar=${
+            cached.data.tePodrianGustar?.length || 0
+          }, descubriNuevasLecturas=${
+            cached.data.descubriNuevasLecturas?.length || 0
+          }`
+        );
         recommendationsCache.delete(cacheKey);
       }
+    } else {
+      console.log(`[Cache] ❌ No hay caché para usuario ${userId}`);
     }
 
     console.log(
@@ -1397,12 +1597,18 @@ const getHomeRecommendations = async (userId) => {
         `[Recommendations] LLM devolvió: ${tePodrianGustar.length} + ${descubriNuevasLecturas.length} libros`
       );
 
-      // Validar que tengamos al menos 12+12 items
-      if (tePodrianGustar.length >= 12 && descubriNuevasLecturas.length >= 12) {
-        console.log("[Recommendations] LLM válido, usando respuesta");
+      // Usar las recomendaciones que devolvió ChatGPT, sin importar la cantidad
+      if (tePodrianGustar.length > 0 || descubriNuevasLecturas.length > 0) {
+        console.log(
+          `[Recommendations] LLM devolvió: ${tePodrianGustar.length} + ${descubriNuevasLecturas.length} libros`
+        );
+        console.log(
+          "[Recommendations] Usando respuesta de ChatGPT (sin completar con defaults)"
+        );
+
         let result = {
-          tePodrianGustar: tePodrianGustar.slice(0, 12),
-          descubriNuevasLecturas: descubriNuevasLecturas.slice(0, 12),
+          tePodrianGustar: tePodrianGustar,
+          descubriNuevasLecturas: descubriNuevasLecturas,
           metadata: {
             userId,
             generatedAt: new Date().toISOString(),
@@ -1437,11 +1643,11 @@ const getHomeRecommendations = async (userId) => {
         }
       }
 
-      // Si el LLM no devolvió al menos 12+12, completar con fallback local
+      // Si el LLM no devolvió ninguna recomendación, usar fallback local
       console.log(
-        `[LLM] Respuesta insuficiente: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
+        `[LLM] No devolvió recomendaciones: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
       );
-      console.log("[LLM] Completando con fallback local");
+      console.log("[LLM] Usando fallback local");
     } else {
       console.log("[Recommendations] LLM falló, usando fallback local");
     }

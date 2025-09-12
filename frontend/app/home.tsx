@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useUser } from "../contexts/UserContext";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
+const IS_LARGE_SCREEN = SCREEN_WIDTH > 768;
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -159,7 +160,12 @@ export default function HomeScreen() {
                 </Text>
               )}
             </Text>
-            <View style={styles.booksRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.booksScrollContainer}
+              style={styles.booksScrollView}
+            >
               {loading ? (
                 <Text>Cargando...</Text>
               ) : (
@@ -169,7 +175,7 @@ export default function HomeScreen() {
                     <TouchableOpacity
                       key={`recommended-${book.volumeId || book.id}`}
                       onPress={() => handleBookSelect(book)}
-                      style={{ marginRight: 8, marginBottom: 8 }}
+                      style={styles.bookItem}
                     >
                       <View
                         style={{
@@ -223,11 +229,16 @@ export default function HomeScreen() {
                   );
                 })
               )}
-            </View>
+            </ScrollView>
           </View>
           <View style={styles.sectionBox}>
             <Text style={styles.sectionTitle}>Explora nuevas lecturas</Text>
-            <View style={styles.booksRow}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.booksScrollContainer}
+              style={styles.booksScrollView}
+            >
               {loading ? (
                 <Text>Cargando...</Text>
               ) : (
@@ -235,7 +246,7 @@ export default function HomeScreen() {
                   <TouchableOpacity
                     key={`explore-${book.volumeId || book.id}`}
                     onPress={() => handleBookSelect(book)}
-                    style={{ marginRight: 8, marginBottom: 8 }}
+                    style={styles.bookItem}
                   >
                     <View
                       style={{
@@ -288,7 +299,7 @@ export default function HomeScreen() {
                   </TouchableOpacity>
                 ))
               )}
-            </View>
+            </ScrollView>
           </View>
           <View style={styles.sectionBox}>
             <Text style={styles.sectionTitle}>En venta cerca tuyo</Text>
@@ -364,6 +375,21 @@ const styles = StyleSheet.create({
     minHeight: 80,
     alignItems: "center",
     width: "100%",
+  },
+  booksScrollView: {
+    marginBottom: 10,
+    minHeight: 150,
+  },
+  booksScrollContainer: {
+    alignItems: "center",
+    justifyContent: IS_LARGE_SCREEN ? "center" : "flex-start",
+    paddingHorizontal: IS_LARGE_SCREEN ? 16 : 8,
+    gap: 12,
+    minWidth: IS_LARGE_SCREEN ? "100%" : "auto",
+  },
+  bookItem: {
+    marginRight: 8,
+    marginBottom: 8,
   },
   fab: {
     position: "absolute",
