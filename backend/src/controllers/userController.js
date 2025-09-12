@@ -64,6 +64,7 @@ exports.editarPerfil = async (req, res) => {
       nombre,
       email,
       telefono,
+      ubicacion,
       fotoPerfil,
       passwordActual,
       passwordNueva,
@@ -72,6 +73,7 @@ exports.editarPerfil = async (req, res) => {
     if (nombre) data.nombre = nombre;
     if (email) data.email = email;
     if (telefono) data.telefono = telefono;
+    if (ubicacion) data.ubicacion = ubicacion;
     if (fotoPerfil) data.fotoPerfil = fotoPerfil;
     // Si se quiere cambiar la contraseña
     if (passwordActual && passwordNueva) {

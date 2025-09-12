@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
 } from "react-native";
+import { Picker } from "@react-native-picker/picker";
 import { useUser } from "../contexts/UserContext";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -19,12 +20,87 @@ import { API_BASE_URL } from "../constants/ApiConfig";
 import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 
+const ubicaciones = [
+  "Bahía Blanca",
+  "Bariloche (San Carlos de Bariloche)",
+  "Catamarca (San Fernando del Valle de Catamarca)",
+  "Chaco (Resistencia)",
+  "Chubut (Rawson)",
+  "Cipolletti",
+  "Comodoro Rivadavia",
+  "Concordia",
+  "Corrientes",
+  "Córdoba",
+  "Formosa",
+  "Gualeguaychú",
+  "Jujuy (San Salvador de Jujuy)",
+  "La Plata",
+  "La Rioja",
+  "La Pampa (Santa Rosa)",
+  "Lomas de Zamora",
+  "Luján de Cuyo",
+  "Mar del Plata",
+  "Mendoza",
+  "Mercedes (Corrientes)",
+  "Misiones (Posadas)",
+  "Necochea",
+  "Neuquén",
+  "Oberá",
+  "Paraná",
+  "Pergamino",
+  "Pilar",
+  "Plottier",
+  "Posadas",
+  "Puerto Iguazú",
+  "Puerto Madryn",
+  "Quilmes",
+  "Rafaela",
+  "Río Cuarto",
+  "Río Gallegos",
+  "Río Grande",
+  "Rivadavia (Mendoza)",
+  "Rosario",
+  "Salta",
+  "San Fernando del Valle de Catamarca",
+  "San Fernando (BsAs)",
+  "San Francisco (Córdoba)",
+  "San Isidro",
+  "San Juan",
+  "San Luis",
+  "San Martín (BsAs)",
+  "San Martín de los Andes",
+  "San Miguel",
+  "San Miguel de Tucumán",
+  "San Nicolás de los Arroyos",
+  "San Pedro",
+  "San Rafael",
+  "Santa Fe",
+  "Santiago del Estero",
+  "Tandil",
+  "Tartagal",
+  "Tierra del Fuego (Ushuaia)",
+  "Tigre",
+  "Trelew",
+  "Tucumán (San Miguel de Tucumán)",
+  "Ushuaia",
+  "Venado Tuerto",
+  "Viedma",
+  "Villa Carlos Paz",
+  "Villa Gesell",
+  "Villa Gobernador Gálvez",
+  "Villa La Angostura",
+  "Villa María",
+  "Villa Mercedes",
+  "Zárate",
+];
+
 export default function EditarPerfilScreen() {
   const { user, setUser } = useUser();
   const router = useRouter();
   const [nombre, setNombre] = useState(user?.nombre || "");
   const [email, setEmail] = useState(user?.email || "");
   const [telefono, setTelefono] = useState(user?.telefono || "");
+  const [ubicacion, setUbicacion] = useState(user?.ubicacion || "");
   const [fotoPerfil, setFotoPerfil] = useState(user?.fotoPerfil || null);
   const [fotoPerfilFile, setFotoPerfilFile] = useState<any>(null);
   const [passwordActual, setPasswordActual] = useState("");
@@ -33,6 +109,15 @@ export default function EditarPerfilScreen() {
   const [showPasswordNueva, setShowPasswordNueva] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Asegurar que la ubicación esté inicializada correctamente
+  useEffect(() => {
+    if (user?.ubicacion && ubicaciones.includes(user.ubicacion)) {
+      setUbicacion(user.ubicacion);
+    } else if (!ubicacion) {
+      setUbicacion(ubicaciones[0]); // Fallback a la primera ciudad si no hay ubicación
+    }
+  }, [user?.ubicacion, ubicacion]);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -93,6 +178,7 @@ export default function EditarPerfilScreen() {
         nombre,
         email,
         telefono,
+        ubicacion,
         fotoPerfil: nuevaFotoUrl,
       };
       if (passwordActual && passwordNueva) {
@@ -174,6 +260,19 @@ export default function EditarPerfilScreen() {
           keyboardType="phone-pad"
           maxLength={20}
         />
+        <Text style={styles.label}>Ubicación</Text>
+        <View style={styles.pickerWrapper}>
+          <Picker
+            selectedValue={ubicacion}
+            onValueChange={setUbicacion}
+            style={styles.picker}
+            dropdownIconColor="#4b2e1e"
+          >
+            {ubicaciones.map((op) => (
+              <Picker.Item label={op} value={op} key={op} />
+            ))}
+          </Picker>
+        </View>
         <Text style={styles.label}>Documento</Text>
         <TextInput
           style={[styles.input, { backgroundColor: "#eee", color: "#888" }]}
@@ -385,5 +484,16 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 16,
+  },
+  pickerWrapper: {
+    backgroundColor: "#fff",
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#e0d3c2",
+    marginBottom: 2,
+  },
+  picker: {
+    height: 50,
+    color: "#3B2412",
   },
 });
