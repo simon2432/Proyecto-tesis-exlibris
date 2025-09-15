@@ -48,89 +48,32 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const recommendationsCache = new Map();
 const CACHE_DURATION = Infinity; // Caché permanente hasta invalidación explícita
 
-// Función para cargar cache desde archivo (si existe)
-const loadCacheFromFile = () => {
-  try {
-    const fs = require("fs");
-    const path = require("path");
-    const cacheFile = path.join(
-      __dirname,
-      "..",
-      "..",
-      "..",
-      "cache",
-      "recommendations.json"
-    );
-
-    if (fs.existsSync(cacheFile)) {
-      const data = fs.readFileSync(cacheFile, "utf8");
-      const cacheData = JSON.parse(data);
-
-      // Restaurar cache con timestamp
-      for (const [key, value] of Object.entries(cacheData)) {
-        recommendationsCache.set(key, value);
-      }
-
-      console.log(
-        `[Cache] Cache cargado desde archivo: ${recommendationsCache.size} entradas`
-      );
-    }
-  } catch (error) {
-    console.log(
-      `[Cache] No se pudo cargar cache desde archivo:`,
-      error.message
-    );
-  }
-};
-
-// Función para guardar cache a archivo
-const saveCacheToFile = () => {
-  try {
-    const fs = require("fs");
-    const path = require("path");
-    const cacheDir = path.join(__dirname, "..", "..", "..", "cache");
-
-    // Crear directorio si no existe
-    if (!fs.existsSync(cacheDir)) {
-      fs.mkdirSync(cacheDir, { recursive: true });
-    }
-
-    const cacheFile = path.join(cacheDir, "recommendations.json");
-    const cacheData = Object.fromEntries(recommendationsCache);
-
-    fs.writeFileSync(cacheFile, JSON.stringify(cacheData, null, 2));
-    console.log(
-      `[Cache] Cache guardado en archivo: ${recommendationsCache.size} entradas`
-    );
-  } catch (error) {
-    console.log(`[Cache] No se pudo guardar cache en archivo:`, error.message);
-  }
-};
-
-// Función helper para guardar en cache y archivo
+// Función helper para guardar en cache (solo en memoria, por sesión)
 const setCacheAndSave = (key, value) => {
   recommendationsCache.set(key, value);
-  saveCacheToFile(); // Guardar inmediatamente en archivo
+  console.log(
+    `[Cache] Cache actualizado en memoria: ${recommendationsCache.size} entradas`
+  );
 };
 
-// Cargar cache al iniciar
-loadCacheFromFile();
+// Función para limpiar cache de un usuario específico (al cerrar sesión)
+const clearUserCache = (userId) => {
+  const cacheKey = `home_recs_${userId}`;
+  const deleted = recommendationsCache.delete(cacheKey);
+  console.log(
+    `[Cache] Cache limpiado para usuario ${userId}: ${
+      deleted ? "eliminado" : "no encontrado"
+    }`
+  );
+  return deleted;
+};
 
-// Guardar cache cada 5 minutos
-setInterval(saveCacheToFile, 5 * 60 * 1000);
-
-// Guardar cache al cerrar el proceso
-process.on("SIGINT", () => {
-  console.log("[Cache] Guardando cache antes de cerrar...");
-  saveCacheToFile();
-  process.exit(0);
-});
-
-process.on("SIGTERM", () => {
-  console.log("[Cache] Guardando cache antes de cerrar...");
-  saveCacheToFile();
-  process.exit(0);
-});
+// Función para limpiar todo el cache (al reiniciar servidor)
+const clearAllCache = () => {
+  const size = recommendationsCache.size;
+  recommendationsCache.clear();
+  console.log(`[Cache] Todo el cache limpiado: ${size} entradas eliminadas`);
+};
 
 // Cache de timestamps para debugging
 const cacheTimestamps = new Map();
@@ -2347,4 +2290,6 @@ module.exports = {
   getUserSignals,
   searchSpecificBook,
   searchGoogleBooks,
+  clearUserCache,
+  clearAllCache,
 };

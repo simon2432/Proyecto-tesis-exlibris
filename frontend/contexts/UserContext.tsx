@@ -91,6 +91,19 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   };
 
   const logout = async () => {
+    try {
+      // Limpiar cache de recomendaciones antes de cerrar sesión
+      if (user?.id) {
+        await axios.post(`${API_BASE_URL}/api/recommendations/clear-cache`, {
+          userId: user.id,
+        });
+        console.log(`[Logout] Cache limpiado para usuario ${user.id}`);
+      }
+    } catch (error) {
+      console.log("[Logout] Error al limpiar cache:", error);
+      // No fallar el logout si no se puede limpiar el cache
+    }
+
     await AsyncStorage.removeItem("token");
     await AsyncStorage.removeItem("user");
     setUser(null);

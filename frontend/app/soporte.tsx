@@ -46,7 +46,6 @@ export default function SoporteScreen() {
           source={require("../assets/images/logoLechuza.png")}
           style={styles.logo}
         />
-        <Text style={styles.logoText}>EXLIBRIS</Text>
       </View>
 
       {/* Botón Volver */}
@@ -132,6 +131,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff4e4",
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 18,
     paddingVertical: 12,
     paddingTop: Platform.OS === "android" ? 50 : 40,
@@ -139,14 +139,8 @@ const styles = StyleSheet.create({
     borderBottomColor: "#e0d3c2",
   },
   logo: {
-    width: 30,
-    height: 30,
-    marginRight: 8,
-  },
-  logoText: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#3B2412",
+    width: 40,
+    height: 40,
   },
   backButton: {
     backgroundColor: "#3B2412",

@@ -15,6 +15,15 @@ router.get("/home", recommendationsController.getHomeRecommendations);
 router.post("/invalidate", recommendationsController.invalidateRecommendations);
 
 /**
+ * POST /api/recommendations/clear-cache
+ * Limpia el cache de recomendaciones para un usuario específico (al cerrar sesión)
+ */
+router.post(
+  "/clear-cache",
+  recommendationsController.clearUserRecommendationsCache
+);
+
+/**
  * GET /api/recommendations/cache-status?userId={userId}
  * Verifica el estado del caché para un usuario específico
  */

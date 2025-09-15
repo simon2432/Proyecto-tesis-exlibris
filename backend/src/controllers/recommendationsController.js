@@ -2,6 +2,8 @@ const {
   getHomeRecommendations,
   invalidateRecommendationsCache,
   checkCacheStatus,
+  clearUserCache,
+  clearAllCache,
 } = require("../services/recs/homeRecs");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
@@ -144,6 +146,45 @@ exports.getCacheStatus = async (req, res) => {
     console.error("[Recommendations] Error al verificar caché:", error);
     res.status(500).json({
       error: "Error interno del servidor al verificar caché",
+      details:
+        process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
+/**
+ * POST /api/recommendations/clear-cache
+ * Limpia el cache de recomendaciones para un usuario específico (al cerrar sesión)
+ */
+exports.clearUserRecommendationsCache = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        error: "userId es requerido en el body",
+      });
+    }
+
+    if (isNaN(parseInt(userId))) {
+      return res.status(400).json({
+        error: "userId debe ser un número válido",
+      });
+    }
+
+    console.log(`[Recommendations] Limpiando cache para usuario ${userId}`);
+
+    const cleared = clearUserCache(userId);
+
+    res.json({
+      message: "Cache de recomendaciones limpiado exitosamente",
+      userId: parseInt(userId),
+      cleared: cleared,
+    });
+  } catch (error) {
+    console.error("[Recommendations] Error al limpiar cache:", error);
+    res.status(500).json({
+      error: "Error interno del servidor al limpiar cache",
       details:
         process.env.NODE_ENV === "development" ? error.message : undefined,
     });
