@@ -28,7 +28,9 @@ export default function HomeScreen() {
   // Estados para los libros de cada sección
   const [recommendedBooks, setRecommendedBooks] = useState<any[]>([]);
   const [exploreBooks, setExploreBooks] = useState<any[]>([]);
+  const [localSales, setLocalSales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingLocalSales, setLoadingLocalSales] = useState(false);
   const [recommendationStrategy, setRecommendationStrategy] =
     useState<string>("");
 
@@ -98,7 +100,54 @@ export default function HomeScreen() {
     };
 
     fetchRecommendations();
-  }, [user?.id]); // Se ejecuta cuando cambia el usuario
+  }, [user?.id]);
+
+  // Función para obtener publicaciones locales
+  const fetchLocalSales = async () => {
+    try {
+      setLoadingLocalSales(true);
+
+      if (!user?.id) {
+        console.log(
+          "[Home] Usuario no logueado, saltando publicaciones locales"
+        );
+        return;
+      }
+
+      const userId = user.id;
+      console.log(
+        `[Home] Obteniendo publicaciones locales para usuario ${userId}`
+      );
+
+      const response = await axios.get(
+        `${API_BASE_URL}/api/recommendations/local-sales?userId=${userId}`
+      );
+
+      if (response.data && response.data.publicaciones) {
+        setLocalSales(response.data.publicaciones);
+        console.log(
+          `[Home] Publicaciones locales cargadas: ${response.data.publicaciones.length} en ${response.data.ubicacion}`
+        );
+      } else {
+        console.error(
+          "[Home] Error: Respuesta de publicaciones locales inválida"
+        );
+        setLocalSales([]);
+      }
+    } catch (error) {
+      console.error("[Home] Error obteniendo publicaciones locales:", error);
+      setLocalSales([]);
+    } finally {
+      setLoadingLocalSales(false);
+    }
+  };
+
+  // Cargar publicaciones locales cuando el usuario esté disponible
+  useEffect(() => {
+    if (user?.id) {
+      fetchLocalSales();
+    }
+  }, [user?.id]);
 
   const handleSearch = (text: string) => {
     // Aquí puedes implementar la lógica de búsqueda
@@ -301,9 +350,59 @@ export default function HomeScreen() {
               )}
             </ScrollView>
           </View>
-          <View style={styles.sectionBox}>
+          <View style={[styles.sectionBox, styles.localSalesSection]}>
             <Text style={styles.sectionTitle}>En venta cerca tuyo</Text>
-            <View style={styles.booksRow}>{/* Aquí irán los libros */}</View>
+            <View style={styles.grid}>
+              {loadingLocalSales ? (
+                <View style={styles.loadingContainer}>
+                  <Text>Cargando publicaciones locales...</Text>
+                </View>
+              ) : localSales.length > 0 ? (
+                localSales.map((publicacion) => (
+                  <TouchableOpacity
+                    key={`local-sale-${publicacion.id}`}
+                    onPress={() =>
+                      router.push({
+                        pathname: "/publicacion/[id]",
+                        params: { id: publicacion.id.toString() },
+                      })
+                    }
+                    style={styles.bookCard}
+                  >
+                    {publicacion.portada ? (
+                      <Image
+                        source={{
+                          uri: `${API_BASE_URL}${publicacion.portada}`,
+                        }}
+                        style={styles.bookImage}
+                        resizeMode="cover"
+                      />
+                    ) : (
+                      <View style={styles.imagePlaceholder} />
+                    )}
+                    <View style={styles.priceTagShadow}>
+                      <View style={styles.priceTag}>
+                        <Text style={styles.priceText}>
+                          ${publicacion.precio.toLocaleString("es-ES")}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={styles.bookTitle} numberOfLines={2}>
+                      {publicacion.titulo}
+                    </Text>
+                    <Text style={styles.bookAuthor} numberOfLines={1}>
+                      {publicacion.autor}
+                    </Text>
+                  </TouchableOpacity>
+                ))
+              ) : (
+                <View style={styles.emptyContainer}>
+                  <Text style={styles.emptyText}>
+                    No hay publicaciones en venta en tu ciudad
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
         </ScrollView>
       </View>
@@ -415,5 +514,128 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#999",
     fontWeight: "normal",
+  },
+  bookPrice: {
+    fontSize: 12,
+    fontWeight: "bold",
+    color: "#2e7d32",
+    marginTop: 2,
+  },
+  bookLocation: {
+    fontSize: 10,
+    color: "#666",
+    marginTop: 1,
+  },
+  emptyState: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 40,
+    paddingHorizontal: 20,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    fontStyle: "italic",
+  },
+  localSalesSection: {
+    marginBottom: 80, // Margen extra para separar del tapbar
+  },
+  // Estilos del marketplace
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    gap: 18,
+    paddingHorizontal: 6,
+  },
+  bookCard: {
+    width: "44%",
+    minWidth: 150,
+    maxWidth: 220,
+    height: 170,
+    backgroundColor: "#fff4e4",
+    borderRadius: 18,
+    marginBottom: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingBottom: 16,
+  },
+  imagePlaceholder: {
+    width: "100%",
+    height: 110,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    backgroundColor: "#e9e3de",
+  },
+  priceTagShadow: {
+    marginTop: -18,
+    alignSelf: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    borderRadius: 12,
+  },
+  priceTag: {
+    backgroundColor: "#f3e8da",
+    borderRadius: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 6,
+    minWidth: 80,
+    alignItems: "center",
+  },
+  priceText: {
+    color: "#7c4a2d",
+    fontWeight: "bold",
+    fontSize: 16,
+    textAlign: "center",
+  },
+  bookImage: {
+    width: "100%",
+    height: 110,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+  },
+  bookTitle: {
+    fontSize: 14,
+    fontWeight: "bold",
+    color: "#3B2412",
+    textAlign: "center",
+    marginTop: 8,
+    marginHorizontal: 8,
+    lineHeight: 18,
+  },
+  bookAuthor: {
+    fontSize: 12,
+    color: "#7c4a2d",
+    textAlign: "center",
+    marginTop: 2,
+    marginHorizontal: 8,
+    fontStyle: "italic",
+  },
+  loadingContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  emptyContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    width: "100%",
+  },
+  emptyText: {
+    fontSize: 16,
+    color: "#7c4a2d",
+    textAlign: "center",
   },
 });

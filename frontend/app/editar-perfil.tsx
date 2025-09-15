@@ -21,6 +21,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { Image as ExpoImage } from "expo-image";
 
 const ubicaciones = [
+  "Buenos Aires (CABA)",
   "Bahía Blanca",
   "Bariloche (San Carlos de Bariloche)",
   "Catamarca (San Fernando del Valle de Catamarca)",

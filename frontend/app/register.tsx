@@ -16,6 +16,7 @@ import { useUser } from "../contexts/UserContext";
 import { API_BASE_URL } from "../constants/ApiConfig";
 
 const ubicaciones = [
+  "Buenos Aires (CABA)",
   "Bahía Blanca",
   "Bariloche (San Carlos de Bariloche)",
   "Catamarca (San Fernando del Valle de Catamarca)",

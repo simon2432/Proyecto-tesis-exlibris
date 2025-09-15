@@ -3,6 +3,8 @@ const {
   invalidateRecommendationsCache,
   checkCacheStatus,
 } = require("../services/recs/homeRecs");
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
 
 /**
  * GET /api/recommendations/home
@@ -145,5 +147,82 @@ exports.getCacheStatus = async (req, res) => {
       details:
         process.env.NODE_ENV === "development" ? error.message : undefined,
     });
+  }
+};
+
+/**
+ * GET /api/recommendations/local-sales
+ * Obtiene publicaciones locales en venta para el usuario
+ */
+exports.getLocalSales = async (req, res) => {
+  try {
+    const { userId } = req.query;
+    console.log(`[LocalSales] Recibido userId: ${userId}`);
+
+    if (!userId) {
+      return res.status(400).json({ error: "userId es requerido" });
+    }
+
+    // Obtener la ciudad del usuario
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(userId) },
+      select: { ubicacion: true },
+    });
+
+    console.log(`[LocalSales] Usuario encontrado:`, user);
+
+    if (!user || !user.ubicacion) {
+      return res.status(400).json({
+        error: "Usuario no encontrado o sin ubicación",
+      });
+    }
+
+    // Buscar publicaciones activas en la misma ciudad
+    const publicaciones = await prisma.publicacion.findMany({
+      where: {
+        ubicacion: user.ubicacion,
+        estado: "activa",
+      },
+      include: {
+        vendedor: {
+          select: {
+            id: true,
+            nombre: true,
+          },
+        },
+      },
+      orderBy: {
+        fechaPublicacion: "desc",
+      },
+      take: 12,
+    });
+
+    console.log(
+      `[LocalSales] Encontradas ${publicaciones.length} publicaciones`
+    );
+
+    // Formatear para el frontend
+    const resultado = publicaciones.map((pub) => ({
+      id: pub.id,
+      titulo: pub.titulo,
+      autor: pub.autor,
+      precio: pub.precio,
+      portada: pub.imagenUrl, // Mapear imagenUrl a portada para el frontend
+      ubicacion: pub.ubicacion,
+      vendedor: {
+        id: pub.vendedor.id,
+        nombre: pub.vendedor.nombre,
+      },
+    }));
+
+    console.log(`[LocalSales] Retornando ${resultado.length} publicaciones`);
+    res.json({
+      publicaciones: resultado,
+      ubicacion: user.ubicacion,
+      total: resultado.length,
+    });
+  } catch (error) {
+    console.error("[LocalSales] Error:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
   }
 };

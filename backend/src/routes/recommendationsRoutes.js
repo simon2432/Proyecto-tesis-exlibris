@@ -21,6 +21,12 @@ router.post("/invalidate", recommendationsController.invalidateRecommendations);
 router.get("/cache-status", recommendationsController.getCacheStatus);
 
 /**
+ * GET /api/recommendations/local-sales?userId={userId}
+ * Obtiene publicaciones en venta cerca del usuario (misma ciudad)
+ */
+router.get("/local-sales", recommendationsController.getLocalSales);
+
+/**
  * GET /api/recommendations/health
  * Endpoint de salud para verificar el estado del servicio
  */

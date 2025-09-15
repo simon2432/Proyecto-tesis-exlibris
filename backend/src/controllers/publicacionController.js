@@ -30,6 +30,12 @@ exports.crearPublicacion = async (req, res) => {
   } = req.body;
   const vendedorId = req.userId;
 
+  // Obtener la ubicación del vendedor
+  const vendedor = await prisma.user.findUnique({
+    where: { id: vendedorId },
+    select: { ubicacion: true },
+  });
+
   console.log("Datos recibidos para crear publicación:", {
     titulo,
     autor,
@@ -40,6 +46,7 @@ exports.crearPublicacion = async (req, res) => {
     estadoLibro,
     precio,
     vendedorId,
+    ubicacionVendedor: vendedor?.ubicacion,
   });
 
   let imagenUrl = null;
@@ -53,11 +60,9 @@ exports.crearPublicacion = async (req, res) => {
     const precioNum = parseFloat(precio);
 
     if (isNaN(paginasNum) || paginasNum <= 0) {
-      return res
-        .status(400)
-        .json({
-          error: "El número de páginas debe ser un número válido mayor a 0",
-        });
+      return res.status(400).json({
+        error: "El número de páginas debe ser un número válido mayor a 0",
+      });
     }
 
     if (isNaN(precioNum) || precioNum <= 0) {
@@ -79,6 +84,7 @@ exports.crearPublicacion = async (req, res) => {
         imagenUrl,
         vendedorId,
         estado: "activa",
+        ubicacion: vendedor?.ubicacion || null,
       },
     });
     console.log("Publicación creada exitosamente:", nueva);

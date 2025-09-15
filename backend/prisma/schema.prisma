@@ -65,6 +65,7 @@ model Publicacion {
   vendedorId       Int
   vendedor         User              @relation(fields: [vendedorId], references: [id])
   estado           EstadoPublicacion @default(activa)
+  ubicacion        String?           // Ciudad donde está la publicación
   compras Compra[]  // relación inversa requerida por Prisma
 }
 

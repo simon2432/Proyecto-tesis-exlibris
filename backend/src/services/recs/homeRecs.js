@@ -48,6 +48,90 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const recommendationsCache = new Map();
 const CACHE_DURATION = Infinity; // Caché permanente hasta invalidación explícita
 
+// Función para cargar cache desde archivo (si existe)
+const loadCacheFromFile = () => {
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    const cacheFile = path.join(
+      __dirname,
+      "..",
+      "..",
+      "..",
+      "cache",
+      "recommendations.json"
+    );
+
+    if (fs.existsSync(cacheFile)) {
+      const data = fs.readFileSync(cacheFile, "utf8");
+      const cacheData = JSON.parse(data);
+
+      // Restaurar cache con timestamp
+      for (const [key, value] of Object.entries(cacheData)) {
+        recommendationsCache.set(key, value);
+      }
+
+      console.log(
+        `[Cache] Cache cargado desde archivo: ${recommendationsCache.size} entradas`
+      );
+    }
+  } catch (error) {
+    console.log(
+      `[Cache] No se pudo cargar cache desde archivo:`,
+      error.message
+    );
+  }
+};
+
+// Función para guardar cache a archivo
+const saveCacheToFile = () => {
+  try {
+    const fs = require("fs");
+    const path = require("path");
+    const cacheDir = path.join(__dirname, "..", "..", "..", "cache");
+
+    // Crear directorio si no existe
+    if (!fs.existsSync(cacheDir)) {
+      fs.mkdirSync(cacheDir, { recursive: true });
+    }
+
+    const cacheFile = path.join(cacheDir, "recommendations.json");
+    const cacheData = Object.fromEntries(recommendationsCache);
+
+    fs.writeFileSync(cacheFile, JSON.stringify(cacheData, null, 2));
+    console.log(
+      `[Cache] Cache guardado en archivo: ${recommendationsCache.size} entradas`
+    );
+  } catch (error) {
+    console.log(`[Cache] No se pudo guardar cache en archivo:`, error.message);
+  }
+};
+
+// Función helper para guardar en cache y archivo
+const setCacheAndSave = (key, value) => {
+  recommendationsCache.set(key, value);
+  saveCacheToFile(); // Guardar inmediatamente en archivo
+};
+
+// Cargar cache al iniciar
+loadCacheFromFile();
+
+// Guardar cache cada 5 minutos
+setInterval(saveCacheToFile, 5 * 60 * 1000);
+
+// Guardar cache al cerrar el proceso
+process.on("SIGINT", () => {
+  console.log("[Cache] Guardando cache antes de cerrar...");
+  saveCacheToFile();
+  process.exit(0);
+});
+
+process.on("SIGTERM", () => {
+  console.log("[Cache] Guardando cache antes de cerrar...");
+  saveCacheToFile();
+  process.exit(0);
+});
+
 // Cache de timestamps para debugging
 const cacheTimestamps = new Map();
 
@@ -401,25 +485,25 @@ const searchGoogleBooks = async (query, maxResults = 20) => {
  * Busca un libro específico en Google Books por título (más eficiente)
  */
 const searchSpecificBook = async (titulo, autor) => {
-  try {
-    // Usar búsqueda flexible como la barra de búsqueda
-    let searchQuery;
-    if (autor && autor.trim() !== "") {
-      searchQuery = `${titulo} ${autor}`;
-    } else {
-      searchQuery = titulo;
-    }
+  // Usar búsqueda flexible como la barra de búsqueda
+  let searchQuery;
+  if (autor && autor.trim() !== "") {
+    searchQuery = `${titulo} ${autor}`;
+  } else {
+    searchQuery = titulo;
+  }
 
+  try {
     const response = await axios.get(
       `https://www.googleapis.com/books/v1/volumes?key=${GOOGLE_BOOKS_API_KEY}`,
       {
         params: {
           q: searchQuery,
-          maxResults: 20,
+          maxResults: 5, // Reducido para mayor velocidad
           printType: "books",
           orderBy: "relevance",
         },
-        timeout: 10000,
+        timeout: 5000, // Timeout más corto
       }
     );
 
@@ -477,9 +561,9 @@ const searchSpecificBook = async (titulo, autor) => {
   } catch (error) {
     if (error.response?.status === 429) {
       console.log(
-        `[Search] Rate limit alcanzado para "${titulo}", esperando 5 segundos...`
+        `[Search] Rate limit alcanzado para "${titulo}", esperando 8 segundos...`
       );
-      await new Promise((resolve) => setTimeout(resolve, 5000));
+      await new Promise((resolve) => setTimeout(resolve, 8000));
       // Intentar una vez más después del delay
       try {
         const retryResponse = await axios.get(
@@ -931,11 +1015,11 @@ IMPORTANTE: Tu respuesta anterior no fue válida. Ahora debés devolver EXACTAME
 {
   "te_podrian_gustar": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (exactamente 20 items)
+    ... (exactamente 15 items)
   ],
   "descubri_nuevas_lecturas": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (exactamente 20 items)
+    ... (exactamente 15 items)
   ]
 }
 
@@ -972,11 +1056,11 @@ Devolvé **únicamente** este JSON:
 {
   "te_podrian_gustar": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (exactamente 20 items)
+    ... (exactamente 15 items)
   ],
   "descubri_nuevas_lecturas": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (exactamente 20 items)
+    ... (exactamente 15 items)
   ]
 }`;
 
@@ -1055,153 +1139,248 @@ const selectBestBooks = (books, maxCount = 10) => {
 };
 
 /**
- * Procesa las recomendaciones del LLM y busca cada libro en Google Books
+ * Procesa las recomendaciones del LLM con paralelización controlada
  */
 const processLLMRecommendations = async (llmResponse, signals) => {
-  console.log(`[Process] Procesando recomendaciones del LLM...`);
+  console.log(
+    `[Process] Procesando recomendaciones del LLM con paralelización controlada...`
+  );
   console.log(`[Process] LLM Response:`, JSON.stringify(llmResponse, null, 2));
+
+  // Inicio inmediato para máxima velocidad
+  console.log(`[Process] Iniciando procesamiento inmediato...`);
 
   const tePodrianGustar = [];
   const descubriNuevasLecturas = [];
+  const usedBookIds = new Set(); // Para evitar duplicados entre listas
 
-  // Procesar "te_podrian_gustar"
-  console.log(
-    `[Process] Buscando ${llmResponse.te_podrian_gustar.length} libros para "te_podrian_gustar"...`
-  );
-  for (const item of llmResponse.te_podrian_gustar) {
-    console.log(`[Process] Buscando: "${item.titulo}" por "${item.autor}"`);
-    const book = await searchSpecificBook(item.titulo, item.autor);
+  // Configuración de paralelización máxima velocidad
+  const BATCH_SIZE = 10; // Procesar de a 10 libros por vez (máxima velocidad)
+  const DELAY_BETWEEN_BOOKS = 50; // 50ms entre libros (ultra rápido)
+  const DELAY_BETWEEN_BATCHES = 200; // 200ms entre batches (ultra rápido)
 
-    // Delay de 2 segundos entre consultas para evitar rate limit (100 queries/min = 1.67s entre consultas)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    if (book) {
-      // Guardar en cache para uso futuro en búsquedas
-      const { saveRecommendedVersion } = require("./recommendationCache");
-      saveRecommendedVersion(item.titulo, item.autor, book);
+  // Función para procesar un batch de libros
+  const processBatch = async (items, listName) => {
+    const results = [];
+    console.log(
+      `[Process] Procesando batch de ${items.length} libros para "${listName}"`
+    );
 
-      // Verificar que no esté en historial o favoritos
-      if (
-        !signals.historialCompleto.includes(book.volumeId) &&
-        !signals.favoritos.some((fav) => fav.volumeId === book.volumeId)
-      ) {
-        tePodrianGustar.push({
-          volumeId: book.volumeId,
-          title: book.title,
-          authors: book.authors,
-          categories: book.categories,
-          description: book.description,
-          language: book.language,
-          pageCount: book.pageCount,
-          averageRating: book.averageRating,
-          image: book.image,
-          reason: "Recomendado por IA",
-        });
-        console.log(`[Process] ✅ Agregado a te_podrian_gustar: ${book.title}`);
-      } else {
-        console.log(`[Process] ❌ Excluido (ya leído/favorito): ${book.title}`);
-      }
-    }
-  }
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      const batch = items.slice(i, i + BATCH_SIZE);
+      console.log(
+        `[Process] Batch ${Math.floor(i / BATCH_SIZE) + 1}: ${
+          batch.length
+        } libros`
+      );
 
-  // Procesar "descubri_nuevas_lecturas"
-  console.log(
-    `[Process] Buscando ${llmResponse.descubri_nuevas_lecturas.length} libros para "descubri_nuevas_lecturas"...`
-  );
-  for (const item of llmResponse.descubri_nuevas_lecturas) {
-    console.log(`[Process] Buscando: "${item.titulo}" por "${item.autor}"`);
-    const book = await searchSpecificBook(item.titulo, item.autor);
-
-    // Delay de 2 segundos entre consultas para evitar rate limit (100 queries/min = 1.67s entre consultas)
-    await new Promise((resolve) => setTimeout(resolve, 2000));
-    if (book) {
-      // Guardar en cache para uso futuro en búsquedas
-      const { saveRecommendedVersion } = require("./recommendationCache");
-      saveRecommendedVersion(item.titulo, item.autor, book);
-
-      // Verificar que no esté en historial o favoritos
-      if (
-        !signals.historialCompleto.includes(book.volumeId) &&
-        !signals.favoritos.some((fav) => fav.volumeId === book.volumeId)
-      ) {
-        descubriNuevasLecturas.push({
-          volumeId: book.volumeId,
-          title: book.title,
-          authors: book.authors,
-          categories: book.categories,
-          description: book.description,
-          language: book.language,
-          pageCount: book.pageCount,
-          averageRating: book.averageRating,
-          image: book.image,
-          reason: "Recomendado por IA",
-        });
-        console.log(
-          `[Process] ✅ Agregado a descubri_nuevas_lecturas: ${book.title}`
+      // Procesar batch en paralelo con delays escalonados
+      const batchPromises = batch.map(async (item, index) => {
+        // Delay escalonado dentro del batch
+        await new Promise((resolve) =>
+          setTimeout(resolve, index * DELAY_BETWEEN_BOOKS)
         );
-      } else {
-        console.log(`[Process] ❌ Excluido (ya leído/favorito): ${book.title}`);
+
+        console.log(`[Process] Buscando: "${item.titulo}" por "${item.autor}"`);
+
+        // Timeout de 10 segundos por libro para evitar cuelgues
+        const bookPromise = searchSpecificBook(item.titulo, item.autor);
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout")), 5000)
+        );
+
+        const book = await Promise.race([bookPromise, timeoutPromise]).catch(
+          (error) => {
+            console.log(
+              `[Process] ⚠️ Timeout o error para "${item.titulo}": ${error.message}`
+            );
+            return null;
+          }
+        );
+
+        if (book) {
+          // Guardar en cache para uso futuro en búsquedas
+          const { saveRecommendedVersion } = require("./recommendationCache");
+          saveRecommendedVersion(item.titulo, item.autor, book);
+
+          // Verificar que no esté en historial o favoritos (permitir duplicados entre listas)
+          if (
+            !signals.historialCompleto.includes(book.volumeId) &&
+            !signals.favoritos.some((fav) => fav.volumeId === book.volumeId)
+          ) {
+            const bookData = {
+              volumeId: book.volumeId,
+              title: book.title,
+              authors: book.authors,
+              categories: book.categories,
+              description: book.description,
+              language: book.language,
+              pageCount: book.pageCount,
+              averageRating: book.averageRating,
+              image: book.image,
+              reason: "Recomendado por IA",
+            };
+            usedBookIds.add(book.volumeId); // Marcar como usado
+            console.log(`[Process] ✅ Agregado a ${listName}: ${book.title}`);
+            return bookData;
+          } else {
+            const reason = signals.historialCompleto.includes(book.volumeId)
+              ? "ya leído"
+              : signals.favoritos.some((fav) => fav.volumeId === book.volumeId)
+              ? "favorito"
+              : usedBookIds.has(book.volumeId)
+              ? "duplicado"
+              : "otro";
+            console.log(`[Process] ❌ Excluido (${reason}): ${book.title}`);
+            return null;
+          }
+        }
+        return null;
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+      results.push(...batchResults.filter((book) => book !== null));
+
+      // Delay entre batches (excepto en el último)
+      if (i + BATCH_SIZE < items.length) {
+        console.log(
+          `[Process] Esperando ${DELAY_BETWEEN_BATCHES}ms antes del siguiente batch...`
+        );
+        await new Promise((resolve) =>
+          setTimeout(resolve, DELAY_BETWEEN_BATCHES)
+        );
       }
     }
-  }
+
+    return results;
+  };
+
+  // Procesar "te_podrian_gustar" con paralelización controlada
+  console.log(
+    `[Process] Iniciando búsqueda paralela de ${llmResponse.te_podrian_gustar.length} libros para "te_podrian_gustar"...`
+  );
+  const tePodrianGustarResults = await processBatch(
+    llmResponse.te_podrian_gustar,
+    "te_podrian_gustar"
+  );
+  tePodrianGustar.push(...tePodrianGustarResults);
+
+  // Procesar "descubri_nuevas_lecturas" con paralelización controlada
+  console.log(
+    `[Process] Iniciando búsqueda paralela de ${llmResponse.descubri_nuevas_lecturas.length} libros para "descubri_nuevas_lecturas"...`
+  );
+  const descubriNuevasLecturasResults = await processBatch(
+    llmResponse.descubri_nuevas_lecturas,
+    "descubri_nuevas_lecturas"
+  );
+  descubriNuevasLecturas.push(...descubriNuevasLecturasResults);
 
   console.log(
     `[Process] Resultado inicial: te_podrian_gustar=${tePodrianGustar.length}, descubri_nuevas_lecturas=${descubriNuevasLecturas.length}`
   );
 
-  // Seleccionar los mejores 10 libros de cada lista, priorizando los que tienen imagen
-  const selectedTePodrianGustar = selectBestBooks(tePodrianGustar, 10);
-  const selectedDescubriNuevasLecturas = selectBestBooks(
+  // Seleccionar los mejores libros, pero asegurar mínimo 10 por lista
+  let selectedTePodrianGustar = selectBestBooks(tePodrianGustar, 10);
+  let selectedDescubriNuevasLecturas = selectBestBooks(
     descubriNuevasLecturas,
     10
   );
 
   console.log(
-    `[Process] Selección final: te_podrian_gustar=${selectedTePodrianGustar.length}, descubri_nuevas_lecturas=${selectedDescubriNuevasLecturas.length}`
+    `[Process] Selección inicial: te_podrian_gustar=${selectedTePodrianGustar.length}, descubri_nuevas_lecturas=${selectedDescubriNuevasLecturas.length}`
   );
 
-  // Si no tenemos suficientes libros, completar con defaults
+  // Sistema de respaldo mejorado: asegurar mínimo 8 libros por lista
   if (
-    selectedTePodrianGustar.length < 10 ||
-    selectedDescubriNuevasLecturas.length < 10
+    selectedTePodrianGustar.length < 8 ||
+    selectedDescubriNuevasLecturas.length < 8
+  ) {
+    console.log(`[Backup] Activando sistema de respaldo mejorado...`);
+
+    // Combinar todas las recomendaciones exitosas sin duplicados
+    const allSuccessfulBooks = [...tePodrianGustar, ...descubriNuevasLecturas];
+    const uniqueBooks = allSuccessfulBooks.filter(
+      (book, index, arr) =>
+        arr.findIndex((b) => b.volumeId === book.volumeId) === index
+    );
+
+    console.log(`[Backup] Libros únicos disponibles: ${uniqueBooks.length}`);
+
+    // Si faltan libros en te_podrian_gustar
+    if (selectedTePodrianGustar.length < 8) {
+      const needed = 8 - selectedTePodrianGustar.length;
+      const availableForBackup = uniqueBooks.filter(
+        (book) =>
+          !selectedTePodrianGustar.some(
+            (selected) => selected.volumeId === book.volumeId
+          )
+      );
+
+      const backupBooks = availableForBackup.slice(0, needed);
+      selectedTePodrianGustar = [...selectedTePodrianGustar, ...backupBooks];
+      console.log(
+        `[Backup] Completando te_podrian_gustar con ${backupBooks.length} libros de respaldo`
+      );
+    }
+
+    // Si faltan libros en descubri_nuevas_lecturas
+    if (selectedDescubriNuevasLecturas.length < 8) {
+      const needed = 8 - selectedDescubriNuevasLecturas.length;
+      const availableForBackup = uniqueBooks.filter(
+        (book) =>
+          !selectedDescubriNuevasLecturas.some(
+            (selected) => selected.volumeId === book.volumeId
+          )
+      );
+
+      const backupBooks = availableForBackup.slice(0, needed);
+      selectedDescubriNuevasLecturas = [
+        ...selectedDescubriNuevasLecturas,
+        ...backupBooks,
+      ];
+      console.log(
+        `[Backup] Completando descubri_nuevas_lecturas con ${backupBooks.length} libros de respaldo`
+      );
+    }
+  }
+
+  console.log(
+    `[Process] Selección final con respaldo: te_podrian_gustar=${selectedTePodrianGustar.length}, descubri_nuevas_lecturas=${selectedDescubriNuevasLecturas.length}`
+  );
+
+  // Fallback agresivo: usar defaults si hay muy pocos libros
+  if (
+    selectedTePodrianGustar.length < 5 ||
+    selectedDescubriNuevasLecturas.length < 5
   ) {
     console.log(
-      `[Process] Completando con defaults: tePodrianGustar=${selectedTePodrianGustar.length}, descubriNuevasLecturas=${selectedDescubriNuevasLecturas.length}`
+      `[Fallback] Muy pocos libros encontrados (${selectedTePodrianGustar.length}, ${selectedDescubriNuevasLecturas.length}), usando defaults`
     );
     const defaults = getDefaultRecommendations();
 
-    // Completar tePodrianGustar
-    while (selectedTePodrianGustar.length < 10) {
-      const defaultBook =
-        defaults.tePodrianGustar[
-          selectedTePodrianGustar.length % defaults.tePodrianGustar.length
-        ];
-      selectedTePodrianGustar.push({
-        ...defaultBook,
-        reason: `Recomendación por defecto (${
-          selectedTePodrianGustar.length + 1
-        })`,
-      });
-    }
+    // Combinar con los libros encontrados si los hay
+    const finalTePodrianGustar = [
+      ...selectedTePodrianGustar,
+      ...defaults.tePodrianGustar.slice(0, 10 - selectedTePodrianGustar.length),
+    ].slice(0, 10);
 
-    // Completar descubriNuevasLecturas
-    while (selectedDescubriNuevasLecturas.length < 10) {
-      const defaultBook =
-        defaults.descubriNuevasLecturas[
-          selectedDescubriNuevasLecturas.length %
-            defaults.descubriNuevasLecturas.length
-        ];
-      selectedDescubriNuevasLecturas.push({
-        ...defaultBook,
-        reason: `Recomendación por defecto (${
-          selectedDescubriNuevasLecturas.length + 1
-        })`,
-      });
-    }
+    const finalDescubriNuevasLecturas = [
+      ...selectedDescubriNuevasLecturas,
+      ...defaults.descubriNuevasLecturas.slice(
+        0,
+        10 - selectedDescubriNuevasLecturas.length
+      ),
+    ].slice(0, 10);
 
-    console.log(
-      `[Process] Completado: tePodrianGustar=${selectedTePodrianGustar.length}, descubriNuevasLecturas=${selectedDescubriNuevasLecturas.length}`
-    );
+    return {
+      tePodrianGustar: finalTePodrianGustar,
+      descubriNuevasLecturas: finalDescubriNuevasLecturas,
+    };
   }
+
+  console.log(
+    `[Process] Resultado final: tePodrianGustar=${selectedTePodrianGustar.length}, descubriNuevasLecturas=${selectedDescubriNuevasLecturas.length}`
+  );
 
   return {
     tePodrianGustar: selectedTePodrianGustar,
@@ -1459,6 +1638,7 @@ const getHomeRecommendations = async (userId) => {
       `[Cache] Claves en caché: ${Array.from(recommendationsCache.keys())}`
     );
     console.log(`[Cache] Buscando clave: ${cacheKey}`);
+    console.log(`[Cache] Timestamp actual: ${new Date().toISOString()}`);
 
     if (cached) {
       console.log(
@@ -1570,7 +1750,7 @@ const getHomeRecommendations = async (userId) => {
         `[Cache] 💾 Guardando fallback local en caché para usuario ${userId}`
       );
       console.log(`[Cache] Estrategia: ${result.metadata.strategy}`);
-      recommendationsCache.set(cacheKey, {
+      setCacheAndSave(cacheKey, {
         data: result,
         timestamp: Date.now(),
       });
@@ -1632,7 +1812,7 @@ const getHomeRecommendations = async (userId) => {
           result = correctedResult;
           console.log(`[Cache] 💾 Guardando en caché para usuario ${userId}`);
           console.log(`[Cache] Estrategia: ${result.metadata.strategy}`);
-          recommendationsCache.set(cacheKey, {
+          setCacheAndSave(cacheKey, {
             data: result,
             timestamp: Date.now(),
           });
@@ -1669,7 +1849,7 @@ const getHomeRecommendations = async (userId) => {
       `[Cache] 💾 Guardando fallback local en caché para usuario ${userId}`
     );
     console.log(`[Cache] Estrategia: ${result.metadata.strategy}`);
-    recommendationsCache.set(cacheKey, {
+    setCacheAndSave(cacheKey, {
       data: result,
       timestamp: Date.now(),
     });
@@ -1872,8 +2052,298 @@ const findReplacementBook = async (signals, existingBooks) => {
   return null;
 };
 
+/**
+ * Obtiene recomendaciones progresivas (5+5 inicial, luego completar)
+ */
+const getProgressiveRecommendations = async (userId) => {
+  try {
+    // Verificar cache primero
+    const cacheKey = `home_recs_${userId}`;
+    const cached = recommendationsCache.get(cacheKey);
+
+    if (cached) {
+      console.log(
+        `[Progressive] ✅ Usando cache existente para usuario ${userId}`
+      );
+
+      // Si ya tenemos 10+10 libros, devolver progresivamente
+      if (
+        cached.data.tePodrianGustar.length >= 10 &&
+        cached.data.descubriNuevasLecturas.length >= 10
+      ) {
+        // Primera llamada: devolver 5+5
+        if (!cached.progressiveLoaded) {
+          const progressiveData = {
+            ...cached.data,
+            tePodrianGustar: cached.data.tePodrianGustar.slice(0, 5),
+            descubriNuevasLecturas: cached.data.descubriNuevasLecturas.slice(
+              0,
+              5
+            ),
+            metadata: {
+              ...cached.data.metadata,
+              progressive: true,
+              hasMore: true,
+              totalTePodrianGustar: cached.data.tePodrianGustar.length,
+              totalDescubriNuevasLecturas:
+                cached.data.descubriNuevasLecturas.length,
+              loadedTePodrianGustar: 5,
+              loadedDescubriNuevasLecturas: 5,
+            },
+          };
+
+          // Marcar como progresivamente cargado
+          cached.progressiveLoaded = true;
+          recommendationsCache.set(cacheKey, cached);
+
+          return progressiveData;
+        } else {
+          // Segunda llamada: devolver todos
+          return {
+            ...cached.data,
+            metadata: {
+              ...cached.data.metadata,
+              progressive: true,
+              hasMore: false,
+              totalTePodrianGustar: cached.data.tePodrianGustar.length,
+              totalDescubriNuevasLecturas:
+                cached.data.descubriNuevasLecturas.length,
+              loadedTePodrianGustar: cached.data.tePodrianGustar.length,
+              loadedDescubriNuevasLecturas:
+                cached.data.descubriNuevasLecturas.length,
+            },
+          };
+        }
+      }
+    }
+
+    // Si no hay cache, generar nuevas recomendaciones
+    console.log(
+      `[Progressive] Generando nuevas recomendaciones para usuario ${userId}`
+    );
+
+    // Obtener señales del usuario
+    const signals = await getUserSignals(userId);
+
+    // Generar recomendaciones con LLM
+    const llmResponse = await callLLMForPicks(signals);
+
+    if (llmResponse) {
+      console.log(`[Progressive] Procesando recomendaciones del LLM...`);
+      const { tePodrianGustar, descubriNuevasLecturas } =
+        await processLLMRecommendations(llmResponse, signals);
+
+      // Seleccionar los mejores libros
+      const selectedTePodrianGustar = selectBestBooks(tePodrianGustar, 10);
+      const selectedDescubriNuevasLecturas = selectBestBooks(
+        descubriNuevasLecturas,
+        10
+      );
+
+      // Completar con defaults si es necesario
+      const defaults = getDefaultRecommendations();
+      const finalTePodrianGustar = [...selectedTePodrianGustar];
+      const finalDescubriNuevasLecturas = [...selectedDescubriNuevasLecturas];
+
+      while (finalTePodrianGustar.length < 10) {
+        const defaultBook =
+          defaults.tePodrianGustar[
+            finalTePodrianGustar.length % defaults.tePodrianGustar.length
+          ];
+        finalTePodrianGustar.push({
+          ...defaultBook,
+          reason: "Recomendación por defecto",
+        });
+      }
+
+      while (finalDescubriNuevasLecturas.length < 10) {
+        const defaultBook =
+          defaults.descubriNuevasLecturas[
+            finalDescubriNuevasLecturas.length %
+              defaults.descubriNuevasLecturas.length
+          ];
+        finalDescubriNuevasLecturas.push({
+          ...defaultBook,
+          reason: "Recomendación por defecto",
+        });
+      }
+
+      const result = {
+        tePodrianGustar: finalTePodrianGustar,
+        descubriNuevasLecturas: finalDescubriNuevasLecturas,
+        metadata: {
+          strategy: "llm-progressive",
+          generatedAt: new Date().toISOString(),
+          userId,
+          progressive: true,
+          hasMore: true,
+          totalTePodrianGustar: finalTePodrianGustar.length,
+          totalDescubriNuevasLecturas: finalDescubriNuevasLecturas.length,
+          loadedTePodrianGustar: 5,
+          loadedDescubriNuevasLecturas: 5,
+        },
+      };
+
+      // Cachear el resultado completo
+      recommendationsCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+        progressiveLoaded: true,
+      });
+
+      // Devolver solo los primeros 5+5
+      return {
+        ...result,
+        tePodrianGustar: result.tePodrianGustar.slice(0, 5),
+        descubriNuevasLecturas: result.descubriNuevasLecturas.slice(0, 5),
+      };
+    } else {
+      // Fallback a defaults
+      console.log(`[Progressive] LLM falló, usando defaults`);
+      const defaults = getDefaultRecommendations();
+      const result = {
+        ...defaults,
+        metadata: {
+          ...defaults.metadata,
+          userId,
+          strategy: "fallback-defaults-progressive",
+          progressive: true,
+          hasMore: true,
+          totalTePodrianGustar: defaults.tePodrianGustar.length,
+          totalDescubriNuevasLecturas: defaults.descubriNuevasLecturas.length,
+          loadedTePodrianGustar: 5,
+          loadedDescubriNuevasLecturas: 5,
+        },
+      };
+
+      // Cachear
+      recommendationsCache.set(cacheKey, {
+        data: result,
+        timestamp: Date.now(),
+        progressiveLoaded: true,
+      });
+
+      return {
+        ...result,
+        tePodrianGustar: result.tePodrianGustar.slice(0, 5),
+        descubriNuevasLecturas: result.descubriNuevasLecturas.slice(0, 5),
+      };
+    }
+  } catch (error) {
+    console.error("Error en getProgressiveRecommendations:", error);
+    return null;
+  }
+};
+
+/**
+ * Obtiene recomendaciones en dos fases: 5+5 rápido, luego 5+5 adicional
+ */
+const getTwoPhaseRecommendations = async (userId, phase = 1) => {
+  try {
+    console.log(`[TwoPhase] Iniciando fase ${phase} para usuario ${userId}`);
+
+    if (phase === 1) {
+      // FASE 1: Procesar completamente pero solo devolver 5+5
+      console.log(`[TwoPhase] Fase 1: Procesando recomendaciones completas...`);
+
+      // Usar el algoritmo original completo
+      const fullResult = await getHomeRecommendations(userId);
+
+      if (fullResult) {
+        // Aplicar selección por calidad para la fase 1 (priorizar imágenes)
+        const selectedTePodrianGustar = selectBestBooks(
+          fullResult.tePodrianGustar,
+          5
+        );
+        const selectedDescubriNuevasLecturas = selectBestBooks(
+          fullResult.descubriNuevasLecturas,
+          5
+        );
+
+        const phase1Result = {
+          tePodrianGustar: selectedTePodrianGustar,
+          descubriNuevasLecturas: selectedDescubriNuevasLecturas,
+          metadata: {
+            ...fullResult.metadata,
+            strategy: "llm-two-phase-1",
+            phase: 1,
+            hasMore: true,
+            totalPhases: 2,
+          },
+        };
+
+        // Cachear el resultado completo para la fase 2
+        const cacheKey = `two_phase_${userId}`;
+        recommendationsCache.set(cacheKey, {
+          fullResult,
+          phase1Result,
+          timestamp: Date.now(),
+        });
+
+        console.log(
+          `[TwoPhase] Fase 1: Devuelto 5+5, cacheado resultado completo`
+        );
+        return phase1Result;
+      } else {
+        // NO usar defaults - devolver arrays vacíos si el LLM falla
+        console.log(`[TwoPhase] Fase 1: LLM falló, devolviendo arrays vacíos`);
+        return {
+          tePodrianGustar: [],
+          descubriNuevasLecturas: [],
+          metadata: {
+            strategy: "llm-failed-two-phase-1",
+            generatedAt: new Date().toISOString(),
+            userId,
+            phase: 1,
+            hasMore: false, // No hay más fases si falló
+            totalPhases: 2,
+          },
+        };
+      }
+    } else if (phase === 2) {
+      // FASE 2: Usar el cache de la fase 1
+      console.log(
+        `[TwoPhase] Fase 2: Recuperando resultado completo del cache...`
+      );
+
+      const cacheKey = `two_phase_${userId}`;
+      const cached = recommendationsCache.get(cacheKey);
+
+      if (!cached || !cached.fullResult) {
+        console.log(
+          `[TwoPhase] Fase 2: No hay cache, generando nueva consulta completa`
+        );
+        return await getHomeRecommendations(userId); // Fallback al algoritmo original
+      }
+
+      // Devolver el resultado completo (ya procesado en fase 1)
+      const completeResult = {
+        ...cached.fullResult,
+        metadata: {
+          ...cached.fullResult.metadata,
+          strategy: "llm-two-phase-complete",
+          phase: 2,
+          hasMore: false,
+          totalPhases: 2,
+        },
+      };
+
+      // Limpiar cache temporal
+      recommendationsCache.delete(cacheKey);
+
+      console.log(`[TwoPhase] Fase 2: Devolviendo resultado completo (10+10)`);
+      return completeResult;
+    }
+  } catch (error) {
+    console.error(`Error en getTwoPhaseRecommendations fase ${phase}:`, error);
+    return null;
+  }
+};
+
 module.exports = {
   getHomeRecommendations,
+  getProgressiveRecommendations,
+  getTwoPhaseRecommendations,
   getUserSignals,
   searchSpecificBook,
   searchGoogleBooks,

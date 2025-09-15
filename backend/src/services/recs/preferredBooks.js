@@ -4,51 +4,37 @@
  */
 
 /**
- * Prioriza libros agrupándolos por título normalizado y seleccionando la mejor versión de cada grupo
+ * Prioriza libros de forma SIMPLE y RÁPIDA - solo por imagen y autor
  */
 const prioritizeBooksByQuality = (books, searchQuery = null) => {
   if (!books || books.length === 0) return [];
 
-  console.log(`[Quality] Priorizando ${books.length} libros...`);
+  console.log(`[Quality] Priorizando ${books.length} libros (modo rápido)...`);
 
-  // Agrupar libros por título normalizado
-  const groups = {};
-  books.forEach((book) => {
-    if (!book.title) return;
+  // Ordenar por criterios simples: imagen primero, luego autor
+  const prioritizedBooks = books
+    .filter((book) => book.title) // Solo libros con título
+    .sort((a, b) => {
+      // 1. Priorizar libros con imagen
+      const aHasImage = a.image && !a.image.includes("placehold.co");
+      const bHasImage = b.image && !b.image.includes("placehold.co");
 
-    // Normalizar título para agrupar versiones del mismo libro
-    const normalizedTitle = book.title
-      .toLowerCase()
-      .replace(/[^\w\s]/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
+      if (aHasImage && !bHasImage) return -1;
+      if (!aHasImage && bHasImage) return 1;
 
-    if (!groups[normalizedTitle]) {
-      groups[normalizedTitle] = [];
-    }
-    groups[normalizedTitle].push(book);
-  });
+      // 2. Priorizar libros con autor
+      const aHasAuthor = a.authors && a.authors.length > 0;
+      const bHasAuthor = b.authors && b.authors.length > 0;
+
+      if (aHasAuthor && !bHasAuthor) return -1;
+      if (!aHasAuthor && bHasAuthor) return 1;
+
+      return 0;
+    });
 
   console.log(
-    `[Quality] Encontrados ${Object.keys(groups).length} grupos únicos`
+    `[Quality] Priorizados ${prioritizedBooks.length} libros (modo rápido)`
   );
-
-  // Para cada grupo, seleccionar la mejor versión
-  const prioritizedBooks = [];
-  Object.entries(groups).forEach(([groupTitle, groupBooks]) => {
-    if (groupBooks.length === 1) {
-      // Si solo hay una versión, tomarla directamente
-      prioritizedBooks.push(groupBooks[0]);
-    } else {
-      // Si hay múltiples versiones, seleccionar la mejor
-      const bestVersion = findBestVersionInGroup(groupBooks, groupTitle);
-      if (bestVersion) {
-        prioritizedBooks.push(bestVersion);
-      }
-    }
-  });
-
-  console.log(`[Quality] Priorizados ${prioritizedBooks.length} libros únicos`);
   return prioritizedBooks;
 };
 
