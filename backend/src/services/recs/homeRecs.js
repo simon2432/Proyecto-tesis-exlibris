@@ -958,13 +958,19 @@ IMPORTANTE: Tu respuesta anterior no fue válida. Ahora debés devolver EXACTAME
 {
   "te_podrian_gustar": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (exactamente 15 items)
+    ... (exactamente 20 items)
   ],
   "descubri_nuevas_lecturas": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (exactamente 15 items)
+    ... (exactamente 20 items)
   ]
 }
+
+**REGLAS CRÍTICAS**:
+- NO incluyas NINGÚN libro de la lista "YA LEÍDOS" que te proporcioné
+- NO incluyas favoritos, likes, ni dislikes del usuario
+- Libros reales de Google Books únicamente
+- Exactamente 20 + 20 recomendaciones
 
 NO agregues texto adicional, solo el JSON.`
     : `Sos un recomendador de libros **experto y creativo**. Tu misión es crear recomendaciones ÚNICAS y PERSONALIZADAS basándote en los gustos específicos del usuario.
@@ -989,7 +995,7 @@ NO agregues texto adicional, solo el JSON.`
 
 **REGLAS ESTRICTAS**:
 - **NO DUPLICADOS**: Cada libro debe ser único en ambas listas
-- **NO HISTORIAL**: No incluyas libros ya leídos por el usuario
+- **NO LIBROS YA LEÍDOS**: No incluyas favoritos, likes, ni dislikes del usuario
 - **EVITAR DISLIKES**: No recomendar similares a libros mal valorados
 - **VARIEDAD TEMPORAL**: Incluye libros de diferentes épocas (clásicos, contemporáneos, recientes)
 - **VARIEDAD CULTURAL**: Incluye autores de diferentes países y culturas
@@ -999,40 +1005,44 @@ Devolvé **únicamente** este JSON:
 {
   "te_podrian_gustar": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (exactamente 15 items)
+    ... (exactamente 20 items)
   ],
   "descubri_nuevas_lecturas": [
     { "titulo": "Título del Libro", "autor": "Nombre del Autor" },
-    ... (exactamente 15 items)
+    ... (exactamente 20 items)
   ]
 }`;
 
   const userPrompt = `**ANÁLISIS DETALLADO DEL USUARIO**:
 
-FAVORITOS (${signals.favoritos.length} libros):
+LIBROS YA LEÍDOS POR EL USUARIO (NO RECOMENDAR NINGUNO DE ESTOS):
+
+FAVORITOS (${signals.favoritos.length} libros ya leídos):
 ${signals.favoritos
   .map((f, i) => `${i + 1}. "${f.title}" por ${f.authors.join(", ")}`)
   .join("\n")}
 
-LIKES (${signals.historialLikes.length} libros - rating >= 3):
+LIKES (${signals.historialLikes.length} libros ya leídos - rating >= 3):
 ${signals.historialLikes.map((l, i) => `${i + 1}. "${l}"`).join("\n")}
 
-DISLIKES (${signals.historialDislikes.length} libros - rating <= 2):
+DISLIKES (${signals.historialDislikes.length} libros ya leídos - rating <= 2):
 ${signals.historialDislikes.map((d, i) => `${i + 1}. "${d}"`).join("\n")}
 
 **INSTRUCCIONES ESPECÍFICAS**:
-1. **ANALIZA CADA FAVORITO**: Identifica género, autor, época, tema de cada favorito
-2. **Lista A**: Para cada favorito, busca 2-3 libros similares pero DIFERENTES (mismo autor pero menos conocidos, mismo género pero subgéneros, etc.)
-3. **Lista B**: Recomendaciones atrevidas basadas en los favoritos (nuevos géneros relacionados, autores emergentes, clásicos olvidados)
+1. **ANALIZA LOS GUSTOS**: Identifica género, autor, época, tema de los libros que le gustaron (favoritos + likes)
+2. **Lista A "te_podrian_gustar"**: Busca libros SIMILARES a sus gustos pero NUEVOS (mismo autor pero menos conocidos, mismo género pero subgéneros, etc.)
+3. **Lista B "descubri_nuevas_lecturas"**: Recomendaciones atrevidas basadas en sus gustos (nuevos géneros relacionados, autores emergentes, clásicos olvidados)
 4. **DIVERSIFICA**: Varía épocas, culturas, estilos narrativos, subgéneros
-5. **CONECTA**: Cada recomendación debe tener una conexión específica con los favoritos
+5. **CONECTA**: Cada recomendación debe tener una conexión específica con sus gustos
 6. **EXPLORA**: Busca libros que el usuario probablemente NO conozca pero que le gustarían
 
-**REGLAS FINALES**:
+**REGLAS ESTRICTAS**:
+- NO incluyas NINGÚN libro de la lista "YA LEÍDOS" de arriba
+- NO incluyas favoritos, likes, ni dislikes
 - Libros reales de Google Books
-- NO DUPLICADOS: Cada libro único
+- NO DUPLICADOS: Cada libro único en ambas listas
 - Exactamente 20 + 20 recomendaciones
-- Conexiones específicas con favoritos
+- Conexiones específicas con sus gustos
 - Máxima diversidad y creatividad`;
 
   return { system: systemPrompt, user: userPrompt };
@@ -1291,33 +1301,17 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     `[Process] Selección final con respaldo: te_podrian_gustar=${selectedTePodrianGustar.length}, descubri_nuevas_lecturas=${selectedDescubriNuevasLecturas.length}`
   );
 
-  // Fallback agresivo: usar defaults si hay muy pocos libros
+  // Fallback: usar defaults SOLO si fallan TODOS los libros
   if (
-    selectedTePodrianGustar.length < 5 ||
-    selectedDescubriNuevasLecturas.length < 5
+    selectedTePodrianGustar.length === 0 &&
+    selectedDescubriNuevasLecturas.length === 0
   ) {
-    console.log(
-      `[Fallback] Muy pocos libros encontrados (${selectedTePodrianGustar.length}, ${selectedDescubriNuevasLecturas.length}), usando defaults`
-    );
+    console.log(`[Fallback] ChatGPT falló completamente, usando defaults`);
     const defaults = getDefaultRecommendations();
 
-    // Combinar con los libros encontrados si los hay
-    const finalTePodrianGustar = [
-      ...selectedTePodrianGustar,
-      ...defaults.tePodrianGustar.slice(0, 10 - selectedTePodrianGustar.length),
-    ].slice(0, 10);
-
-    const finalDescubriNuevasLecturas = [
-      ...selectedDescubriNuevasLecturas,
-      ...defaults.descubriNuevasLecturas.slice(
-        0,
-        10 - selectedDescubriNuevasLecturas.length
-      ),
-    ].slice(0, 10);
-
     return {
-      tePodrianGustar: finalTePodrianGustar,
-      descubriNuevasLecturas: finalDescubriNuevasLecturas,
+      tePodrianGustar: defaults.tePodrianGustar.slice(0, 10),
+      descubriNuevasLecturas: defaults.descubriNuevasLecturas.slice(0, 10),
     };
   }
 
@@ -1325,9 +1319,135 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     `[Process] Resultado final: tePodrianGustar=${selectedTePodrianGustar.length}, descubriNuevasLecturas=${selectedDescubriNuevasLecturas.length}`
   );
 
+  // Log detallado de filtrado
+  console.log(`[Process] 📊 ESTADÍSTICAS DE FILTRADO:`);
+  console.log(
+    `- Libros procesados por ChatGPT: ${
+      llmResponse.te_podrian_gustar.length +
+      llmResponse.descubri_nuevas_lecturas.length
+    }`
+  );
+  console.log(
+    `- Libros encontrados en Google Books: ${
+      tePodrianGustar.length + descubriNuevasLecturas.length
+    }`
+  );
+  console.log(
+    `- Libros seleccionados finales: ${
+      selectedTePodrianGustar.length + selectedDescubriNuevasLecturas.length
+    }`
+  );
+  console.log(
+    `- Tasa de éxito: ${(
+      ((selectedTePodrianGustar.length +
+        selectedDescubriNuevasLecturas.length) /
+        (llmResponse.te_podrian_gustar.length +
+          llmResponse.descubri_nuevas_lecturas.length)) *
+      100
+    ).toFixed(1)}%`
+  );
+
+  // Sistema de recuperación: completar listas que tengan menos de 10 libros
+  const finalResult = await completePartialLists(
+    selectedTePodrianGustar,
+    selectedDescubriNuevasLecturas,
+    signals
+  );
+
+  return finalResult;
+};
+
+/**
+ * Completa listas parciales usando libros de la otra lista o defaults
+ */
+const completePartialLists = async (
+  tePodrianGustar,
+  descubriNuevasLecturas,
+  signals
+) => {
+  const TARGET_COUNT = 10; // Meta de 10 libros por lista
+
+  console.log(
+    `[Complete] Verificando listas: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
+  );
+
+  let finalTePodrianGustar = [...tePodrianGustar];
+  let finalDescubriNuevasLecturas = [...descubriNuevasLecturas];
+
+  // Si alguna lista tiene menos de 10 libros, completar
+  if (
+    finalTePodrianGustar.length < TARGET_COUNT ||
+    finalDescubriNuevasLecturas.length < TARGET_COUNT
+  ) {
+    console.log(`[Complete] Completando listas parciales...`);
+
+    // Obtener libros por defecto como fuente de respaldo
+    const defaults = getDefaultRecommendations();
+
+    // Completar tePodrianGustar si es necesario
+    if (finalTePodrianGustar.length < TARGET_COUNT) {
+      const needed = TARGET_COUNT - finalTePodrianGustar.length;
+      console.log(
+        `[Complete] Necesitamos ${needed} libros más para tePodrianGustar`
+      );
+
+      // Primero intentar con libros de descubriNuevasLecturas que no estén duplicados
+      const availableFromOther = finalDescubriNuevasLecturas
+        .filter(
+          (book) =>
+            !finalTePodrianGustar.some(
+              (existing) => existing.volumeId === book.volumeId
+            )
+        )
+        .slice(0, needed);
+
+      finalTePodrianGustar.push(...availableFromOther);
+
+      // Si aún faltan, no usar defaults - solo completar con lo que tenemos
+      const stillNeeded = TARGET_COUNT - finalTePodrianGustar.length;
+      if (stillNeeded > 0) {
+        console.log(
+          `[Complete] Aún faltan ${stillNeeded} libros para tePodrianGustar, pero no usando defaults`
+        );
+      }
+    }
+
+    // Completar descubriNuevasLecturas si es necesario
+    if (finalDescubriNuevasLecturas.length < TARGET_COUNT) {
+      const needed = TARGET_COUNT - finalDescubriNuevasLecturas.length;
+      console.log(
+        `[Complete] Necesitamos ${needed} libros más para descubriNuevasLecturas`
+      );
+
+      // Primero intentar con libros de tePodrianGustar que no estén duplicados
+      const availableFromOther = finalTePodrianGustar
+        .filter(
+          (book) =>
+            !finalDescubriNuevasLecturas.some(
+              (existing) => existing.volumeId === book.volumeId
+            )
+        )
+        .slice(0, needed);
+
+      finalDescubriNuevasLecturas.push(...availableFromOther);
+
+      // Si aún faltan, no usar defaults - solo completar con lo que tenemos
+      const stillNeeded = TARGET_COUNT - finalDescubriNuevasLecturas.length;
+      if (stillNeeded > 0) {
+        console.log(
+          `[Complete] Aún faltan ${stillNeeded} libros para descubriNuevasLecturas, pero no usando defaults`
+        );
+      }
+    }
+  }
+
+  console.log(
+    `[Complete] Listas finales: tePodrianGustar=${finalTePodrianGustar.length}, descubriNuevasLecturas=${finalDescubriNuevasLecturas.length}`
+  );
+
   return {
-    tePodrianGustar: selectedTePodrianGustar,
-    descubriNuevasLecturas: selectedDescubriNuevasLecturas,
+    tePodrianGustar: finalTePodrianGustar.slice(0, TARGET_COUNT),
+    descubriNuevasLecturas: finalDescubriNuevasLecturas.slice(0, TARGET_COUNT),
   };
 };
 
@@ -2083,33 +2203,13 @@ const getProgressiveRecommendations = async (userId) => {
         10
       );
 
-      // Completar con defaults si es necesario
-      const defaults = getDefaultRecommendations();
+      // No completar con defaults - usar solo los libros encontrados
       const finalTePodrianGustar = [...selectedTePodrianGustar];
       const finalDescubriNuevasLecturas = [...selectedDescubriNuevasLecturas];
 
-      while (finalTePodrianGustar.length < 10) {
-        const defaultBook =
-          defaults.tePodrianGustar[
-            finalTePodrianGustar.length % defaults.tePodrianGustar.length
-          ];
-        finalTePodrianGustar.push({
-          ...defaultBook,
-          reason: "Recomendación por defecto",
-        });
-      }
-
-      while (finalDescubriNuevasLecturas.length < 10) {
-        const defaultBook =
-          defaults.descubriNuevasLecturas[
-            finalDescubriNuevasLecturas.length %
-              defaults.descubriNuevasLecturas.length
-          ];
-        finalDescubriNuevasLecturas.push({
-          ...defaultBook,
-          reason: "Recomendación por defecto",
-        });
-      }
+      console.log(
+        `[Progressive] Usando solo libros encontrados: tePodrianGustar=${finalTePodrianGustar.length}, descubriNuevasLecturas=${finalDescubriNuevasLecturas.length}`
+      );
 
       const result = {
         tePodrianGustar: finalTePodrianGustar,
