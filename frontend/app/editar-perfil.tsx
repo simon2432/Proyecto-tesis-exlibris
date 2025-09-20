@@ -102,7 +102,7 @@ export default function EditarPerfilScreen() {
   const [nombre, setNombre] = useState(user?.nombre || "");
   const [email, setEmail] = useState(user?.email || "");
   const [telefono, setTelefono] = useState(user?.telefono || "");
-  const [ubicacion, setUbicacion] = useState(user?.ubicacion || "");
+  const [ubicacion, setUbicacion] = useState(user?.ubicacion || ubicaciones[0]);
   const [fotoPerfil, setFotoPerfil] = useState(user?.fotoPerfil || null);
   const [fotoPerfilFile, setFotoPerfilFile] = useState<any>(null);
   const [passwordActual, setPasswordActual] = useState("");
@@ -112,14 +112,12 @@ export default function EditarPerfilScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Asegurar que la ubicación esté inicializada correctamente
+  // Asegurar que la ubicación esté inicializada correctamente cuando cambie el usuario
   useEffect(() => {
     if (user?.ubicacion && ubicaciones.includes(user.ubicacion)) {
       setUbicacion(user.ubicacion);
-    } else if (!ubicacion) {
-      setUbicacion(ubicaciones[0]); // Fallback a la primera ciudad si no hay ubicación
     }
-  }, [user?.ubicacion, ubicacion]);
+  }, [user?.ubicacion]);
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({

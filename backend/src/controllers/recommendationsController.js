@@ -218,11 +218,16 @@ exports.getLocalSales = async (req, res) => {
       });
     }
 
-    // Buscar publicaciones activas en la misma ciudad
+    console.log(
+      `[LocalSales] Buscando publicaciones en: "${user.ubicacion}" (excluyendo usuario ${userId})`
+    );
+
+    // Buscar publicaciones activas en la misma ciudad, excluyendo las del usuario actual
     const publicaciones = await prisma.publicacion.findMany({
       where: {
         ubicacion: user.ubicacion,
         estado: "activa",
+        vendedorId: { not: parseInt(userId) }, // Excluir publicaciones del usuario actual
       },
       include: {
         vendedor: {
@@ -235,11 +240,46 @@ exports.getLocalSales = async (req, res) => {
       orderBy: {
         fechaPublicacion: "desc",
       },
-      take: 12,
+      take: 15,
     });
 
     console.log(
       `[LocalSales] Encontradas ${publicaciones.length} publicaciones`
+    );
+
+    // Debug: Mostrar publicaciones del usuario actual que se están excluyendo
+    const misPublicaciones = await prisma.publicacion.findMany({
+      where: {
+        ubicacion: user.ubicacion,
+        estado: "activa",
+        vendedorId: parseInt(userId),
+      },
+      select: { id: true, titulo: true },
+    });
+    console.log(
+      `[LocalSales] Publicaciones propias excluidas: ${misPublicaciones.length}`
+    );
+    if (misPublicaciones.length > 0) {
+      console.log(
+        `[LocalSales] Mis publicaciones:`,
+        misPublicaciones.map((p) => `${p.id}: ${p.titulo}`)
+      );
+    }
+
+    // Debug: Mostrar todas las ubicaciones disponibles
+    const allPublications = await prisma.publicacion.findMany({
+      where: { estado: "activa" },
+      select: { ubicacion: true, id: true },
+    });
+    const ubicacionesUnicas = [
+      ...new Set(allPublications.map((p) => p.ubicacion)),
+    ];
+    console.log(
+      `[LocalSales] Ubicaciones disponibles en DB:`,
+      ubicacionesUnicas
+    );
+    console.log(
+      `[LocalSales] Total publicaciones activas: ${allPublications.length}`
     );
 
     // Formatear para el frontend
