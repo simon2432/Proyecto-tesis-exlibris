@@ -2,6 +2,47 @@ const axios = require("axios");
 
 const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY;
 
+// Función para obtener imagen individual de un libro
+const getBookImageIndividual = async (bookId) => {
+  try {
+    const response = await axios.get(
+      `https://www.googleapis.com/books/v1/volumes/${bookId}?key=${GOOGLE_BOOKS_API_KEY}`,
+      { timeout: 5000 }
+    );
+
+    let imageUrl =
+      response.data.volumeInfo?.imageLinks?.thumbnail ||
+      response.data.volumeInfo?.imageLinks?.smallThumbnail ||
+      "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen";
+
+    // Mejorar la calidad de la imagen de Google Books
+    if (
+      imageUrl &&
+      imageUrl !== "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen"
+    ) {
+      if (imageUrl.includes("zoom=1")) {
+        imageUrl = imageUrl.replace("zoom=1", "zoom=2");
+      } else if (!imageUrl.includes("zoom=")) {
+        const separator = imageUrl.includes("?") ? "&" : "?";
+        imageUrl = `${imageUrl}${separator}zoom=2`;
+      }
+
+      // Asegurar que la URL sea HTTPS
+      if (imageUrl.startsWith("http://")) {
+        imageUrl = imageUrl.replace("http://", "https://");
+      }
+    }
+
+    return imageUrl;
+  } catch (error) {
+    console.log(
+      `[GoogleBooks] Error obteniendo imagen individual para ${bookId}:`,
+      error.message
+    );
+    return "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen";
+  }
+};
+
 // Función auxiliar para generar descripción con OpenAI
 const generateDescription = async (bookInfo) => {
   try {
@@ -161,7 +202,7 @@ exports.searchGoogleBooks = async (req, res) => {
       image:
         item.volumeInfo.imageLinks?.thumbnail ||
         item.volumeInfo.imageLinks?.smallThumbnail ||
-        "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen",
+        null, // Marcar como null si no hay imagen para consultar individualmente
     }));
 
     // Filtrar libros según el tipo de búsqueda
@@ -267,11 +308,51 @@ exports.searchGoogleBooks = async (req, res) => {
       );
     }
 
+    // Obtener imágenes individuales para libros que no tienen imagen
+    console.log(
+      `[GoogleBooks] Obteniendo imágenes individuales para libros sin imagen...`
+    );
+    const booksWithImages = [];
+    const booksWithoutImages = [];
+
+    // Separar libros con y sin imagen
+    matchingBooks.forEach((book) => {
+      if (book.image && !book.image.includes("placehold.co")) {
+        booksWithImages.push(book);
+      } else {
+        booksWithoutImages.push(book);
+      }
+    });
+
+    // Obtener imágenes individuales para libros sin imagen (máximo 10 para no sobrecargar)
+    const booksToProcess = booksWithoutImages.slice(0, 10);
+    const imagePromises = booksToProcess.map(async (book) => {
+      const imageUrl = await getBookImageIndividual(book.id);
+      return { ...book, image: imageUrl };
+    });
+
+    const booksWithIndividualImages = await Promise.all(imagePromises);
+
+    // Combinar libros con imagen original + libros con imagen individual + resto sin imagen
+    const allProcessedBooks = [
+      ...booksWithImages,
+      ...booksWithIndividualImages,
+      ...booksWithoutImages.slice(10), // Los que no se procesaron individualmente
+    ];
+
+    console.log(
+      `[GoogleBooks] Procesados: ${
+        booksWithImages.length
+      } con imagen original, ${
+        booksWithIndividualImages.length
+      } con imagen individual, ${booksWithoutImages.length - 10} sin procesar`
+    );
+
     // Solo generar descripciones si se solicita explícitamente
-    let processedBooks = matchingBooks;
+    let processedBooks = allProcessedBooks;
     if (generateDescriptions === "true") {
       processedBooks = [];
-      for (const book of matchingBooks) {
+      for (const book of allProcessedBooks) {
         let finalBook = { ...book };
 
         // Si no hay descripción, generar una con OpenAI

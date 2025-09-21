@@ -802,6 +802,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 24,
     paddingHorizontal: 18,
+    marginTop: 24,
   },
 
   // Grid de logros
