@@ -66,11 +66,7 @@ export default function HistorialLectorExtendido() {
     return new Date(b.fechaFin).getTime() - new Date(a.fechaFin).getTime();
   });
 
-  // Agrupar en filas de 3
-  const filas = [];
-  for (let i = 0; i < lecturasOrdenadas.length; i += 3) {
-    filas.push(lecturasOrdenadas.slice(i, i + 3));
-  }
+  // Mostrar todos los libros sin agrupar en filas
 
   return (
     <View style={{ flex: 1, backgroundColor: "#FFF" }}>
@@ -99,55 +95,48 @@ export default function HistorialLectorExtendido() {
             {errorLecturas}
           </Text>
         ) : (
-          filas.map((fila, idx) => (
-            <View key={idx} style={styles.row}>
-              {fila.map((lectura) => (
-                <TouchableOpacity
-                  key={lectura.id}
-                  onPress={() =>
-                    router.push({
-                      pathname: "/lectura-historial/[id]",
-                      params: { id: lectura.id },
-                    })
-                  }
-                  style={styles.coverWrapper}
-                >
-                  <ExpoImage
-                    source={{
-                      uri: lectura.portada || getPlaceholderImage(180, 250),
-                    }}
-                    style={styles.cover}
-                    placeholder={getPlaceholderImage(180, 250)}
-                    {...getOptimizedImageConfig()}
-                    onError={() => {
-                      setPortadas((prev) => {
-                        if (
-                          prev[lectura.id] &&
-                          prev[lectura.id] !== getPlaceholderImage(180, 250)
-                        ) {
-                          return prev;
-                        }
-                        return {
-                          ...prev,
-                          [lectura.id]: getPlaceholderImage(180, 250),
-                        };
-                      });
-                    }}
-                  />
-                  {!lectura.fechaFin && (
-                    <View style={styles.chipLectura}>
-                      <Text style={styles.chipLecturaText}>En lectura</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              ))}
-              {/* Si la fila tiene menos de 3, agregar espacios vacíos */}
-              {fila.length < 3 &&
-                Array.from({ length: 3 - fila.length }).map((_, i) => (
-                  <View key={"empty-" + i} style={styles.coverWrapper} />
-                ))}
-            </View>
-          ))
+          <View style={styles.booksGrid}>
+            {lecturasOrdenadas.map((lectura) => (
+              <TouchableOpacity
+                key={lectura.id}
+                onPress={() =>
+                  router.push({
+                    pathname: "/lectura-historial/[id]",
+                    params: { id: lectura.id },
+                  })
+                }
+                style={styles.coverWrapper}
+              >
+                <ExpoImage
+                  source={{
+                    uri: lectura.portada || getPlaceholderImage(180, 250),
+                  }}
+                  style={styles.cover}
+                  placeholder={getPlaceholderImage(180, 250)}
+                  {...getOptimizedImageConfig()}
+                  onError={() => {
+                    setPortadas((prev) => {
+                      if (
+                        prev[lectura.id] &&
+                        prev[lectura.id] !== getPlaceholderImage(180, 250)
+                      ) {
+                        return prev;
+                      }
+                      return {
+                        ...prev,
+                        [lectura.id]: getPlaceholderImage(180, 250),
+                      };
+                    });
+                  }}
+                />
+                {!lectura.fechaFin && (
+                  <View style={styles.chipLectura}>
+                    <Text style={styles.chipLecturaText}>En lectura</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
       </ScrollView>
     </View>
@@ -199,6 +188,14 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: Platform.OS === "web" ? 4 : 16,
     paddingBottom: 40,
+  },
+  booksGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "center",
+    alignItems: "flex-start",
+    gap: 18,
+    paddingHorizontal: 6,
   },
   row: {
     flexDirection: "row",

@@ -63,6 +63,7 @@ export default function LecturaHistorialDetalle() {
   const [reviewLoading, setReviewLoading] = useState(false);
   const [reviewCharCount, setReviewCharCount] = useState(0);
   const [showDeleteReviewModal, setShowDeleteReviewModal] = useState(false);
+  const [showNoReviewsSection, setShowNoReviewsSection] = useState(false);
 
   useEffect(() => {
     // Precargar imagen placeholder
@@ -234,6 +235,12 @@ export default function LecturaHistorialDetalle() {
     }
   };
 
+  const handleVerResenasOtros = () => {
+    // Por ahora mostramos la sección de "no hay reseñas"
+    // En el futuro aquí se podría implementar la lógica para buscar reseñas de otros usuarios
+    setShowNoReviewsSection(!showNoReviewsSection);
+  };
+
   if (!lectura) return <Text>Cargando...</Text>;
 
   return (
@@ -241,6 +248,10 @@ export default function LecturaHistorialDetalle() {
       style={{
         backgroundColor: "#FFF",
         paddingTop: Platform.OS === "android" ? 40 : 0,
+        paddingBottom: Platform.OS === "android" ? 20 : 0,
+      }}
+      contentContainerStyle={{
+        paddingBottom: Platform.OS === "android" ? 20 : 0,
       }}
     >
       <View style={styles.headerRow}>
@@ -1038,11 +1049,35 @@ export default function LecturaHistorialDetalle() {
           </View>
         )}
       </View>
-      <TouchableOpacity style={styles.otherReviewsBtn}>
-        <Text style={styles.otherReviewsBtnText}>
+      <TouchableOpacity
+        style={[
+          styles.otherReviewsBtn,
+          Platform.OS === "android" && styles.otherReviewsBtnAndroid,
+        ]}
+        onPress={handleVerResenasOtros}
+      >
+        <Text
+          style={[
+            styles.otherReviewsBtnText,
+            Platform.OS === "android" && styles.otherReviewsBtnTextAndroid,
+          ]}
+        >
           Ver reseñas de otros usuarios
         </Text>
       </TouchableOpacity>
+
+      {/* Sección de "no hay reseñas" */}
+      {showNoReviewsSection && (
+        <View style={styles.noReviewsSection}>
+          <Text style={styles.noReviewsTitle}>Reseñas de otros usuarios</Text>
+          <Text style={styles.noReviewsMessage}>
+            No hay reseñas de otros usuarios sobre este libro.
+          </Text>
+          <Text style={styles.noReviewsInfo}>
+            Sé el primero en compartir tu opinión sobre este libro.
+          </Text>
+        </View>
+      )}
 
       {/* Modal de confirmación para eliminar */}
       <Modal
@@ -1268,10 +1303,58 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: "center",
   },
+  otherReviewsBtnAndroid: {
+    marginBottom: 40,
+    marginTop: 24,
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
   otherReviewsBtnText: {
     color: "#fff4e4",
     fontWeight: "bold",
     fontSize: 17,
+  },
+  otherReviewsBtnTextAndroid: {
+    fontSize: 16,
+    textAlign: "center",
+    paddingHorizontal: 8,
+  },
+  noReviewsSection: {
+    backgroundColor: "#FFF4E4",
+    borderRadius: 16,
+    marginHorizontal: 18,
+    marginTop: 12,
+    marginBottom: Platform.OS === "android" ? 30 : 20,
+    padding: 16,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  noReviewsTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+    color: "#3B2412",
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  noReviewsMessage: {
+    fontSize: 16,
+    color: "#3B2412",
+    marginBottom: 8,
+    textAlign: "center",
+    lineHeight: 22,
+  },
+  noReviewsInfo: {
+    fontSize: 14,
+    color: "#666",
+    textAlign: "center",
+    fontStyle: "italic",
   },
   // Estilos del modal de confirmación
   modalOverlay: {

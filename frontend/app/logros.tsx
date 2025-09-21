@@ -14,6 +14,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import axios from "axios";
 import { API_BASE_URL } from "../constants/ApiConfig";
 import CustomTabBar from "../components/CustomTabBar";
+import { Image as ExpoImage } from "expo-image";
+
+// Componente para renderizar imágenes de logros
+const LogroImagen = ({ logro }: { logro: any }) => {
+  return (
+    <ExpoImage
+      source={logro.imagen}
+      style={{ width: 60, height: 60 }}
+      contentFit="contain"
+    />
+  );
+};
 
 export default function LogrosScreen() {
   const router = useRouter();
@@ -23,6 +35,7 @@ export default function LogrosScreen() {
   const [librosComprados, setLibrosComprados] = useState(0);
   const [puntuacionVendedor, setPuntuacionVendedor] = useState(0);
   const [loadingLogros, setLoadingLogros] = useState(true);
+  const [failedImages, setFailedImages] = useState<Set<string>>(new Set());
 
   // Función para obtener logros del usuario
   const fetchLogros = async () => {
@@ -154,7 +167,7 @@ export default function LogrosScreen() {
               nombre: "Primer Libro",
               descripcion: "Completa tu primera lectura",
               requerido: 1,
-              imagen: require("../assets/images/svg/Leidos1.svg"),
+              imagen: require("../assets/images/logos_logros/Leidos1.png"),
               color: "#FF6B6B",
             },
             {
@@ -162,7 +175,7 @@ export default function LogrosScreen() {
               nombre: "Lector Novato",
               descripcion: "Completa 5 lecturas",
               requerido: 5,
-              imagen: require("../assets/images/svg/Leidos5.svg"),
+              imagen: require("../assets/images/logos_logros/Leidos5.png"),
               color: "#4ECDC4",
             },
             {
@@ -170,7 +183,7 @@ export default function LogrosScreen() {
               nombre: "Lector Intermedio",
               descripcion: "Completa 10 lecturas",
               requerido: 10,
-              imagen: require("../assets/images/svg/Leidos10.svg"),
+              imagen: require("../assets/images/logos_logros/Leidos10.png"),
               color: "#45B7D1",
             },
             {
@@ -178,7 +191,7 @@ export default function LogrosScreen() {
               nombre: "Lector Avanzado",
               descripcion: "Completa 20 lecturas",
               requerido: 20,
-              imagen: require("../assets/images/svg/Leidos20.svg"),
+              imagen: require("../assets/images/logos_logros/Leidos20.png"),
               color: "#96CEB4",
             },
             {
@@ -186,7 +199,7 @@ export default function LogrosScreen() {
               nombre: "Lector Experto",
               descripcion: "Completa 25 lecturas",
               requerido: 25,
-              imagen: require("../assets/images/svg/Leidos25.svg"),
+              imagen: require("../assets/images/logos_logros/Leidos25.png"),
               color: "#FFEAA7",
             },
           ].map((logro) => {
@@ -210,14 +223,7 @@ export default function LogrosScreen() {
                     { backgroundColor: logro.color },
                   ]}
                 >
-                  {logro.imagen ? (
-                    <Image
-                      source={logro.imagen}
-                      style={styles.logroImagenInner}
-                    />
-                  ) : (
-                    <Text style={styles.logroIconoTexto}>📚</Text>
-                  )}
+                  <LogroImagen logro={logro} />
                   {!desbloqueado && (
                     <View style={styles.logroBloqueado}>
                       <Text style={styles.logroBloqueadoText}>🔒</Text>
@@ -289,7 +295,7 @@ export default function LogrosScreen() {
               nombre: "Primera Venta",
               descripcion: "Completa tu primera venta",
               requerido: 1,
-              imagen: require("../assets/images/svg/Vendido1.svg"),
+              imagen: require("../assets/images/logos_logros/Vendido1.png"),
               color: "#FF8A65",
             },
             {
@@ -297,7 +303,7 @@ export default function LogrosScreen() {
               nombre: "Vendedor Novato",
               descripcion: "Completa 5 ventas",
               requerido: 5,
-              imagen: require("../assets/images/svg/Vendido5.svg"),
+              imagen: require("../assets/images/logos_logros/Vendido5.png"),
               color: "#81C784",
             },
             {
@@ -305,7 +311,7 @@ export default function LogrosScreen() {
               nombre: "Vendedor Intermedio",
               descripcion: "Completa 10 ventas",
               requerido: 10,
-              imagen: require("../assets/images/svg/Vendido10.svg"),
+              imagen: require("../assets/images/logos_logros/Vendido10.png"),
               color: "#64B5F6",
             },
             {
@@ -313,7 +319,7 @@ export default function LogrosScreen() {
               nombre: "Vendedor Avanzado",
               descripcion: "Completa 20 ventas",
               requerido: 20,
-              imagen: require("../assets/images/svg/Vendido20.svg"),
+              imagen: require("../assets/images/logos_logros/Vendido20.png"),
               color: "#BA68C8",
             },
             {
@@ -321,7 +327,7 @@ export default function LogrosScreen() {
               nombre: "Vendedor Experto",
               descripcion: "Completa 40 ventas",
               requerido: 40,
-              imagen: require("../assets/images/svg/Vendido40.svg"),
+              imagen: require("../assets/images/logos_logros/Vendido40.png"),
               color: "#FFD54F",
             },
           ].map((logro) => {
@@ -420,7 +426,7 @@ export default function LogrosScreen() {
               nombre: "Primera Compra",
               descripcion: "Completa tu primera compra",
               requerido: 1,
-              imagen: require("../assets/images/svg/Compras1.svg"),
+              imagen: require("../assets/images/logos_logros/Compras1.png"),
               color: "#FF9800",
             },
             {
@@ -428,7 +434,7 @@ export default function LogrosScreen() {
               nombre: "Comprador Novato",
               descripcion: "Completa 5 compras",
               requerido: 5,
-              imagen: require("../assets/images/svg/Compras5.svg"),
+              imagen: require("../assets/images/logos_logros/Compras5.png"),
               color: "#9C27B0",
             },
             {
@@ -436,7 +442,7 @@ export default function LogrosScreen() {
               nombre: "Comprador Intermedio",
               descripcion: "Completa 10 compras",
               requerido: 10,
-              imagen: require("../assets/images/svg/Compras10.svg"),
+              imagen: require("../assets/images/logos_logros/Compras10.png"),
               color: "#2196F3",
             },
             {
@@ -444,7 +450,7 @@ export default function LogrosScreen() {
               nombre: "Comprador Avanzado",
               descripcion: "Completa 20 compras",
               requerido: 20,
-              imagen: require("../assets/images/svg/Compras20.svg"),
+              imagen: require("../assets/images/logos_logros/Compras20.png"),
               color: "#4CAF50",
             },
             {
@@ -452,7 +458,7 @@ export default function LogrosScreen() {
               nombre: "Comprador Experto",
               descripcion: "Completa 30 compras",
               requerido: 30,
-              imagen: require("../assets/images/svg/Compras30.svg"),
+              imagen: require("../assets/images/logos_logros/Compras30.png"),
               color: "#F44336",
             },
           ].map((logro) => {
@@ -551,7 +557,7 @@ export default function LogrosScreen() {
               nombre: "Vendedor Confiable",
               descripcion: "Alcanza una puntuación de 4.0 o superior",
               requerido: 4.0,
-              imagen: require("../assets/images/svg/Puntuacion4.0.svg"),
+              imagen: require("../assets/images/logos_logros/Puntuacion4.0.png"),
               color: "#FF9800",
             },
             {
@@ -559,7 +565,7 @@ export default function LogrosScreen() {
               nombre: "Vendedor Excelente",
               descripcion: "Alcanza una puntuación de 5.0",
               requerido: 5.0,
-              imagen: require("../assets/images/svg/Puntuacion5.0.svg"),
+              imagen: require("../assets/images/logos_logros/Puntuacion5.0.png"),
               color: "#4CAF50",
             },
           ].map((logro) => {
@@ -959,7 +965,12 @@ const styles = StyleSheet.create({
     lineHeight: 24,
   },
   logroIconoTexto: {
-    fontSize: 40,
+    fontSize: 48,
     textAlign: "center",
+    fontWeight: "bold",
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.3)",
+    textShadowOffset: { width: 1, height: 1 },
+    textShadowRadius: 2,
   },
 });
