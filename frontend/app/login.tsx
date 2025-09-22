@@ -9,6 +9,7 @@ import {
   Platform,
   Button,
   ActivityIndicator,
+  Animated,
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useRouter } from "expo-router";
@@ -30,8 +31,45 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+
+  // Estados para mensajes temporales
+  const [showMessage, setShowMessage] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [messageType, setMessageType] = useState<"error" | "success">("error");
+
+  // Animación para mensajes
+  const messageOpacity = useState(new Animated.Value(0))[0];
+
   const router = useRouter();
   const { setUser } = useUser();
+
+  // Función para mostrar mensajes temporales
+  const showTemporaryMessage = (
+    text: string,
+    type: "error" | "success" = "error"
+  ) => {
+    setMessageText(text);
+    setMessageType(type);
+    setShowMessage(true);
+
+    // Animar entrada
+    Animated.timing(messageOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    // Ocultar después de 3 segundos
+    setTimeout(() => {
+      Animated.timing(messageOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowMessage(false);
+      });
+    }, 3000);
+  };
 
   const handleLogin = async () => {
     setLoginLoading(true);
@@ -43,9 +81,17 @@ export default function Login() {
       await AsyncStorage.setItem("token", res.data.token);
       // Guardar los datos del usuario en el contexto
       setUser(res.data.user);
-      router.replace("/home"); // redirige a la pantalla principal
+
+      showTemporaryMessage("¡Login exitoso! Redirigiendo...", "success");
+
+      // Redirigir después de mostrar el mensaje de éxito
+      setTimeout(() => {
+        router.replace("/home");
+      }, 1500);
     } catch (error: any) {
-      Alert.alert("Error", error?.response?.data?.error || "Falló el login");
+      const errorMessage =
+        error?.response?.data?.error || "Credenciales incorrectas";
+      showTemporaryMessage(errorMessage, "error");
     } finally {
       setLoginLoading(false);
     }
@@ -53,7 +99,7 @@ export default function Login() {
 
   const handleForgotPassword = async () => {
     if (!email.trim()) {
-      Alert.alert("Error", "Por favor ingresa tu email");
+      showTemporaryMessage("Por favor ingresa tu email", "error");
       return;
     }
 
@@ -75,18 +121,17 @@ export default function Login() {
       console.log("State updated - showResetPassword:", true);
       console.log("resetToken in state:", res.data.resetToken);
 
-      Alert.alert(
-        "Éxito",
-        "Verifica tu email para continuar con la recuperación"
+      showTemporaryMessage(
+        "Verifica tu email para continuar con la recuperación",
+        "success"
       );
     } catch (error: any) {
       console.error("Forgot password error:", error);
       console.error("Error response:", error?.response?.data);
 
-      Alert.alert(
-        "Error",
-        error?.response?.data?.error || "Error al procesar la solicitud"
-      );
+      const errorMessage =
+        error?.response?.data?.error || "Error al procesar la solicitud";
+      showTemporaryMessage(errorMessage, "error");
     } finally {
       setLoading(false);
     }
@@ -99,22 +144,25 @@ export default function Login() {
     console.log("confirmPassword:", confirmPassword);
 
     if (!newPassword || !confirmPassword) {
-      Alert.alert("Error", "Por favor completa todos los campos");
+      showTemporaryMessage("Por favor completa todos los campos", "error");
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert("Error", "Las contraseñas no coinciden");
+      showTemporaryMessage("Las contraseñas no coinciden", "error");
       return;
     }
 
     if (newPassword.length < 6) {
-      Alert.alert("Error", "La contraseña debe tener al menos 6 caracteres");
+      showTemporaryMessage(
+        "La contraseña debe tener al menos 6 caracteres",
+        "error"
+      );
       return;
     }
 
     if (!resetToken) {
-      Alert.alert("Error", "Token de recuperación no válido");
+      showTemporaryMessage("Token de recuperación no válido", "error");
       return;
     }
 
@@ -145,10 +193,9 @@ export default function Login() {
       console.error("Reset password error:", error);
       console.error("Error response:", error?.response?.data);
 
-      Alert.alert(
-        "Error",
-        error?.response?.data?.error || "Error al actualizar la contraseña"
-      );
+      const errorMessage =
+        error?.response?.data?.error || "Error al actualizar la contraseña";
+      showTemporaryMessage(errorMessage, "error");
     } finally {
       setLoading(false);
     }
@@ -287,6 +334,21 @@ export default function Login() {
   // Renderizar pantalla de login principal
   return (
     <View style={styles.container}>
+      {/* Mensaje temporal */}
+      {showMessage && (
+        <Animated.View
+          style={[
+            styles.messageContainer,
+            { opacity: messageOpacity },
+            messageType === "error"
+              ? styles.errorMessage
+              : styles.successMessage,
+          ]}
+        >
+          <Text style={styles.messageText}>{messageText}</Text>
+        </Animated.View>
+      )}
+
       {/* Espacio para logo/título si se desea */}
       <Text style={styles.title}>Iniciar sesión</Text>
       <TextInput
@@ -368,6 +430,37 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontFamily: Platform.OS === "android" ? "serif" : undefined,
   },
+  // Mensajes temporales
+  messageContainer: {
+    position: "absolute",
+    top: Platform.OS === "android" ? 50 : 80,
+    left: 20,
+    right: 20,
+    zIndex: 1000,
+    borderRadius: 10,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  errorMessage: {
+    backgroundColor: "#ffebee",
+    borderLeftWidth: 4,
+    borderLeftColor: "#f44336",
+  },
+  successMessage: {
+    backgroundColor: "#e8f5e8",
+    borderLeftWidth: 4,
+    borderLeftColor: "#4caf50",
+  },
+  messageText: {
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+    color: "#2e2e2e",
+  },
   input: {
     width: "100%",
     maxWidth: 350,
@@ -445,18 +538,6 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginLeft: 8,
-  },
-  successMessage: {
-    backgroundColor: "#4CAF50",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 20,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
   },
   successText: {
     color: "#fff",

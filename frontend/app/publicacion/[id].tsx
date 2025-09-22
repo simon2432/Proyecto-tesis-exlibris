@@ -37,6 +37,8 @@ interface Publicacion {
     nombre: string;
     ubicacion: string | null;
     puntuacionVendedor: number | null;
+    librosVendidos: number;
+    librosComprados: number;
   };
 }
 
@@ -259,18 +261,22 @@ export default function PublicacionDetalleScreen() {
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Libros vendidos:</Text>
-              <Text style={styles.detailValue}>4</Text>
+              <Text style={styles.detailValue}>
+                {publicacion.vendedor.librosVendidos || 0}
+              </Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Libros comprados:</Text>
-              <Text style={styles.detailValue}>11</Text>
+              <Text style={styles.detailValue}>
+                {publicacion.vendedor.librosComprados || 0}
+              </Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Puntuación de vendedor:</Text>
               <Text style={styles.detailValue}>
-                {publicacion.vendedor.puntuacionVendedor || 4.5} ⭐
+                {(publicacion.vendedor.puntuacionVendedor || 0).toFixed(1)} ⭐
               </Text>
             </View>
 

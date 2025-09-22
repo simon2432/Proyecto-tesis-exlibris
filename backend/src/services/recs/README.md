@@ -2,22 +2,22 @@
 
 ## 📚 Descripción
 
-Sistema inteligente de recomendaciones de libros para la pantalla de inicio que combina señales del usuario con IA (ChatGPT), caché inteligente y fallbacks locales. El sistema está optimizado para proporcionar recomendaciones consistentes y de alta calidad.
+Sistema inteligente de recomendaciones de libros para la pantalla de inicio que combina señales del usuario con IA (ChatGPT), caché inteligente y fallbacks locales. El sistema está optimizado para proporcionar recomendaciones consistentes y de alta calidad, con un enfoque en la personalización basada en el historial de lectura del usuario.
 
 ## 🏗️ Arquitectura del Sistema
 
 ### **Archivos Principales:**
 
-- `homeRecs.js` - Lógica principal de recomendaciones y ChatGPT
-- `homeDefaults.js` - Libros por defecto con portadas reales de Google Books
-- `recommendationCache.js` - Caché de versiones recomendadas para consistencia
-- `preferredBooks.js` - Sistema de priorización por calidad en búsquedas
+- `homeRecs.js` - Lógica principal de recomendaciones, integración con ChatGPT y Google Books API
+- `homeDefaults.js` - Libros por defecto con portadas reales de Google Books (fallback cuando no hay datos del usuario)
+- `recommendationCache.js` - Caché de versiones recomendadas para mantener consistencia entre recomendaciones y búsquedas
+- `preferredBooks.js` - Sistema de priorización por calidad en búsquedas (imagen, autor, descripción)
 
 ### **Base de Datos:**
 
-- **Tabla `Lectura`** - Incluye campo `titulo` para simplificar recomendaciones
-- **Tabla `Favorito`** - Libros marcados como favoritos por el usuario
-- **Tabla `User`** - Información del usuario
+- **Tabla `Lectura`** - Historial de lecturas del usuario con campo `titulo` para análisis de gustos
+- **Tabla `User`** - Información del usuario incluyendo `librosFavoritos` (JSON array)
+- **Relaciones** - Lecturas vinculadas a usuarios para análisis de patrones de lectura
 
 ## 🔄 Flujo de Recomendaciones
 
@@ -26,117 +26,133 @@ Sistema inteligente de recomendaciones de libros para la pantalla de inicio que 
 ```javascript
 // getUserSignals() - homeRecs.js
 const signals = {
-  favoritos: [], // Objetos completos con title/authors
-  historialLikes: [], // Array de strings (títulos)
-  historialDislikes: [], // Array de strings (títulos)
-  historialCompleto: [], // Array de libroIds
+  favoritos: [], // Top 3 favoritos del usuario (objetos completos con title/authors)
+  historialLikes: [], // Títulos de libros con rating >= 3 (array de strings)
+  historialDislikes: [], // Títulos de libros con rating <= 2 (array de strings)
+  historialCompleto: [], // Array de libroIds de todas las lecturas
 };
 ```
 
-### **2. Generación de Recomendaciones**
+### **2. Estrategias de Recomendación**
 
 #### **Estrategia Principal: ChatGPT + Google Books**
 
-1. **Envío a ChatGPT** - Solo títulos en `historialLikes` y `historialDislikes`
-2. **Procesamiento de respuesta** - 24 recomendaciones (12 + 12)
-3. **Búsqueda en Google Books** - Para cada recomendación
-4. **Caché de versiones** - Guardar versión exacta recomendada
+1. **Análisis de señales** - Procesa favoritos, likes y dislikes del usuario
+2. **Prompt a ChatGPT** - Envía títulos de libros que le gustaron y no le gustaron
+3. **Respuesta estructurada** - ChatGPT devuelve 20+20 recomendaciones en formato JSON
+4. **Búsqueda en Google Books** - Para cada recomendación de ChatGPT
+5. **Validación y filtrado** - Excluye libros ya leídos o en favoritos
+6. **Caché de versiones** - Guarda la versión exacta recomendada para consistencia
 
 #### **Estrategia Fallback: Libros por Defecto**
 
-- Se activa cuando ChatGPT falla
-- Usa libros predefinidos con portadas reales
+- Se activa cuando ChatGPT falla o no hay datos del usuario
+- Usa libros predefinidos con portadas reales de Google Books
 - No requiere consultas a APIs externas
+- Garantiza que siempre haya recomendaciones disponibles
 
-### **3. Sistema de Caché**
+### **3. Sistema de Caché Inteligente**
 
 #### **Caché de Recomendaciones (homeRecs.js)**
 
-- **Duración**: `Infinity` - Hasta que se invalide explícitamente
-- **Persistencia**: Mientras el usuario esté logueado
-- **Invalidación**: Solo al desloguearse
+- **Duración**: `Infinity` - Persistente hasta invalidación explícita
+- **Persistencia**: Mientras el usuario esté logueado en la sesión
+- **Invalidación**: Solo al desloguearse o reiniciar servidor
+- **Estructura**: `Map<userId, {data, timestamp}>`
+- **Validación**: Verifica integridad del caché antes de usar
 
 #### **Caché de Versiones (recommendationCache.js)**
 
-- **Propósito**: Mantener consistencia entre recomendaciones y búsquedas
-- **Duración**: 24 horas
+- **Propósito**: Mantener consistencia entre recomendaciones y búsquedas manuales
+- **Duración**: 24 horas por entrada
+- **Clave**: `"${titulo}_${autor}"` (normalizada)
 - **Funciones**:
-  - `saveRecommendedVersion()` - Guardar versión recomendada
+  - `saveRecommendedVersion()` - Guardar versión exacta recomendada
   - `getRecommendedVersion()` - Obtener versión del caché
-  - `findSimilarCachedVersion()` - Buscar versión similar
+  - `findSimilarCachedVersion()` - Buscar versión similar por título
+  - `cleanExpiredCache()` - Limpiar entradas expiradas
 
-## 🔍 Sistema de Búsqueda
+## 🔍 Sistema de Búsqueda y Procesamiento
 
-### **Búsqueda Flexible y Ordenada**
+### **Búsqueda en Google Books API**
 
 ```javascript
-// bookController.js - searchGoogleBooks()
+// homeRecs.js - searchGoogleBooks()
 const searchParams = {
-  q: `intitle:"${searchQuery}"`, // Búsqueda por título
+  q: `intitle:"${searchQuery}"`, // Búsqueda por título exacto
   maxResults: 20,
   printType: "books",
   orderBy: "relevance",
+  key: GOOGLE_BOOKS_API_KEY,
 };
+```
+
+### **Procesamiento Paralelo de Recomendaciones**
+
+```javascript
+// homeRecs.js - processLLMRecommendations()
+const BATCH_SIZE = 10; // Procesar de a 10 libros por vez
+const DELAY_BETWEEN_BOOKS = 50; // 50ms entre libros
+const DELAY_BETWEEN_BATCHES = 200; // 200ms entre batches
 ```
 
 ### **Priorización de Resultados**
 
 1. **Versión del caché** - Si existe, se muestra primero
-2. **Libros con imagen** - Se muestran al inicio
-3. **Libros sin imagen** - Se muestran al final
-4. **Sistema de calidad** - Solo si no hay versión en caché
+2. **Libros con imagen** - Se priorizan sobre los sin imagen
+3. **Libros con autor** - Se priorizan sobre los sin autor
+4. **Sistema de calidad** - Ordenamiento por criterios de calidad
 
-### **Matching de Títulos**
+### **Filtrado Inteligente**
 
-```javascript
-const titleMatchesSearch = (title, searchQuery) => {
-  // Búsqueda flexible que permite variaciones
-  // - Normaliza caracteres especiales
-  // - Busca palabras importantes (>2 caracteres)
-  // - Permite coincidencias parciales
-};
-```
+- **Exclusión de historial** - No recomienda libros ya leídos
+- **Exclusión de favoritos** - No recomienda libros en favoritos
+- **Deduplicación** - Evita duplicados entre listas
+- **Validación de integridad** - Verifica que los libros sean válidos
 
 ## 🎯 Sistema de Priorización por Calidad
 
-### **Criterios de Evaluación (preferredBooks.js)**
+### **Criterios de Evaluación Simplificados (preferredBooks.js)**
 
 ```javascript
-const calculateBookQualityScore = (book, searchQuery) => {
-  let score = 0;
+const prioritizeBooksByQuality = (books, searchQuery = null) => {
+  // Ordenamiento simple y rápido por criterios básicos
+  return books
+    .filter((book) => book.title) // Solo libros con título
+    .sort((a, b) => {
+      // 1. Priorizar libros con imagen
+      const aHasImage = a.image && !a.image.includes("placehold.co");
+      const bHasImage = b.image && !b.image.includes("placehold.co");
 
-  // Título exacto: +50 puntos
-  if (book.title.toLowerCase() === searchQuery.toLowerCase()) score += 50;
+      if (aHasImage && !bHasImage) return -1;
+      if (!aHasImage && bHasImage) return 1;
 
-  // Coincidencia de palabras: +30 puntos
-  if (titleMatchesSearch(book.title, searchQuery)) score += 30;
+      // 2. Priorizar libros con autor
+      const aHasAuthor = a.authors && a.authors.length > 0;
+      const bHasAuthor = b.authors && b.authors.length > 0;
 
-  // Tiene imagen: +20 puntos
-  if (book.image && !book.image.includes("placehold.co")) score += 20;
+      if (aHasAuthor && !bHasAuthor) return -1;
+      if (!aHasAuthor && bHasAuthor) return 1;
 
-  // Tiene descripción: +10 puntos
-  if (book.description && book.description.length > 50) score += 10;
-
-  // Tiene rating: +5 puntos
-  if (book.averageRating && book.averageRating > 0) score += 5;
-
-  return score;
+      return 0;
+    });
 };
 ```
 
-### **Agrupación por Título**
+### **Selección de Mejores Libros**
 
-- Agrupa libros con títulos similares
-- Selecciona la mejor versión de cada grupo
-- Evita duplicados en resultados
+- **Prioridad por imagen** - Libros con portada real primero
+- **Prioridad por autor** - Libros con información de autor
+- **Filtrado por calidad** - Solo libros con datos completos
+- **Deduplicación** - Evita libros repetidos en resultados
 
 ## 🚀 APIs y Endpoints
 
-### **Recomendaciones**
+### **Recomendaciones del Home**
 
 #### `GET /api/recommendations/home?userId={userId}`
 
-Obtiene recomendaciones para el usuario:
+Obtiene recomendaciones personalizadas para el usuario:
 
 ```json
 {
@@ -145,50 +161,43 @@ Obtiene recomendaciones para el usuario:
       "volumeId": "DqIPAAAACAAJ",
       "title": "El Señor de los Anillos",
       "authors": ["J.R.R. Tolkien"],
+      "categories": ["Fiction", "Fantasy"],
+      "description": "Una épica aventura de fantasía...",
       "image": "https://books.google.com/books/publisher/content/images/frontcover/DqIPAAAACAAJ?fife=w400-h600&source=gbs_api",
-      "reason": "Clásico de fantasía épica"
+      "reason": "Recomendado por IA"
     }
   ],
-  "descubriNuevasLecturas": [...],
+  "descubriNuevasLecturas": [
+    {
+      "volumeId": "5PQEAAAAMAAJ",
+      "title": "1984",
+      "authors": ["George Orwell"],
+      "categories": ["Fiction", "Dystopian"],
+      "description": "Una distopía clásica...",
+      "image": "https://books.google.com/books/publisher/content/images/frontcover/5PQEAAAAMAAJ?fife=w400-h600&source=gbs_api",
+      "reason": "Recomendado por IA"
+    }
+  ],
   "metadata": {
-    "strategy": "llm+shortlist",
+    "strategy": "llm+googlebooks",
     "generatedAt": "2024-01-15T10:30:00.000Z",
     "userId": 123
   }
 }
 ```
 
-#### `GET /api/recommendations/cache-status?userId={userId}`
+### **Estrategias de Recomendación**
 
-Verifica estado del caché:
+- **`llm+googlebooks`** - ChatGPT + Google Books (estrategia principal)
+- **`fallback-defaults`** - Libros por defecto (cuando ChatGPT falla)
+- **`llm-progressive`** - Carga progresiva de recomendaciones
+- **`llm-two-phase`** - Carga en dos fases (5+5 inicial, luego completo)
 
-```json
-{
-  "userId": "123",
-  "hasCache": true,
-  "timestamp": 1703123456789,
-  "age": "2h 15m",
-  "strategy": "llm+shortlist",
-  "tePodrianGustar": 12,
-  "descubriNuevasLecturas": 12
-}
-```
+### **Búsqueda de Libros**
 
-#### `POST /api/recommendations/invalidate`
+#### `GET /api/books/search?q={query}&generateDescriptions={true/false}`
 
-Invalida el caché:
-
-```json
-{
-  "userId": "123"
-}
-```
-
-### **Búsqueda**
-
-#### `GET /api/books/search?q={query}&filter={filter}`
-
-Busca libros en Google Books:
+Busca libros en Google Books con optimizaciones:
 
 ```json
 {
@@ -197,35 +206,55 @@ Busca libros en Google Books:
       "id": "DqIPAAAACAAJ",
       "title": "El Señor de los Anillos",
       "authors": ["J.R.R. Tolkien"],
-      "image": "https://books.google.com/books/publisher/content/images/frontcover/DqIPAAAACAAJ?fife=w400-h600&source=gbs_api",
+      "categories": ["Fiction", "Fantasy"],
       "description": "Una épica aventura de fantasía...",
-      "averageRating": 4.5
+      "image": "https://books.google.com/books/publisher/content/images/frontcover/DqIPAAAACAAJ?fife=w400-h600&source=gbs_api",
+      "averageRating": 4.5,
+      "pageCount": 1216,
+      "language": "es"
     }
   ],
   "totalResults": 1
 }
 ```
 
+### **Funciones de Utilidad**
+
+- **`getUserSignals(userId)`** - Obtiene señales del usuario
+- **`searchSpecificBook(title, author)`** - Busca un libro específico
+- **`clearUserCache(userId)`** - Limpia caché del usuario
+- **`clearAllCache()`** - Limpia todo el caché
+
 ## 🛡️ Manejo de Errores y Fallbacks
 
 ### **Rate Limiting de Google Books API**
 
 - **Límite**: 100 consultas/minuto
-- **Manejo**: Delays de 1 segundo entre consultas
-- **Fallback**: Libros por defecto si se excede el límite
+- **Manejo**: Delays escalonados entre consultas (50ms entre libros, 200ms entre batches)
+- **Retry automático**: Reintenta después de 8 segundos si se alcanza el límite
+- **Fallback**: Libros por defecto si se excede el límite persistentemente
 
-### **Fallbacks del Sistema**
+### **Sistema de Fallbacks en Cascada**
 
-1. **ChatGPT falla** → Libros por defecto
-2. **Google Books falla** → Libros por defecto
-3. **Libro no encontrado** → Se reemplaza con libro por defecto
-4. **Caché corrupto** → Se regenera automáticamente
+1. **ChatGPT falla** → Usar libros por defecto
+2. **Google Books falla** → Usar libros por defecto
+3. **Libro no encontrado** → Buscar libro de reemplazo
+4. **Caché corrupto** → Regenerar automáticamente
+5. **Sin datos del usuario** → Usar libros por defecto directamente
 
-### **Validaciones**
+### **Validaciones y Correcciones**
 
-- **Integridad del caché**: Exactamente 12+12 libros
-- **Respuesta de ChatGPT**: Formato JSON válido
-- **Datos de Google Books**: Estructura correcta
+- **Integridad del caché**: Verifica que tenga libros válidos
+- **Respuesta de ChatGPT**: Repara JSON malformado automáticamente
+- **Datos de Google Books**: Valida estructura y campos requeridos
+- **Filtrado de duplicados**: Elimina libros repetidos entre listas
+- **Exclusión de historial**: No recomienda libros ya leídos o en favoritos
+
+### **Sistema de Recuperación**
+
+- **Reemplazo de libros inválidos**: Busca alternativas automáticamente
+- **Completado de listas parciales**: Usa libros de la otra lista si es necesario
+- **Validación continua**: Verifica integridad en cada paso del proceso
 
 ## 📊 Logs del Sistema
 
@@ -233,30 +262,47 @@ Busca libros en Google Books:
 
 ```
 [Recommendations] Generando recomendaciones para usuario 123
-[Recommendations] Estrategia: llm+shortlist
-[Recommendations] Señales obtenidas: 3 favoritos, 5 likes, 2 dislikes
-[Recommendations] Enviando a ChatGPT: 24 recomendaciones
-[Recommendations] Procesando respuesta de ChatGPT...
-[Recommendations] Buscando libros en Google Books...
-[Recommendations] ✅ Recomendaciones generadas: 12 + 12 libros
+[Recommendations] Estrategia: llm+googlebooks
+[Signals] Obteniendo señales para usuario 123
+[Signals] Favoritos procesados: 3 libros
+[Signals] Historial LIKES (rating >= 3): 5 libros
+[Signals] Historial DISLIKES (rating <= 2): 2 libros
+[LLM] Enviando consulta a ChatGPT...
+[Process] Procesando recomendaciones del LLM con paralelización controlada...
+[Process] Resultado final: tePodrianGustar=10, descubriNuevasLecturas=10
+[Cache] Guardando en caché para usuario 123
 ```
 
 ### **Caché**
 
 ```
-[Cache] Hit para usuario 123, usando cache existente
+[Cache] Verificando caché para usuario 123
+[Cache] ✅ HIT para usuario 123, usando cache existente
 [Cache] Cache generado: 12/21/2024, 3:45:30 PM
-[Cache] Estrategia usada: llm+shortlist
-[Cache] Caché válido: 12 + 12 libros
+[Cache] Estrategia usada: llm+googlebooks
+[Cache] Caché válido: 10 + 10 libros
 ```
 
-### **Búsqueda**
+### **Búsqueda y Procesamiento**
 
 ```
 [GoogleBooks] Búsqueda: "El Alquimista"
 [GoogleBooks] Resultados encontrados: 15 libros
-[GoogleBooks] Priorizando versión del cache: El Alquimista (ID: 5PQEAAAAMAAJ)
-[GoogleBooks] Ordenando por calidad: 8 libros con imagen, 7 sin imagen
+[Quality] Priorizando 15 libros (modo rápido)
+[Quality] Priorizados 15 libros (modo rápido)
+[Process] ✅ Agregado a te_podrian_gustar: El Alquimista
+[Cache] Guardando versión recomendada: "El Alquimista" (ID: 5PQEAAAAMAAJ)
+```
+
+### **Manejo de Errores**
+
+```
+[LLM] ❌ ERROR PARSING JSON: Unexpected token
+[LLM] 🔧 INTENTANDO REPARAR JSON...
+[LLM] ✅ JSON REPARADO exitosamente
+[GoogleBooks] Rate limit alcanzado, esperando 8 segundos...
+[Process] ⚠️ Timeout o error para "Libro X": Timeout
+[Backup] Activando sistema de respaldo mejorado...
 ```
 
 ## 🔧 Configuración
@@ -268,47 +314,72 @@ GOOGLE_BOOKS_API_KEY=tu_api_key_aqui
 OPENAI_API_KEY=tu_openai_key_aqui
 ```
 
+### **Configuración de Procesamiento**
+
+```javascript
+// homeRecs.js - Procesamiento paralelo
+const BATCH_SIZE = 10; // Libros por batch
+const DELAY_BETWEEN_BOOKS = 50; // ms entre libros
+const DELAY_BETWEEN_BATCHES = 200; // ms entre batches
+const TIMEOUT_PER_BOOK = 5000; // ms timeout por libro
+```
+
 ### **Configuración de Caché**
 
 ```javascript
 // recommendationCache.js
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 const MAX_CACHE_SIZE = 1000; // Máximo 1000 entradas
+
+// homeRecs.js
+const CACHE_DURATION = Infinity; // Caché persistente por sesión
 ```
 
 ## 🚀 Beneficios del Sistema
 
+✅ **Personalización**: Recomendaciones basadas en historial real del usuario  
 ✅ **Consistencia**: Mismas recomendaciones durante toda la sesión  
-✅ **Performance**: Caché inteligente reduce consultas a APIs  
-✅ **Calidad**: Sistema de priorización por calidad  
-✅ **Flexibilidad**: Búsqueda flexible y ordenada  
-✅ **Confiabilidad**: Múltiples fallbacks para garantizar funcionamiento  
-✅ **UX**: Experiencia predecible y fluida para el usuario  
-✅ **Debugging**: Logs detallados para monitoreo y troubleshooting
+✅ **Performance**: Caché inteligente y procesamiento paralelo  
+✅ **Calidad**: Sistema de priorización por imagen y autor  
+✅ **Confiabilidad**: Múltiples fallbacks en cascada  
+✅ **Escalabilidad**: Procesamiento paralelo controlado  
+✅ **UX**: Experiencia fluida y predecible  
+✅ **Debugging**: Logs detallados para monitoreo  
+✅ **Recuperación**: Sistema automático de corrección de errores
 
 ## 🔄 Flujo de Datos Completo
 
 ```mermaid
 graph TD
-    A[Usuario solicita recomendaciones] --> B[Verificar caché]
-    B -->|Hit| C[Retornar recomendaciones del caché]
-    B -->|Miss| D[Obtener señales del usuario]
-    D --> E[Enviar a ChatGPT]
-    E --> F[Procesar respuesta de ChatGPT]
-    F --> G[Buscar libros en Google Books]
-    G --> H[Guardar en caché]
-    H --> I[Retornar recomendaciones]
+    A[Usuario solicita recomendaciones] --> B[Verificar caché persistente]
+    B -->|Hit| C[Validar integridad del caché]
+    C -->|Válido| D[Retornar recomendaciones del caché]
+    C -->|Inválido| E[Regenerar recomendaciones]
+    B -->|Miss| E[Obtener señales del usuario]
+    E --> F[Analizar favoritos y historial]
+    F --> G[Enviar prompt a ChatGPT]
+    G --> H[Procesar respuesta JSON]
+    H --> I[Buscar libros en Google Books en paralelo]
+    I --> J[Filtrar libros ya leídos/favoritos]
+    J --> K[Priorizar por calidad imagen/autor]
+    K --> L[Guardar en caché persistente]
+    L --> M[Retornar recomendaciones]
 
-    E -->|Falla| J[Usar libros por defecto]
-    G -->|Falla| J
-    J --> I
+    G -->|Falla| N[Usar libros por defecto]
+    I -->|Falla| N
+    H -->|JSON inválido| O[Reparar JSON automáticamente]
+    O -->|Éxito| I
+    O -->|Falla| N
+    N --> L
 ```
 
 ## 📝 Notas de Desarrollo
 
-- **ChatGPT**: Solo recibe títulos, no objetos completos
-- **Google Books**: Rate limit de 100 consultas/minuto
-- **Caché**: Se invalida solo al desloguearse
-- **Búsqueda**: Prioriza versión del caché si existe
-- **Imágenes**: Placeholders para libros sin portada
-- **Calidad**: Sistema de puntuación para ordenar resultados
+- **ChatGPT**: Recibe títulos de libros que le gustaron/no le gustaron al usuario
+- **Google Books**: Rate limit de 100 consultas/minuto con retry automático
+- **Caché**: Persistente por sesión, se invalida solo al desloguearse
+- **Procesamiento**: Paralelo en batches de 10 libros con delays controlados
+- **Búsqueda**: Prioriza versión del caché si existe para consistencia
+- **Imágenes**: Placeholders automáticos para libros sin portada
+- **Calidad**: Priorización simple por imagen y autor para velocidad
+- **Recuperación**: Sistema automático de reemplazo de libros inválidos

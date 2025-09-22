@@ -10,6 +10,7 @@ import {
   Alert,
   Platform,
   Image,
+  Animated,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useUser } from "../contexts/UserContext";
@@ -112,12 +113,183 @@ export default function EditarPerfilScreen() {
   const [modalVisible, setModalVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  // Estados para validación
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [showMessage, setShowMessage] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [messageType, setMessageType] = useState<"error" | "success">("error");
+
+  // Animación para mensajes
+  const messageOpacity = useState(new Animated.Value(0))[0];
+
   // Asegurar que la ubicación esté inicializada correctamente cuando cambie el usuario
   useEffect(() => {
     if (user?.ubicacion && ubicaciones.includes(user.ubicacion)) {
       setUbicacion(user.ubicacion);
     }
   }, [user?.ubicacion]);
+
+  // Función para mostrar mensajes temporales
+  const showTemporaryMessage = (
+    text: string,
+    type: "error" | "success" = "error"
+  ) => {
+    setMessageText(text);
+    setMessageType(type);
+    setShowMessage(true);
+
+    // Animar entrada
+    Animated.timing(messageOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    // Ocultar después de 3 segundos
+    setTimeout(() => {
+      Animated.timing(messageOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowMessage(false);
+      });
+    }, 3000);
+  };
+
+  // Validaciones individuales
+  const validateNombre = (value: string): string => {
+    if (!value.trim()) return "El nombre es obligatorio";
+    if (value.trim().length < 2)
+      return "El nombre debe tener al menos 2 caracteres";
+    if (value.trim().length > 50)
+      return "El nombre no puede exceder 50 caracteres";
+    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/.test(value.trim()))
+      return "El nombre solo puede contener letras y espacios";
+    return "";
+  };
+
+  const validateEmail = (value: string): string => {
+    if (!value.trim()) return "El email es obligatorio";
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value.trim())) return "Ingrese un email válido";
+    return "";
+  };
+
+  const validateTelefono = (value: string): string => {
+    if (!value.trim()) return "El teléfono es obligatorio";
+    if (!/^\d{10,15}$/.test(value.trim()))
+      return "El teléfono debe tener entre 10 y 15 dígitos";
+    return "";
+  };
+
+  const validatePassword = (value: string): string => {
+    if (!value) return "La contraseña es obligatoria";
+    if (value.length < 6)
+      return "La contraseña debe tener al menos 6 caracteres";
+    if (value.length > 50)
+      return "La contraseña no puede exceder 50 caracteres";
+
+    // Validar que tenga al menos una letra
+    if (!/[a-zA-Z]/.test(value)) {
+      return "La contraseña debe contener al menos una letra";
+    }
+
+    // Validar que tenga al menos un número
+    if (!/\d/.test(value)) {
+      return "La contraseña debe contener al menos un número";
+    }
+
+    return "";
+  };
+
+  const validatePasswordNueva = (value: string): string => {
+    if (!value) return ""; // La nueva contraseña es opcional
+    if (value.length < 6)
+      return "La nueva contraseña debe tener al menos 6 caracteres";
+    if (value.length > 50)
+      return "La nueva contraseña no puede exceder 50 caracteres";
+
+    // Validar que tenga al menos una letra
+    if (!/[a-zA-Z]/.test(value)) {
+      return "La nueva contraseña debe contener al menos una letra";
+    }
+
+    // Validar que tenga al menos un número
+    if (!/\d/.test(value)) {
+      return "La nueva contraseña debe contener al menos un número";
+    }
+
+    return "";
+  };
+
+  // Validación en tiempo real
+  const validateField = (field: string, value: string) => {
+    let error = "";
+
+    switch (field) {
+      case "nombre":
+        error = validateNombre(value);
+        break;
+      case "email":
+        error = validateEmail(value);
+        break;
+      case "telefono":
+        error = validateTelefono(value);
+        break;
+      case "passwordActual":
+        error = validatePassword(value);
+        break;
+      case "passwordNueva":
+        error = validatePasswordNueva(value);
+        break;
+    }
+
+    setErrors((prev) => ({
+      ...prev,
+      [field]: error,
+    }));
+
+    return error === "";
+  };
+
+  // Validación completa del formulario
+  const validateForm = (): boolean => {
+    const newErrors: { [key: string]: string } = {};
+
+    newErrors.nombre = validateNombre(nombre);
+    newErrors.email = validateEmail(email);
+    newErrors.telefono = validateTelefono(telefono);
+
+    // Solo validar contraseñas si se están cambiando
+    if (passwordActual || passwordNueva) {
+      if (passwordActual && !passwordNueva) {
+        newErrors.passwordNueva = "Debe ingresar la nueva contraseña";
+      }
+      if (!passwordActual && passwordNueva) {
+        newErrors.passwordActual = "Debe ingresar la contraseña actual";
+      }
+      if (passwordActual) {
+        newErrors.passwordActual = validatePassword(passwordActual);
+      }
+      if (passwordNueva) {
+        newErrors.passwordNueva = validatePasswordNueva(passwordNueva);
+      }
+    }
+
+    setErrors(newErrors);
+
+    const hasErrors = Object.values(newErrors).some((error) => error !== "");
+
+    if (hasErrors) {
+      const firstError = Object.values(newErrors).find((error) => error !== "");
+      if (firstError) {
+        showTemporaryMessage(firstError, "error");
+      }
+    }
+
+    return !hasErrors;
+  };
 
   const pickImage = async () => {
     const result = await ImagePicker.launchImageLibraryAsync({
@@ -167,6 +339,11 @@ export default function EditarPerfilScreen() {
   };
 
   const handleGuardar = async () => {
+    // Validar formulario completo
+    if (!validateForm()) {
+      return;
+    }
+
     try {
       setLoading(true);
       let nuevaFotoUrl = fotoPerfil;
@@ -175,9 +352,9 @@ export default function EditarPerfilScreen() {
       }
       const token = await AsyncStorage.getItem("token");
       const body: any = {
-        nombre,
-        email,
-        telefono,
+        nombre: nombre.trim(),
+        email: email.trim(),
+        telefono: telefono.trim(),
         ubicacion,
         fotoPerfil: nuevaFotoUrl,
       };
@@ -190,18 +367,23 @@ export default function EditarPerfilScreen() {
       });
       if (res.data && res.data.user) {
         setUser(res.data.user);
-        setModalVisible(true);
         setPasswordActual("");
         setPasswordNueva("");
         setFotoPerfilFile(null);
+
+        showTemporaryMessage("¡Perfil actualizado correctamente!", "success");
+
+        // Redirigir después de mostrar el mensaje de éxito
+        setTimeout(() => {
+          router.back();
+        }, 1500);
       } else {
-        Alert.alert("Error", "No se pudo actualizar el perfil.");
+        showTemporaryMessage("No se pudo actualizar el perfil", "error");
       }
     } catch (err: any) {
-      Alert.alert(
-        "Error",
-        err?.response?.data?.error || "No se pudo actualizar el perfil."
-      );
+      const errorMessage =
+        err?.response?.data?.error || "No se pudo actualizar el perfil";
+      showTemporaryMessage(errorMessage, "error");
     } finally {
       setLoading(false);
     }
@@ -209,6 +391,21 @@ export default function EditarPerfilScreen() {
 
   return (
     <View style={styles.container}>
+      {/* Mensaje temporal */}
+      {showMessage && (
+        <Animated.View
+          style={[
+            styles.messageContainer,
+            { opacity: messageOpacity },
+            messageType === "error"
+              ? styles.errorMessage
+              : styles.successMessage,
+          ]}
+        >
+          <Text style={styles.messageText}>{messageText}</Text>
+        </Animated.View>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <Image
@@ -249,30 +446,57 @@ export default function EditarPerfilScreen() {
             <Text style={styles.cambiarFotoText}>Cambiar foto</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.label}>Nombre</Text>
-        <TextInput
-          style={styles.input}
-          value={nombre}
-          onChangeText={setNombre}
-          maxLength={40}
-        />
-        <Text style={styles.label}>Correo electrónico</Text>
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          maxLength={60}
-        />
-        <Text style={styles.label}>Teléfono</Text>
-        <TextInput
-          style={styles.input}
-          value={telefono}
-          onChangeText={setTelefono}
-          keyboardType="phone-pad"
-          maxLength={20}
-        />
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Nombre</Text>
+          <TextInput
+            style={[styles.input, errors.nombre ? styles.inputError : null]}
+            value={nombre}
+            onChangeText={(text) => {
+              setNombre(text);
+              validateField("nombre", text);
+            }}
+            onBlur={() => validateField("nombre", nombre)}
+            maxLength={40}
+          />
+          {errors.nombre && (
+            <Text style={styles.errorText}>{errors.nombre}</Text>
+          )}
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Correo electrónico</Text>
+          <TextInput
+            style={[styles.input, errors.email ? styles.inputError : null]}
+            value={email}
+            onChangeText={(text) => {
+              setEmail(text);
+              validateField("email", text);
+            }}
+            onBlur={() => validateField("email", email)}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            maxLength={60}
+          />
+          {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+        </View>
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Teléfono</Text>
+          <TextInput
+            style={[styles.input, errors.telefono ? styles.inputError : null]}
+            value={telefono}
+            onChangeText={(text) => {
+              setTelefono(text);
+              validateField("telefono", text);
+            }}
+            onBlur={() => validateField("telefono", telefono)}
+            keyboardType="phone-pad"
+            maxLength={20}
+          />
+          {errors.telefono && (
+            <Text style={styles.errorText}>{errors.telefono}</Text>
+          )}
+        </View>
         <Text style={styles.label}>Ubicación</Text>
         <View style={styles.pickerWrapper}>
           <Picker
@@ -302,47 +526,74 @@ export default function EditarPerfilScreen() {
           }
           editable={false}
         />
-        <Text style={styles.label}>Contraseña actual</Text>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            value={passwordActual}
-            onChangeText={setPasswordActual}
-            placeholder="Contraseña actual"
-            secureTextEntry={!showPassword}
-            maxLength={40}
-          />
-          <TouchableOpacity
-            onPress={() => setShowPassword((v) => !v)}
-            style={{ marginLeft: 8 }}
-          >
-            <Ionicons
-              name={showPassword ? "eye-off" : "eye"}
-              size={22}
-              color="#7c4a2d"
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Contraseña actual</Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <TextInput
+              style={[
+                styles.input,
+                { flex: 1 },
+                errors.passwordActual ? styles.inputError : null,
+              ]}
+              value={passwordActual}
+              onChangeText={(text) => {
+                setPasswordActual(text);
+                validateField("passwordActual", text);
+              }}
+              onBlur={() => validateField("passwordActual", passwordActual)}
+              placeholder="Contraseña actual"
+              secureTextEntry={!showPassword}
+              maxLength={40}
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowPassword((v) => !v)}
+              style={{ marginLeft: 8 }}
+            >
+              <Ionicons
+                name={showPassword ? "eye-off" : "eye"}
+                size={22}
+                color="#7c4a2d"
+              />
+            </TouchableOpacity>
+          </View>
+          {errors.passwordActual && (
+            <Text style={styles.errorText}>{errors.passwordActual}</Text>
+          )}
         </View>
-        <Text style={styles.label}>Nueva contraseña</Text>
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <TextInput
-            style={[styles.input, { flex: 1 }]}
-            value={passwordNueva}
-            onChangeText={setPasswordNueva}
-            placeholder="Nueva contraseña"
-            secureTextEntry={!showPasswordNueva}
-            maxLength={40}
-          />
-          <TouchableOpacity
-            onPress={() => setShowPasswordNueva((v) => !v)}
-            style={{ marginLeft: 8 }}
-          >
-            <Ionicons
-              name={showPasswordNueva ? "eye-off" : "eye"}
-              size={22}
-              color="#7c4a2d"
+
+        <View style={styles.inputContainer}>
+          <Text style={styles.label}>Nueva contraseña</Text>
+          <View style={{ flexDirection: "row", alignItems: "center" }}>
+            <TextInput
+              style={[
+                styles.input,
+                { flex: 1 },
+                errors.passwordNueva ? styles.inputError : null,
+              ]}
+              value={passwordNueva}
+              onChangeText={(text) => {
+                setPasswordNueva(text);
+                validateField("passwordNueva", text);
+              }}
+              onBlur={() => validateField("passwordNueva", passwordNueva)}
+              placeholder="Nueva contraseña"
+              secureTextEntry={!showPasswordNueva}
+              maxLength={40}
             />
-          </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowPasswordNueva((v) => !v)}
+              style={{ marginLeft: 8 }}
+            >
+              <Ionicons
+                name={showPasswordNueva ? "eye-off" : "eye"}
+                size={22}
+                color="#7c4a2d"
+              />
+            </TouchableOpacity>
+          </View>
+          {errors.passwordNueva && (
+            <Text style={styles.errorText}>{errors.passwordNueva}</Text>
+          )}
         </View>
         <TouchableOpacity
           style={styles.button}
@@ -354,30 +605,6 @@ export default function EditarPerfilScreen() {
           </Text>
         </TouchableOpacity>
       </ScrollView>
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>¡Perfil actualizado!</Text>
-            <Text style={styles.modalMsg}>
-              Tus cambios se han guardado correctamente.
-            </Text>
-            <TouchableOpacity
-              style={styles.modalBtn}
-              onPress={() => {
-                setModalVisible(false);
-                router.back();
-              }}
-            >
-              <Text style={styles.modalBtnText}>Aceptar</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </View>
   );
 }
@@ -386,6 +613,41 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFF9F2",
+  },
+  // Mensajes temporales
+  messageContainer: {
+    position: "absolute",
+    top: Platform.OS === "android" ? 50 : 80,
+    left: 20,
+    right: 20,
+    zIndex: 1000,
+    borderRadius: 10,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  errorMessage: {
+    backgroundColor: "#ffebee",
+    borderLeftWidth: 4,
+    borderLeftColor: "#f44336",
+  },
+  successMessage: {
+    backgroundColor: "#e8f5e8",
+    borderLeftWidth: 4,
+    borderLeftColor: "#4caf50",
+  },
+  messageText: {
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+    color: "#2e2e2e",
+  },
+  // Contenedor de input con error
+  inputContainer: {
+    marginBottom: 8,
   },
   header: {
     backgroundColor: "#fff4e4",
@@ -471,6 +733,18 @@ const styles = StyleSheet.create({
     color: "#3B2412",
     marginBottom: 2,
   },
+  inputError: {
+    borderColor: "#f44336",
+    borderWidth: 2,
+    backgroundColor: "#ffebee",
+  },
+  errorText: {
+    color: "#f44336",
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+    fontWeight: "500",
+  },
   button: {
     marginTop: 28,
     alignSelf: "center",
@@ -484,48 +758,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontWeight: "bold",
     fontSize: 17,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.25)",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalContent: {
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 28,
-    alignItems: "center",
-    width: 300,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    color: "#3B2412",
-    marginBottom: 10,
-    textAlign: "center",
-  },
-  modalMsg: {
-    fontSize: 15,
-    color: "#3B2412",
-    marginBottom: 18,
-    textAlign: "center",
-  },
-  modalBtn: {
-    backgroundColor: "#7c4a2d",
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 32,
-  },
-  modalBtnText: {
-    color: "#fff",
-    fontWeight: "bold",
-    fontSize: 16,
   },
   pickerWrapper: {
     backgroundColor: "#fff",

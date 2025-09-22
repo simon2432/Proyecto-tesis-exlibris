@@ -134,6 +134,8 @@ exports.obtenerUnaPublicacion = async (req, res) => {
             nombre: true,
             ubicacion: true,
             puntuacionVendedor: true,
+            librosVendidos: true,
+            librosComprados: true,
           },
         },
       },

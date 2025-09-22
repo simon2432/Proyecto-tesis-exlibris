@@ -14,6 +14,7 @@ import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE_URL } from "../constants/ApiConfig";
 import ModalDetallePublicacion from "../components/ModalDetallePublicacion";
+import { getEstadoColorObject, getEstadoText } from "../constants/EstadoColors";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -28,6 +29,9 @@ export default function MisPublicaciones() {
   const [loading, setLoading] = useState(false);
   const [selectedPublicacion, setSelectedPublicacion] = useState<any>(null);
   const [modalVisible, setModalVisible] = useState(false);
+  const [estadosCompras, setEstadosCompras] = useState<{
+    [key: number]: string;
+  }>({});
 
   useEffect(() => {
     if (tab === "activas") {
@@ -91,6 +95,9 @@ export default function MisPublicaciones() {
         console.log("[Mis Publicaciones] Publicaciones en proceso:", enProceso);
 
         setPublicacionesEnProceso(enProceso);
+
+        // Obtener estados de las compras para cada publicación en proceso
+        await fetchEstadosCompras(enProceso);
       } else {
         setPublicacionesEnProceso([]);
       }
@@ -138,6 +145,45 @@ export default function MisPublicaciones() {
       setVentasCompletadas([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchEstadosCompras = async (publicaciones: any[]) => {
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const estados: { [key: number]: string } = {};
+
+      // Obtener estado de compra para cada publicación en paralelo
+      const promises = publicaciones.map(async (pub) => {
+        try {
+          const res = await fetch(
+            `${API_BASE_URL}/compras/publicacion/${pub.id}`,
+            {
+              headers: {
+                Authorization: token ? `Bearer ${token}` : "",
+              },
+            }
+          );
+          if (res.ok) {
+            const compra = await res.json();
+            estados[pub.id] = compra.estado;
+          } else {
+            // Si no hay compra, usar estado por defecto
+            estados[pub.id] = "en_venta";
+          }
+        } catch (error) {
+          console.error(
+            `Error obteniendo estado para publicación ${pub.id}:`,
+            error
+          );
+          estados[pub.id] = "en_venta";
+        }
+      });
+
+      await Promise.all(promises);
+      setEstadosCompras(estados);
+    } catch (error) {
+      console.error("Error obteniendo estados de compras:", error);
     }
   };
 
@@ -342,6 +388,19 @@ export default function MisPublicaciones() {
                   <Text style={styles.pubTitle} numberOfLines={2}>
                     {pub.titulo}
                   </Text>
+                  {/* Chip de estado de la compra */}
+                  <View
+                    style={[
+                      styles.estadoTag,
+                      getEstadoColorObject(
+                        estadosCompras[pub.id] || "en_venta"
+                      ),
+                    ]}
+                  >
+                    <Text style={styles.estadoText}>
+                      {getEstadoText(estadosCompras[pub.id] || "en_venta")}
+                    </Text>
+                  </View>
                 </TouchableOpacity>
               ))}
             </View>
@@ -577,5 +636,19 @@ const styles = StyleSheet.create({
   placeholderText: {
     color: "#7c4a2d",
     fontSize: 14,
+  },
+  estadoTag: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 6,
+    alignSelf: "center",
+    alignItems: "center",
+    marginHorizontal: 12,
+  },
+  estadoText: {
+    fontSize: 11,
+    fontWeight: "bold",
+    textAlign: "center",
   },
 });

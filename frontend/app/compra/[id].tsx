@@ -18,6 +18,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE_URL } from "../../constants/ApiConfig";
 import CustomTabBar from "../../components/CustomTabBar";
+import {
+  getEstadoColorObject,
+  getEstadoText,
+} from "../../constants/EstadoColors";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -443,63 +447,21 @@ export default function CompraDetalleScreen() {
     }
   };
 
-  const getEstadoColor = (estado: string) => {
-    switch (estado) {
-      case "pago_pendiente":
-        return { backgroundColor: "#c6f6fa", color: "#3B2412" };
-      case "encuentro":
-        return { backgroundColor: "#ffb3d9", color: "#3B2412" };
-      case "envio_pendiente":
-        return { backgroundColor: "#e9d6fa", color: "#3B2412" };
-      case "en_camino":
-        return { backgroundColor: "#e9d6fa", color: "#3B2412" };
-      case "comprador_confirmado":
-        return { backgroundColor: "#ffb74d", color: "#3B2412" };
-      case "vendedor_confirmado":
-        return { backgroundColor: "#81c784", color: "#3B2412" };
-      case "completado":
-        return { backgroundColor: "#c6fadc", color: "#3B2412" };
-      default:
-        return { backgroundColor: "#eee", color: "#3B2412" };
-    }
-  };
-
-  const getEstadoText = (estado: string) => {
-    switch (estado) {
-      case "pago_pendiente":
-        return "Pago pendiente";
-      case "encuentro":
-        return "Encuentro";
-      case "envio_pendiente":
-        return "Envío pendiente";
-      case "en_camino":
-        return "En camino";
-      case "comprador_confirmado":
-        return "Comprador confirmó";
-      case "vendedor_confirmado":
-        return "Vendedor confirmó";
-      case "completado":
-        return "Completado";
-      default:
-        return estado;
-    }
-  };
+  // Usar funciones centralizadas para colores y textos de estado
 
   const getInstrucciones = (tipoEntrega: string, estado: string) => {
     if (estado === "completado") {
       return "Esta transacción ha sido completada exitosamente.";
     }
 
-    if (estado === "comprador_confirmado") {
-      return "Solo apriete el botón si recibió el libro en condiciones y como acordó con el vendedor.";
-    }
-
-    if (estado === "vendedor_confirmado") {
-      return "El vendedor ya confirmó el pago. Confirma que recibiste el libro para completar la transacción.";
-    }
-
     if (tipoEntrega === "encuentro") {
-      return "Presione el siguiente botón si ya realizó el pago del libro y recibió el mismo en condiciones. Debe coordinar el encuentro con el vendedor.";
+      if (estado === "comprador_confirmado") {
+        return "El comprador ya confirmó la transacción. Confirma que recibiste el pago para completar la transacción.";
+      } else if (estado === "vendedor_confirmado") {
+        return "El vendedor ya confirmó el pago. Confirma que recibiste el libro para completar la transacción.";
+      } else {
+        return "Presione el siguiente botón si ya realizó el pago del libro y recibió el mismo en condiciones. Debe coordinar el encuentro con el vendedor.";
+      }
     } else if (tipoEntrega === "envio") {
       // Instrucciones específicas para envío
       if (estado === "pago_pendiente") {
@@ -508,6 +470,8 @@ export default function CompraDetalleScreen() {
         return "Presione el siguiente botón si ya recibio la informacion del envio por parte del vendedor";
       } else if (estado === "en_camino") {
         return "El envío está en camino. Una vez que recibas el libro en condiciones y como acordo con el vendedor, confirma que llegó en buen estado. Si hay algun inconveniente comunicarse con soporte.";
+      } else if (estado === "comprador_confirmado") {
+        return "Solo apriete el botón si recibió el libro en condiciones y como acordó con el vendedor.";
       }
       return "Presione el siguiente botón si ya realizó el pago del libro y lo recibió en buenas condiciones.";
     } else {
@@ -739,7 +703,9 @@ export default function CompraDetalleScreen() {
 
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Estado:</Text>
-            <View style={[styles.estadoTag, getEstadoColor(compra.estado)]}>
+            <View
+              style={[styles.estadoTag, getEstadoColorObject(compra.estado)]}
+            >
               <Text style={styles.estadoText}>
                 {getEstadoText(compra.estado)}
               </Text>
@@ -750,19 +716,22 @@ export default function CompraDetalleScreen() {
             {getInstrucciones(compra.tipoEntrega, compra.estado)}
           </Text>
 
-          {/* Botón para vendedor confirmar pago - solo para envío en estado pago_pendiente */}
+          {/* Botón para vendedor confirmar pago - para envío en estado pago_pendiente */}
           {(() => {
             const shouldShowButton =
               compra.tipoEntrega === "envio" &&
               compra.estado === "pago_pendiente" &&
               isVendedor;
 
-            console.log("Condiciones del botón de confirmar pago vendedor:", {
-              tipoEntrega: compra.tipoEntrega,
-              estado: compra.estado,
-              isVendedor,
-              shouldShowButton,
-            });
+            console.log(
+              "Condiciones del botón de confirmar pago vendedor (envío):",
+              {
+                tipoEntrega: compra.tipoEntrega,
+                estado: compra.estado,
+                isVendedor,
+                shouldShowButton,
+              }
+            );
 
             return shouldShowButton ? (
               <TouchableOpacity
@@ -779,6 +748,41 @@ export default function CompraDetalleScreen() {
                   <Text style={styles.completeButtonText}>
                     Confirmar recepción del pago
                   </Text>
+                )}
+              </TouchableOpacity>
+            ) : null;
+          })()}
+
+          {/* Botón para vendedor confirmar pago - para encuentro en estado comprador_confirmado */}
+          {(() => {
+            const shouldShowButton =
+              compra.tipoEntrega === "encuentro" &&
+              compra.estado === "comprador_confirmado" &&
+              isVendedor;
+
+            console.log(
+              "Condiciones del botón de confirmar pago vendedor (encuentro):",
+              {
+                tipoEntrega: compra.tipoEntrega,
+                estado: compra.estado,
+                isVendedor,
+                shouldShowButton,
+              }
+            );
+
+            return shouldShowButton ? (
+              <TouchableOpacity
+                style={[
+                  styles.completeButton,
+                  updating && styles.completeButtonDisabled,
+                ]}
+                onPress={confirmarPagoVendedor}
+                disabled={updating}
+              >
+                {updating ? (
+                  <ActivityIndicator size="small" color="#fff" />
+                ) : (
+                  <Text style={styles.completeButtonText}>Pago recibido</Text>
                 )}
               </TouchableOpacity>
             ) : null;
@@ -1023,51 +1027,44 @@ export default function CompraDetalleScreen() {
                 </View>
               ) : (
                 <View style={styles.valoracionPendiente}>
-                  <View style={styles.pickerContainer}>
-                    {Platform.OS === "web" ? (
-                      <select
-                        value={valoracion}
-                        onChange={(e) => setValoracion(Number(e.target.value))}
-                        style={{
-                          width: "100%",
-                          height: 60,
-                          fontSize: 18,
-                          padding: 12,
-                          borderRadius: 15,
-                          border: "2px solid #ddd",
-                          backgroundColor: "#fff",
-                          color: "#3B2412",
-                          cursor: "pointer",
-                          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-                          outline: "none",
-                        }}
+                  <Text style={styles.valoracionTexto}>
+                    Selecciona una valoración:
+                  </Text>
+
+                  {/* Selector de estrellas */}
+                  <View style={styles.estrellasSelector}>
+                    {[1, 2, 3, 4, 5].map((estrella) => (
+                      <TouchableOpacity
+                        key={estrella}
+                        style={[
+                          styles.estrellaButton,
+                          estrella <= valoracion &&
+                            styles.estrellaButtonSeleccionada,
+                        ]}
+                        onPress={() => setValoracion(estrella)}
+                        activeOpacity={0.7}
                       >
-                        <option value={0}>⭐ Seleccione una valoración</option>
-                        <option value={1}>⭐</option>
-                        <option value={2}>⭐⭐</option>
-                        <option value={3}>⭐⭐⭐</option>
-                        <option value={4}>⭐⭐⭐⭐</option>
-                        <option value={5}>⭐⭐⭐⭐⭐</option>
-                      </select>
-                    ) : (
-                      <Picker
-                        selectedValue={valoracion}
-                        onValueChange={(itemValue) => setValoracion(itemValue)}
-                        style={styles.picker}
-                        itemStyle={styles.pickerItem}
-                      >
-                        <Picker.Item
-                          label="⭐ Seleccione una valoración"
-                          value={0}
-                        />
-                        <Picker.Item label="⭐" value={1} />
-                        <Picker.Item label="⭐⭐" value={2} />
-                        <Picker.Item label="⭐⭐⭐" value={3} />
-                        <Picker.Item label="⭐⭐⭐⭐" value={4} />
-                        <Picker.Item label="⭐⭐⭐⭐⭐" value={5} />
-                      </Picker>
-                    )}
+                        <Text
+                          style={[
+                            styles.estrellaSelector,
+                            estrella <= valoracion
+                              ? styles.estrellaSelectorLlena
+                              : styles.estrellaSelectorVacia,
+                          ]}
+                        >
+                          ⭐
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
                   </View>
+
+                  {/* Texto de valoración seleccionada */}
+                  {valoracion > 0 && (
+                    <Text style={styles.valoracionSeleccionada}>
+                      {valoracion} de 5 estrellas
+                    </Text>
+                  )}
+
                   <TouchableOpacity
                     style={[
                       styles.valorarButton,
@@ -1597,7 +1594,72 @@ const styles = StyleSheet.create({
     color: "#3B2412",
     marginBottom: 16,
     textAlign: "center",
-    fontStyle: "italic",
+    fontWeight: "bold",
+  },
+  estrellasSelector: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 20,
+    gap: 2,
+    paddingHorizontal: 8,
+  },
+  estrellaButton: {
+    padding: 8,
+    borderRadius: 20,
+    marginHorizontal: 1,
+    borderWidth: 2,
+    borderColor: "transparent",
+    backgroundColor: "rgba(255, 255, 255, 0.5)",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 2,
+    flex: 1,
+    maxWidth: 50,
+  },
+  estrellaButtonSeleccionada: {
+    borderColor: "#ffd700",
+    backgroundColor: "rgba(255, 215, 0, 0.1)",
+    shadowColor: "#ffd700",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  estrellaSelector: {
+    fontSize: 28,
+    textAlign: "center",
+    minWidth: 32,
+    minHeight: 32,
+    lineHeight: 32,
+  },
+  estrellaSelectorLlena: {
+    color: "#ffd700",
+    textShadowColor: "rgba(255, 215, 0, 0.8)",
+    textShadowOffset: { width: 0, height: 0 },
+    textShadowRadius: 6,
+  },
+  estrellaSelectorVacia: {
+    color: "#b0b0b0",
+    opacity: 0.4,
+  },
+  valoracionSeleccionada: {
+    fontSize: 16,
+    color: "#3B2412",
+    fontWeight: "bold",
+    textAlign: "center",
+    marginBottom: 16,
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   valoracionPendiente: {
     backgroundColor: "#f3e8da",
@@ -1609,28 +1671,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
-  },
-  pickerContainer: {
-    marginBottom: 20,
-    paddingVertical: 8,
-    backgroundColor: "#fff",
-    borderRadius: 15,
-    borderWidth: 2,
-    borderColor: "#ddd",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  picker: {
-    height: 60,
-    width: "100%",
-  },
-  pickerItem: {
-    fontSize: 18,
-    color: "#3B2412",
-    fontWeight: "500",
   },
   valorarButton: {
     backgroundColor: "#3B2412",

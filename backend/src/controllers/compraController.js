@@ -628,26 +628,83 @@ exports.confirmarPagoVendedor = async (req, res) => {
       return res.status(404).json({ error: "Compra no encontrada" });
     }
 
-    // Solo permitir confirmar pago si está en estado pago_pendiente
-    if (compra.estado !== "pago_pendiente") {
+    // Solo permitir confirmar pago si está en estado pago_pendiente (para envíos) o comprador_confirmado (para encuentros)
+    if (
+      compra.estado !== "pago_pendiente" &&
+      compra.estado !== "comprador_confirmado"
+    ) {
       return res.status(400).json({
-        error: "Solo se puede confirmar pago en estado de pago pendiente",
+        error:
+          "Solo se puede confirmar pago en estado de pago pendiente o cuando el comprador ya confirmó",
       });
     }
 
-    // Actualizar el estado a envio_pendiente
+    // Actualizar el estado según el tipo de entrega
+    let nuevoEstado;
+    if (compra.tipoEntrega === "envio") {
+      nuevoEstado = "envio_pendiente";
+    } else if (compra.tipoEntrega === "encuentro") {
+      nuevoEstado = compra.compradorConfirmado
+        ? "completado"
+        : "vendedor_confirmado";
+    }
+
     const compraActualizada = await prisma.compra.update({
       where: { id: parseInt(id) },
       data: {
-        estado: "envio_pendiente",
+        estado: nuevoEstado,
         vendedorConfirmado: true,
       },
     });
 
+    // Si la venta se completó (encuentro), actualizar el estado de la publicación
+    if (compraActualizada.estado === "completado") {
+      await prisma.publicacion.update({
+        where: { id: compra.publicacionId },
+        data: { estado: "vendida" },
+      });
+      console.log(
+        "[Compra] Publicación marcada como vendida:",
+        compra.publicacionId
+      );
+
+      // Verificar logros del vendedor
+      try {
+        const logrosInfo = await verificarLogros(compra.vendedorId);
+        if (logrosInfo && logrosInfo.nuevosLogros.length > 0) {
+          console.log(
+            "[Compra] Nuevos logros otorgados al vendedor:",
+            logrosInfo.nuevosLogros
+          );
+        }
+      } catch (logrosError) {
+        console.error("Error verificando logros:", logrosError);
+        // No fallar la operación principal por errores en logros
+      }
+
+      // Verificar logros del comprador
+      try {
+        const logrosInfoComprador = await verificarLogros(compra.compradorId);
+        if (
+          logrosInfoComprador &&
+          logrosInfoComprador.nuevosLogros.length > 0
+        ) {
+          console.log(
+            "[Compra] Nuevos logros otorgados al comprador:",
+            logrosInfoComprador.nuevosLogros
+          );
+        }
+      } catch (logrosError) {
+        console.error("Error verificando logros del comprador:", logrosError);
+        // No fallar la operación principal por errores en logros
+      }
+    }
+
     console.log(
       "[Compra] Pago confirmado por vendedor:",
       id,
-      "nuevo estado: envio_pendiente"
+      "nuevo estado:",
+      nuevoEstado
     );
 
     res.json({

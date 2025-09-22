@@ -17,6 +17,10 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE_URL } from "../../constants/ApiConfig";
 import CustomTabBar from "../../components/CustomTabBar";
+import {
+  getEstadoColorObject,
+  getEstadoText,
+} from "../../constants/EstadoColors";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -230,47 +234,7 @@ export default function DetalleVenta() {
     }
   };
 
-  const getEstadoText = (estado: string) => {
-    switch (estado) {
-      case "pago_pendiente":
-        return "Pago pendiente";
-      case "encuentro":
-        return "Encuentro";
-      case "envio_pendiente":
-        return "Envío pendiente";
-      case "en_camino":
-        return "En camino";
-      case "comprador_confirmado":
-        return "Comprador confirmó";
-      case "vendedor_confirmado":
-        return "Vendedor confirmó";
-      case "completado":
-        return "Completado";
-      default:
-        return estado;
-    }
-  };
-
-  const getEstadoColor = (estado: string) => {
-    switch (estado) {
-      case "pago_pendiente":
-        return "#ffd700";
-      case "encuentro":
-        return "#ff69b4";
-      case "envio_pendiente":
-        return "#ffa500";
-      case "en_camino":
-        return "#87ceeb";
-      case "comprador_confirmado":
-        return "#ffb74d";
-      case "vendedor_confirmado":
-        return "#81c784";
-      case "completado":
-        return "#90ee90";
-      default:
-        return "#cccccc";
-    }
-  };
+  // Usar funciones centralizadas para colores y textos de estado
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -457,10 +421,7 @@ export default function DetalleVenta() {
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Estado:</Text>
             <View
-              style={[
-                styles.estadoTag,
-                { backgroundColor: getEstadoColor(venta.estado) },
-              ]}
+              style={[styles.estadoTag, getEstadoColorObject(venta.estado)]}
             >
               <Text style={styles.estadoText}>
                 {getEstadoText(venta.estado)}

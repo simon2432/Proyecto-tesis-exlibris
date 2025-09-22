@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   Alert,
   StyleSheet,
   Platform,
+  Animated,
 } from "react-native";
 import { Picker } from "@react-native-picker/picker";
 import { useRouter } from "expo-router";
@@ -98,89 +99,328 @@ export default function Register() {
   const [password, setPassword] = useState("");
   const [repeatPassword, setRepeatPassword] = useState("");
   const [ubicacion, setUbicacion] = useState(ubicaciones[0]);
+
+  // Estados para validación
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [showMessage, setShowMessage] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [messageType, setMessageType] = useState<"error" | "success">("error");
+  const [isValidating, setIsValidating] = useState(false);
+
+  // Animación para mensajes
+  const messageOpacity = useState(new Animated.Value(0))[0];
+
   const router = useRouter();
   const { setUser } = useUser();
 
+  // Función para mostrar mensajes temporales
+  const showTemporaryMessage = (
+    text: string,
+    type: "error" | "success" = "error"
+  ) => {
+    setMessageText(text);
+    setMessageType(type);
+    setShowMessage(true);
+
+    // Animar entrada
+    Animated.timing(messageOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    // Ocultar después de 3 segundos
+    setTimeout(() => {
+      Animated.timing(messageOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowMessage(false);
+      });
+    }, 3000);
+  };
+
+  // Validaciones individuales
+  const validateNombre = (value: string): string => {
+    if (!value.trim()) return "El nombre es obligatorio";
+    if (value.trim().length < 2)
+      return "El nombre debe tener al menos 2 caracteres";
+    if (value.trim().length > 50)
+      return "El nombre no puede exceder 50 caracteres";
+    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s]+$/.test(value.trim()))
+      return "El nombre solo puede contener letras y espacios";
+    return "";
+  };
+
+  const validateDNI = (value: string): string => {
+    if (!value.trim()) return "El DNI es obligatorio";
+    if (!/^\d{7,8}$/.test(value.trim()))
+      return "El DNI debe tener 7 u 8 dígitos";
+    return "";
+  };
+
+  const validateEmail = (value: string): string => {
+    if (!value.trim()) return "El email es obligatorio";
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(value.trim())) return "Ingrese un email válido";
+    return "";
+  };
+
+  const validateTelefono = (value: string): string => {
+    if (!value.trim()) return "El teléfono es obligatorio";
+    if (!/^\d{10,15}$/.test(value.trim()))
+      return "El teléfono debe tener entre 10 y 15 dígitos";
+    return "";
+  };
+
+  const validatePassword = (value: string): string => {
+    if (!value) return "La contraseña es obligatoria";
+    if (value.length < 6)
+      return "La contraseña debe tener al menos 6 caracteres";
+    if (value.length > 50)
+      return "La contraseña no puede exceder 50 caracteres";
+
+    // Validar que tenga al menos una letra
+    if (!/[a-zA-Z]/.test(value)) {
+      return "La contraseña debe contener al menos una letra";
+    }
+
+    // Validar que tenga al menos un número
+    if (!/\d/.test(value)) {
+      return "La contraseña debe contener al menos un número";
+    }
+
+    return "";
+  };
+
+  const validateRepeatPassword = (value: string): string => {
+    if (!value) return "Debe repetir la contraseña";
+    if (value !== password) return "Las contraseñas no coinciden";
+    return "";
+  };
+
+  // Validación en tiempo real
+  const validateField = (field: string, value: string) => {
+    let error = "";
+
+    switch (field) {
+      case "nombre":
+        error = validateNombre(value);
+        break;
+      case "dni":
+        error = validateDNI(value);
+        break;
+      case "email":
+        error = validateEmail(value);
+        break;
+      case "telefono":
+        error = validateTelefono(value);
+        break;
+      case "password":
+        error = validatePassword(value);
+        break;
+      case "repeatPassword":
+        error = validateRepeatPassword(value);
+        break;
+    }
+
+    setErrors((prev) => ({
+      ...prev,
+      [field]: error,
+    }));
+
+    return error === "";
+  };
+
+  // Validación completa del formulario
+  const validateForm = (): boolean => {
+    const newErrors: { [key: string]: string } = {};
+
+    newErrors.nombre = validateNombre(nombre);
+    newErrors.dni = validateDNI(dni);
+    newErrors.email = validateEmail(email);
+    newErrors.telefono = validateTelefono(telefono);
+    newErrors.password = validatePassword(password);
+    newErrors.repeatPassword = validateRepeatPassword(repeatPassword);
+
+    setErrors(newErrors);
+
+    const hasErrors = Object.values(newErrors).some((error) => error !== "");
+
+    if (hasErrors) {
+      const firstError = Object.values(newErrors).find((error) => error !== "");
+      if (firstError) {
+        showTemporaryMessage(firstError, "error");
+      }
+    }
+
+    return !hasErrors;
+  };
+
   const handleRegister = async () => {
-    if (password !== repeatPassword) {
-      Alert.alert("Error", "Las contraseñas no coinciden");
+    // Validar formulario completo
+    if (!validateForm()) {
       return;
     }
-    if (!telefono.trim()) {
-      Alert.alert("Error", "El teléfono es obligatorio");
-      return;
-    }
+
+    setIsValidating(true);
+
     try {
       const res = await axios.post(`${API_BASE_URL}/auth/register`, {
         nombre: nombre.trim(),
-        email,
+        email: email.trim(),
         telefono: telefono.trim(),
         password,
         ubicacion,
-        documento: dni,
+        documento: dni.trim(),
       });
 
       // Guardar token y datos del usuario
       await AsyncStorage.setItem("token", res.data.token);
       setUser(res.data.user);
 
-      router.replace("/home");
+      showTemporaryMessage("¡Registro exitoso! Redirigiendo...", "success");
+
+      // Redirigir después de mostrar el mensaje de éxito
+      setTimeout(() => {
+        router.replace("/home");
+      }, 1500);
     } catch (error: any) {
-      Alert.alert("Error", error?.response?.data?.error || "Falló el registro");
+      const errorMessage = error?.response?.data?.error || "Falló el registro";
+      showTemporaryMessage(errorMessage, "error");
+    } finally {
+      setIsValidating(false);
     }
   };
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Crear cuenta</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Nombre y apellido"
-        value={nombre}
-        onChangeText={setNombre}
-        placeholderTextColor="#a08b7d"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="DNI"
-        value={dni}
-        onChangeText={setDni}
-        keyboardType="numeric"
-        placeholderTextColor="#a08b7d"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        autoCapitalize="none"
-        keyboardType="email-address"
-        placeholderTextColor="#a08b7d"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Teléfono"
-        value={telefono}
-        onChangeText={setTelefono}
-        keyboardType="phone-pad"
-        placeholderTextColor="#a08b7d"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Contraseña"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        placeholderTextColor="#a08b7d"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Repetir contraseña"
-        value={repeatPassword}
-        onChangeText={setRepeatPassword}
-        secureTextEntry
-        placeholderTextColor="#a08b7d"
-      />
+
+      {/* Mensaje temporal */}
+      {showMessage && (
+        <Animated.View
+          style={[
+            styles.messageContainer,
+            { opacity: messageOpacity },
+            messageType === "error"
+              ? styles.errorMessage
+              : styles.successMessage,
+          ]}
+        >
+          <Text style={styles.messageText}>{messageText}</Text>
+        </Animated.View>
+      )}
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={[styles.input, errors.nombre ? styles.inputError : null]}
+          placeholder="Nombre y apellido"
+          value={nombre}
+          onChangeText={(text) => {
+            setNombre(text);
+            validateField("nombre", text);
+          }}
+          onBlur={() => validateField("nombre", nombre)}
+          placeholderTextColor="#a08b7d"
+        />
+        {errors.nombre && <Text style={styles.errorText}>{errors.nombre}</Text>}
+      </View>
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={[styles.input, errors.dni ? styles.inputError : null]}
+          placeholder="DNI"
+          value={dni}
+          onChangeText={(text) => {
+            setDni(text);
+            validateField("dni", text);
+          }}
+          onBlur={() => validateField("dni", dni)}
+          keyboardType="numeric"
+          placeholderTextColor="#a08b7d"
+        />
+        {errors.dni && <Text style={styles.errorText}>{errors.dni}</Text>}
+      </View>
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={[styles.input, errors.email ? styles.inputError : null]}
+          placeholder="Email"
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            validateField("email", text);
+          }}
+          onBlur={() => validateField("email", email)}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          placeholderTextColor="#a08b7d"
+        />
+        {errors.email && <Text style={styles.errorText}>{errors.email}</Text>}
+      </View>
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={[styles.input, errors.telefono ? styles.inputError : null]}
+          placeholder="Teléfono"
+          value={telefono}
+          onChangeText={(text) => {
+            setTelefono(text);
+            validateField("telefono", text);
+          }}
+          onBlur={() => validateField("telefono", telefono)}
+          keyboardType="phone-pad"
+          placeholderTextColor="#a08b7d"
+        />
+        {errors.telefono && (
+          <Text style={styles.errorText}>{errors.telefono}</Text>
+        )}
+      </View>
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={[styles.input, errors.password ? styles.inputError : null]}
+          placeholder="Contraseña"
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            validateField("password", text);
+            // Revalidar repeatPassword si ya tiene valor
+            if (repeatPassword) {
+              validateField("repeatPassword", repeatPassword);
+            }
+          }}
+          onBlur={() => validateField("password", password)}
+          secureTextEntry
+          placeholderTextColor="#a08b7d"
+        />
+        {errors.password && (
+          <Text style={styles.errorText}>{errors.password}</Text>
+        )}
+      </View>
+
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={[
+            styles.input,
+            errors.repeatPassword ? styles.inputError : null,
+          ]}
+          placeholder="Repetir contraseña"
+          value={repeatPassword}
+          onChangeText={(text) => {
+            setRepeatPassword(text);
+            validateField("repeatPassword", text);
+          }}
+          onBlur={() => validateField("repeatPassword", repeatPassword)}
+          secureTextEntry
+          placeholderTextColor="#a08b7d"
+        />
+        {errors.repeatPassword && (
+          <Text style={styles.errorText}>{errors.repeatPassword}</Text>
+        )}
+      </View>
       <View style={styles.selectContainer}>
         <Text style={styles.selectLabel}>Ubicación:</Text>
         <View style={styles.pickerWrapper}>
@@ -196,8 +436,14 @@ export default function Register() {
           </Picker>
         </View>
       </View>
-      <TouchableOpacity style={styles.button} onPress={handleRegister}>
-        <Text style={styles.buttonText}>Registrarse</Text>
+      <TouchableOpacity
+        style={[styles.button, isValidating ? styles.buttonDisabled : null]}
+        onPress={handleRegister}
+        disabled={isValidating}
+      >
+        <Text style={styles.buttonText}>
+          {isValidating ? "Registrando..." : "Registrarse"}
+        </Text>
       </TouchableOpacity>
       <TouchableOpacity
         style={[styles.button, styles.smallButton]}
@@ -226,13 +472,48 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontFamily: Platform.OS === "android" ? "serif" : undefined,
   },
-  input: {
+  // Mensajes temporales
+  messageContainer: {
+    position: "absolute",
+    top: Platform.OS === "android" ? 50 : 80,
+    left: 20,
+    right: 20,
+    zIndex: 1000,
+    borderRadius: 10,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  errorMessage: {
+    backgroundColor: "#ffebee",
+    borderLeftWidth: 4,
+    borderLeftColor: "#f44336",
+  },
+  successMessage: {
+    backgroundColor: "#e8f5e8",
+    borderLeftWidth: 4,
+    borderLeftColor: "#4caf50",
+  },
+  messageText: {
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+    color: "#2e2e2e",
+  },
+  // Contenedor de input con error
+  inputContainer: {
     width: "100%",
     maxWidth: 350,
+    marginBottom: 8,
+  },
+  input: {
+    width: "100%",
     backgroundColor: "#fff",
     borderRadius: 10,
     padding: 14,
-    marginBottom: 16,
     fontSize: 16,
     color: "#4b2e1e",
     borderWidth: 1,
@@ -242,6 +523,18 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 2,
     elevation: 2,
+  },
+  inputError: {
+    borderColor: "#f44336",
+    borderWidth: 2,
+    backgroundColor: "#ffebee",
+  },
+  errorText: {
+    color: "#f44336",
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+    fontWeight: "500",
   },
   selectContainer: {
     width: "100%",
@@ -275,6 +568,10 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 6,
     marginTop: 10,
+  },
+  buttonDisabled: {
+    backgroundColor: "#9e9e9e",
+    opacity: 0.7,
   },
   buttonText: {
     color: "#f3e8da",

@@ -13,6 +13,7 @@ import {
 import { useRouter } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { API_BASE_URL } from "../constants/ApiConfig";
+import { getEstadoColorObject, getEstadoText } from "../constants/EstadoColors";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
@@ -79,41 +80,7 @@ export default function HistorialCompras() {
     (compra) => compra.estado === "completado"
   );
 
-  // Colores para los estados
-  const estadoColor = (estado: string) => {
-    switch (estado) {
-      case "pago_pendiente":
-        return { backgroundColor: "#c6f6fa", color: "#3B2412" };
-      case "encuentro":
-        return { backgroundColor: "#ffb3d9", color: "#3B2412" };
-      case "envio_pendiente":
-        return { backgroundColor: "#e9d6fa", color: "#3B2412" };
-      case "en_camino":
-        return { backgroundColor: "#e9d6fa", color: "#3B2412" };
-      case "completado":
-        return { backgroundColor: "#c6fadc", color: "#3B2412" };
-      default:
-        return { backgroundColor: "#eee", color: "#3B2412" };
-    }
-  };
-
-  // Mapear estados a texto legible
-  const getEstadoText = (estado: string) => {
-    switch (estado) {
-      case "pago_pendiente":
-        return "Pago pendiente";
-      case "encuentro":
-        return "Encuentro";
-      case "envio_pendiente":
-        return "Envío pendiente";
-      case "en_camino":
-        return "En camino";
-      case "completado":
-        return "Completado";
-      default:
-        return estado;
-    }
-  };
+  // Usar funciones centralizadas para colores y textos de estado
 
   const renderCompra = (compra: Compra) => (
     <TouchableOpacity
@@ -148,7 +115,7 @@ export default function HistorialCompras() {
       <Text style={styles.vendedorText} numberOfLines={1}>
         {compra.vendedor}
       </Text>
-      <View style={[styles.estadoTag, estadoColor(compra.estado)]}>
+      <View style={[styles.estadoTag, getEstadoColorObject(compra.estado)]}>
         <Text style={styles.estadoText}>{getEstadoText(compra.estado)}</Text>
       </View>
     </TouchableOpacity>

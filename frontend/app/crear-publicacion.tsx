@@ -10,6 +10,7 @@ import {
   Platform,
   Alert,
   Modal,
+  Animated,
 } from "react-native";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -60,6 +61,166 @@ export default function CrearPublicacion() {
   const [showIdiomaPicker, setShowIdiomaPicker] = useState(false);
   const [showEstadoPicker, setShowEstadoPicker] = useState(false);
 
+  // Estados para validación
+  const [errors, setErrors] = useState<{ [key: string]: string }>({});
+  const [showMessage, setShowMessage] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [messageType, setMessageType] = useState<"error" | "success">("error");
+
+  // Animación para mensajes
+  const messageOpacity = useState(new Animated.Value(0))[0];
+
+  // Función para mostrar mensajes temporales
+  const showTemporaryMessage = (
+    text: string,
+    type: "error" | "success" = "error"
+  ) => {
+    setMessageText(text);
+    setMessageType(type);
+    setShowMessage(true);
+
+    // Animar entrada
+    Animated.timing(messageOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+
+    // Ocultar después de 3 segundos
+    setTimeout(() => {
+      Animated.timing(messageOpacity, {
+        toValue: 0,
+        duration: 300,
+        useNativeDriver: true,
+      }).start(() => {
+        setShowMessage(false);
+      });
+    }, 3000);
+  };
+
+  // Validaciones individuales
+  const validateTitulo = (value: string): string => {
+    if (!value.trim()) return "El título es obligatorio";
+    if (value.trim().length < 2)
+      return "El título debe tener al menos 2 caracteres";
+    if (value.trim().length > 100)
+      return "El título no puede exceder 100 caracteres";
+    return "";
+  };
+
+  const validateAutor = (value: string): string => {
+    if (!value.trim()) return "El autor es obligatorio";
+    if (value.trim().length < 2)
+      return "El autor debe tener al menos 2 caracteres";
+    if (value.trim().length > 80)
+      return "El autor no puede exceder 80 caracteres";
+    if (!/^[a-zA-ZáéíóúÁÉÍÓÚñÑ\s.,-]+$/.test(value.trim()))
+      return "El autor solo puede contener letras, espacios, puntos, comas y guiones";
+    return "";
+  };
+
+  const validateGenero = (value: string): string => {
+    if (!value.trim()) return "El género es obligatorio";
+    if (value.trim().length < 2)
+      return "El género debe tener al menos 2 caracteres";
+    if (value.trim().length > 50)
+      return "El género no puede exceder 50 caracteres";
+    return "";
+  };
+
+  const validateEditorial = (value: string): string => {
+    if (!value.trim()) return "La editorial es obligatoria";
+    if (value.trim().length < 2)
+      return "La editorial debe tener al menos 2 caracteres";
+    if (value.trim().length > 80)
+      return "La editorial no puede exceder 80 caracteres";
+    return "";
+  };
+
+  const validatePaginas = (value: string): string => {
+    if (!value.trim()) return "La cantidad de páginas es obligatoria";
+    const paginasNum = parseInt(value.trim());
+    if (isNaN(paginasNum))
+      return "La cantidad de páginas debe ser un número válido";
+    if (paginasNum <= 0) return "La cantidad de páginas debe ser mayor a 0";
+    if (paginasNum > 10000)
+      return "La cantidad de páginas no puede exceder 10,000";
+    return "";
+  };
+
+  const validatePrecio = (value: string): string => {
+    if (!value.trim()) return "El precio es obligatorio";
+    const precioNum = parseInt(value.trim());
+    if (isNaN(precioNum)) return "El precio debe ser un número válido";
+    if (precioNum <= 0) return "El precio debe ser mayor a 0";
+    if (precioNum > 1000000) return "El precio máximo permitido es $1.000.000";
+    return "";
+  };
+
+  const validateImagen = (): string => {
+    if (!imagen) return "La imagen es obligatoria";
+    return "";
+  };
+
+  // Validación en tiempo real
+  const validateField = (field: string, value: string) => {
+    let error = "";
+
+    switch (field) {
+      case "titulo":
+        error = validateTitulo(value);
+        break;
+      case "autor":
+        error = validateAutor(value);
+        break;
+      case "genero":
+        error = validateGenero(value);
+        break;
+      case "editorial":
+        error = validateEditorial(value);
+        break;
+      case "paginas":
+        error = validatePaginas(value);
+        break;
+      case "precio":
+        error = validatePrecio(value);
+        break;
+    }
+
+    setErrors((prev) => ({
+      ...prev,
+      [field]: error,
+    }));
+
+    return error === "";
+  };
+
+  // Validación completa del formulario
+  const validateForm = (): boolean => {
+    const newErrors: { [key: string]: string } = {};
+
+    newErrors.titulo = validateTitulo(titulo);
+    newErrors.autor = validateAutor(autor);
+    newErrors.genero = validateGenero(genero);
+    newErrors.editorial = validateEditorial(editorial);
+    newErrors.paginas = validatePaginas(paginas);
+    newErrors.precio = validatePrecio(precio);
+    newErrors.imagen = validateImagen();
+
+    setErrors(newErrors);
+
+    const hasErrors = Object.values(newErrors).some((error) => error !== "");
+
+    if (hasErrors) {
+      const firstError = Object.values(newErrors).find((error) => error !== "");
+      if (firstError) {
+        showTemporaryMessage(firstError, "error");
+      }
+    }
+
+    return !hasErrors;
+  };
+
   // Handler para mostrar siempre el símbolo $ en el input
   const handlePrecioChange = (text: string) => {
     // Eliminar todo lo que no sea número
@@ -67,11 +228,12 @@ export default function CrearPublicacion() {
 
     // Validar precio máximo de 1.000.000
     if (parseInt(soloNumeros) > 1000000) {
-      Alert.alert("Precio máximo", "El precio máximo permitido es $1.000.000");
+      showTemporaryMessage("El precio máximo permitido es $1.000.000", "error");
       return;
     }
 
     setPrecio(soloNumeros);
+    validateField("precio", soloNumeros);
   };
 
   const pickImage = async () => {
@@ -93,52 +255,30 @@ export default function CrearPublicacion() {
   };
 
   const handleCrear = async () => {
+    // Validar formulario completo
+    if (!validateForm()) {
+      return;
+    }
+
     try {
-      if (
-        !titulo ||
-        !autor ||
-        !genero ||
-        !editorial ||
-        !paginas ||
-        !idioma ||
-        !estado ||
-        !precio
-      ) {
-        Alert.alert("Completa todos los campos obligatorios");
-        return;
-      }
-
-      // Validar que páginas sea un número válido
       const paginasNum = parseInt(paginas);
-      if (isNaN(paginasNum) || paginasNum <= 0) {
-        Alert.alert(
-          "Error",
-          "El número de páginas debe ser un número válido mayor a 0"
-        );
-        return;
-      }
-
-      // Validar que precio sea un número válido
       const precioNum = parseInt(precio);
-      if (isNaN(precioNum) || precioNum <= 0) {
-        Alert.alert("Error", "El precio debe ser un número válido mayor a 0");
-        return;
-      }
+
       const formData = new FormData();
-      formData.append("titulo", titulo);
-      formData.append("autor", autor);
-      formData.append("genero", genero);
-      formData.append("editorial", editorial);
+      formData.append("titulo", titulo.trim());
+      formData.append("autor", autor.trim());
+      formData.append("genero", genero.trim());
+      formData.append("editorial", editorial.trim());
       formData.append("paginas", paginasNum.toString());
       formData.append("idioma", idioma);
       formData.append("estadoLibro", estado);
       formData.append("precio", precioNum.toString());
 
       console.log("Datos a enviar:", {
-        titulo,
-        autor,
-        genero,
-        editorial,
+        titulo: titulo.trim(),
+        autor: autor.trim(),
+        genero: genero.trim(),
+        editorial: editorial.trim(),
         paginas: paginasNum,
         idioma,
         estadoLibro: estado,
@@ -168,19 +308,22 @@ export default function CrearPublicacion() {
         body: formData,
       });
       if (res.ok) {
-        Alert.alert("Publicación creada", "¡Tu publicación ha sido creada!");
-        router.replace("/mis-publicaciones");
+        showTemporaryMessage("¡Publicación creada exitosamente!", "success");
+
+        // Redirigir después de mostrar el mensaje de éxito
+        setTimeout(() => {
+          router.replace("/mis-publicaciones");
+        }, 1500);
       } else {
         const errorData = await res.json();
         console.error("Error del servidor:", errorData);
-        Alert.alert(
-          "Error",
-          errorData.error || "No se pudo crear la publicación"
-        );
+        const errorMessage =
+          errorData.error || "No se pudo crear la publicación";
+        showTemporaryMessage(errorMessage, "error");
       }
     } catch (err) {
       console.error("Error al crear publicación:", err);
-      Alert.alert("Error", "No se pudo crear la publicación");
+      showTemporaryMessage("No se pudo crear la publicación", "error");
     }
   };
 
@@ -244,6 +387,21 @@ export default function CrearPublicacion() {
 
   return (
     <View style={styles.container}>
+      {/* Mensaje temporal */}
+      {showMessage && (
+        <Animated.View
+          style={[
+            styles.messageContainer,
+            { opacity: messageOpacity },
+            messageType === "error"
+              ? styles.errorMessage
+              : styles.successMessage,
+          ]}
+        >
+          <Text style={styles.messageText}>{messageText}</Text>
+        </Animated.View>
+      )}
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
@@ -257,57 +415,129 @@ export default function CrearPublicacion() {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         <View style={styles.form}>
           {/* Imagen */}
-          <TouchableOpacity style={styles.imagePicker} onPress={pickImage}>
-            {imagen ? (
-              <Image source={{ uri: imagen }} style={styles.image} />
-            ) : (
-              <Text style={styles.imagePickerText}>Seleccionar imagen</Text>
+          <View style={styles.inputContainer}>
+            <TouchableOpacity
+              style={[
+                styles.imagePicker,
+                errors.imagen ? styles.imagePickerError : null,
+              ]}
+              onPress={pickImage}
+            >
+              {imagen ? (
+                <Image source={{ uri: imagen }} style={styles.image} />
+              ) : (
+                <Text style={styles.imagePickerText}>Seleccionar imagen</Text>
+              )}
+            </TouchableOpacity>
+            {errors.imagen && (
+              <Text style={styles.errorText}>{errors.imagen}</Text>
             )}
-          </TouchableOpacity>
+          </View>
+
           {/* Título */}
-          <TextInput
-            style={styles.input}
-            placeholder="Título"
-            value={titulo}
-            onChangeText={setTitulo}
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={[styles.input, errors.titulo ? styles.inputError : null]}
+              placeholder="Título"
+              value={titulo}
+              onChangeText={(text) => {
+                setTitulo(text);
+                validateField("titulo", text);
+              }}
+              onBlur={() => validateField("titulo", titulo)}
+            />
+            {errors.titulo && (
+              <Text style={styles.errorText}>{errors.titulo}</Text>
+            )}
+          </View>
+
           {/* Autor */}
-          <TextInput
-            style={styles.input}
-            placeholder="Autor"
-            value={autor}
-            onChangeText={setAutor}
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={[styles.input, errors.autor ? styles.inputError : null]}
+              placeholder="Autor"
+              value={autor}
+              onChangeText={(text) => {
+                setAutor(text);
+                validateField("autor", text);
+              }}
+              onBlur={() => validateField("autor", autor)}
+            />
+            {errors.autor && (
+              <Text style={styles.errorText}>{errors.autor}</Text>
+            )}
+          </View>
+
           {/* Género */}
-          <TextInput
-            style={styles.input}
-            placeholder="Género"
-            value={genero}
-            onChangeText={setGenero}
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={[styles.input, errors.genero ? styles.inputError : null]}
+              placeholder="Género"
+              value={genero}
+              onChangeText={(text) => {
+                setGenero(text);
+                validateField("genero", text);
+              }}
+              onBlur={() => validateField("genero", genero)}
+            />
+            {errors.genero && (
+              <Text style={styles.errorText}>{errors.genero}</Text>
+            )}
+          </View>
+
           {/* Editorial */}
-          <TextInput
-            style={styles.input}
-            placeholder="Editorial"
-            value={editorial}
-            onChangeText={setEditorial}
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={[
+                styles.input,
+                errors.editorial ? styles.inputError : null,
+              ]}
+              placeholder="Editorial"
+              value={editorial}
+              onChangeText={(text) => {
+                setEditorial(text);
+                validateField("editorial", text);
+              }}
+              onBlur={() => validateField("editorial", editorial)}
+            />
+            {errors.editorial && (
+              <Text style={styles.errorText}>{errors.editorial}</Text>
+            )}
+          </View>
+
           {/* Cantidad de páginas */}
-          <TextInput
-            style={styles.input}
-            placeholder="Cantidad de páginas"
-            value={paginas}
-            onChangeText={setPaginas}
-            keyboardType="numeric"
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={[styles.input, errors.paginas ? styles.inputError : null]}
+              placeholder="Cantidad de páginas"
+              value={paginas}
+              onChangeText={(text) => {
+                setPaginas(text);
+                validateField("paginas", text);
+              }}
+              onBlur={() => validateField("paginas", paginas)}
+              keyboardType="numeric"
+            />
+            {errors.paginas && (
+              <Text style={styles.errorText}>{errors.paginas}</Text>
+            )}
+          </View>
+
           {/* Precio */}
-          <TextInput
-            style={styles.input}
-            placeholder="Precio"
-            value={precio ? `$${parseInt(precio).toLocaleString("es-ES")}` : ""}
-            onChangeText={handlePrecioChange}
-            keyboardType="numeric"
-          />
+          <View style={styles.inputContainer}>
+            <TextInput
+              style={[styles.input, errors.precio ? styles.inputError : null]}
+              placeholder="Precio"
+              value={
+                precio ? `$${parseInt(precio).toLocaleString("es-ES")}` : ""
+              }
+              onChangeText={handlePrecioChange}
+              keyboardType="numeric"
+            />
+            {errors.precio && (
+              <Text style={styles.errorText}>{errors.precio}</Text>
+            )}
+          </View>
           {/* Idioma */}
           <View style={styles.selectContainer}>
             <Text style={styles.selectLabel}>Idioma</Text>
@@ -362,6 +592,41 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
+  },
+  // Mensajes temporales
+  messageContainer: {
+    position: "absolute",
+    top: Platform.OS === "android" ? 50 : 80,
+    left: 20,
+    right: 20,
+    zIndex: 1000,
+    borderRadius: 10,
+    padding: 16,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  errorMessage: {
+    backgroundColor: "#ffebee",
+    borderLeftWidth: 4,
+    borderLeftColor: "#f44336",
+  },
+  successMessage: {
+    backgroundColor: "#e8f5e8",
+    borderLeftWidth: 4,
+    borderLeftColor: "#4caf50",
+  },
+  messageText: {
+    fontSize: 16,
+    fontWeight: "600",
+    textAlign: "center",
+    color: "#2e2e2e",
+  },
+  // Contenedor de input con error
+  inputContainer: {
+    marginBottom: 8,
   },
   header: {
     backgroundColor: "#fff4e4",
@@ -427,6 +692,23 @@ const styles = StyleSheet.create({
     color: "#3B2412",
     borderWidth: 1,
     borderColor: "#e0d3c2",
+  },
+  inputError: {
+    borderColor: "#f44336",
+    borderWidth: 2,
+    backgroundColor: "#ffebee",
+  },
+  errorText: {
+    color: "#f44336",
+    fontSize: 12,
+    marginTop: 4,
+    marginLeft: 4,
+    fontWeight: "500",
+  },
+  imagePickerError: {
+    borderColor: "#f44336",
+    borderWidth: 2,
+    backgroundColor: "#ffebee",
   },
   selectContainer: {
     marginTop: 8,
