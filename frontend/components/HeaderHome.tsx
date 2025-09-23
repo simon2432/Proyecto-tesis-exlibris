@@ -36,7 +36,7 @@ export default function HeaderHome({
   const { results, loading, searchBooks, searchInfo, clearResults } =
     useGoogleBooksSearch();
 
-  const toggleFilter = (filter: "libro" | "autor" | "genero") => {
+  const toggleFilter = (filter: "libro" | "autor") => {
     const newFilter = selectedFilter === filter ? null : filter;
     setSelectedFilter(newFilter);
     onFilterChange?.(newFilter);
@@ -151,7 +151,9 @@ export default function HeaderHome({
         >
           <Text style={styles.filterButtonText}>
             {selectedFilter
-              ? selectedFilter.charAt(0).toUpperCase() + selectedFilter.slice(1)
+              ? selectedFilter === "libro"
+                ? "Título"
+                : "Autor"
               : "Filtros"}
           </Text>
           {selectedFilter && (
@@ -252,7 +254,7 @@ export default function HeaderHome({
           >
             <View style={styles.filtrosModal}>
               <Text style={styles.filtrosTitle}>Selecciona un filtro:</Text>
-              {(["libro", "autor", "genero"] as const).map((filter) => (
+              {(["libro", "autor"] as const).map((filter) => (
                 <TouchableOpacity
                   key={filter}
                   style={[
@@ -277,7 +279,7 @@ export default function HeaderHome({
                       selectedFilter === filter && styles.selectedLabel,
                     ]}
                   >
-                    {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                    {filter === "libro" ? "Título" : "Autor"}
                   </Text>
                 </TouchableOpacity>
               ))}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -11,7 +11,22 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
-const HeaderMarketplace = () => {
+interface HeaderMarketplaceProps {
+  onSearch?: (searchText: string) => void;
+}
+
+const HeaderMarketplace = ({ onSearch }: HeaderMarketplaceProps) => {
+  const [searchText, setSearchText] = useState("");
+
+  const handleSearchChange = (text: string) => {
+    setSearchText(text);
+    onSearch?.(text);
+  };
+
+  const handleSearchPress = () => {
+    onSearch?.(searchText);
+  };
+
   return (
     <View style={styles.header}>
       {/* Logo principal */}
@@ -23,7 +38,7 @@ const HeaderMarketplace = () => {
         />
       </View>
       <View style={styles.searchContainer}>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={handleSearchPress}>
           <Ionicons
             name="search"
             size={20}
@@ -35,11 +50,11 @@ const HeaderMarketplace = () => {
           style={styles.searchInput}
           placeholder="Buscar libros en venta..."
           placeholderTextColor="#a08b7d"
-          editable={false}
+          value={searchText}
+          onChangeText={handleSearchChange}
+          returnKeyType="search"
+          onSubmitEditing={handleSearchPress}
         />
-        <TouchableOpacity style={styles.filterButton}>
-          <Text style={styles.filterButtonText}>Filtros</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
@@ -107,18 +122,6 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderWidth: 0,
     ...(Platform.OS === "web" ? { outlineStyle: "none" as any } : {}),
-  },
-  filterButton: {
-    backgroundColor: "#332018",
-    borderRadius: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 16,
-    marginLeft: 8,
-  },
-  filterButtonText: {
-    color: "#f3e8da",
-    fontWeight: "bold",
-    fontSize: 15,
   },
 });
 

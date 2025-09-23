@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
@@ -21,6 +21,34 @@ const { width: SCREEN_WIDTH } = Dimensions.get("window");
 export default function MarketScreen() {
   const router = useRouter();
   const { publicaciones, loading, error } = usePublicaciones();
+  const [searchText, setSearchText] = useState("");
+
+  // Filtrar publicaciones según el texto de búsqueda
+  const filteredPublicaciones = useMemo(() => {
+    if (!searchText.trim()) {
+      return publicaciones;
+    }
+
+    const searchLower = searchText.toLowerCase().trim();
+    return publicaciones.filter((publicacion) => {
+      const tituloMatch = publicacion.titulo
+        ?.toLowerCase()
+        .includes(searchLower);
+      const autorMatch = publicacion.autor?.toLowerCase().includes(searchLower);
+      const generoMatch = publicacion.genero
+        ?.toLowerCase()
+        .includes(searchLower);
+      const editorialMatch = publicacion.editorial
+        ?.toLowerCase()
+        .includes(searchLower);
+
+      return tituloMatch || autorMatch || generoMatch || editorialMatch;
+    });
+  }, [publicaciones, searchText]);
+
+  const handleSearch = (text: string) => {
+    setSearchText(text);
+  };
 
   const renderPublicacion = (publicacion: any) => (
     <TouchableOpacity
@@ -60,7 +88,7 @@ export default function MarketScreen() {
 
   return (
     <View style={styles.container}>
-      <HeaderMarketplace />
+      <HeaderMarketplace onSearch={handleSearch} />
       <ScrollView contentContainerStyle={{ paddingBottom: 90 }}>
         {/* Botones superiores */}
         <View style={styles.topButtonsRow}>
@@ -78,7 +106,11 @@ export default function MarketScreen() {
           </TouchableOpacity>
         </View>
         {/* Título */}
-        <Text style={styles.sectionTitle}>Encuentra tu siguiente libro</Text>
+        <Text style={styles.sectionTitle}>
+          {searchText.trim()
+            ? `Resultados para "${searchText}" (${filteredPublicaciones.length})`
+            : "Encuentra tu siguiente libro"}
+        </Text>
 
         {/* Estado de carga */}
         {loading && (
@@ -98,12 +130,14 @@ export default function MarketScreen() {
         {/* Grilla de publicaciones */}
         {!loading && !error && (
           <View style={styles.grid}>
-            {publicaciones.length > 0 ? (
-              publicaciones.map(renderPublicacion)
+            {filteredPublicaciones.length > 0 ? (
+              filteredPublicaciones.map(renderPublicacion)
             ) : (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>
-                  No hay publicaciones disponibles
+                  {searchText.trim()
+                    ? `No se encontraron publicaciones para "${searchText}"`
+                    : "No hay publicaciones disponibles"}
                 </Text>
               </View>
             )}
