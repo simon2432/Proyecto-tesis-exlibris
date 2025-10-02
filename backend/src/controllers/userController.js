@@ -115,6 +115,8 @@ exports.getUserById = async (req, res) => {
         cantidadValoraciones: true,
         sumaValoraciones: true,
         librosFavoritos: true,
+        librosVendidos: true,
+        librosComprados: true,
       },
     });
 

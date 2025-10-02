@@ -8,6 +8,7 @@ import {
   Dimensions,
   SafeAreaView,
   Image,
+  Platform,
 } from "react-native";
 import CustomTabBar from "../components/CustomTabBar";
 import HeaderHome from "../components/HeaderHome";
@@ -195,7 +196,7 @@ export default function HomeScreen() {
         <ScrollView
           style={styles.scroll}
           contentContainerStyle={{
-            paddingBottom: 100, // Espacio suficiente para el TabBar
+            paddingBottom: 150, // Espacio suficiente para el botón flotante y TabBar
           }}
           showsVerticalScrollIndicator={false}
         >
@@ -352,13 +353,18 @@ export default function HomeScreen() {
           </View>
           <View style={[styles.sectionBox, styles.localSalesSection]}>
             <Text style={styles.sectionTitle}>En venta cerca tuyo</Text>
-            <View style={styles.grid}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.localSalesScrollContainer}
+              style={styles.localSalesScrollView}
+            >
               {loadingLocalSales ? (
                 <View style={styles.loadingContainer}>
                   <Text>Cargando publicaciones locales...</Text>
                 </View>
               ) : localSales.length > 0 ? (
-                localSales.map((publicacion) => (
+                localSales.slice(0, 20).map((publicacion) => (
                   <TouchableOpacity
                     key={`local-sale-${publicacion.id}`}
                     onPress={() =>
@@ -367,7 +373,7 @@ export default function HomeScreen() {
                         params: { id: publicacion.id.toString() },
                       })
                     }
-                    style={styles.bookCard}
+                    style={styles.localBookCard}
                   >
                     {publicacion.portada ? (
                       <Image
@@ -387,7 +393,7 @@ export default function HomeScreen() {
                         </Text>
                       </View>
                     </View>
-                    <Text style={styles.bookTitle} numberOfLines={2}>
+                    <Text style={styles.bookTitle} numberOfLines={1}>
                       {publicacion.titulo}
                     </Text>
                     <Text style={styles.bookAuthor} numberOfLines={1}>
@@ -402,7 +408,7 @@ export default function HomeScreen() {
                   </Text>
                 </View>
               )}
-            </View>
+            </ScrollView>
           </View>
         </ScrollView>
       </View>
@@ -540,7 +546,41 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
   },
   localSalesSection: {
-    marginBottom: 80, // Margen extra para separar del tapbar
+    marginBottom: 80, // Margen extra para separar del botón flotante y tabbar
+  },
+  localSalesScrollView: {
+    marginBottom: 10,
+    minHeight: 200,
+    ...(Platform.OS === "web" && {
+      minHeight: 280,
+    }),
+  },
+  localSalesScrollContainer: {
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingHorizontal: 8,
+    gap: 12,
+  },
+  localBookCard: {
+    width: 150,
+    height: 190,
+    backgroundColor: "#fff4e4",
+    borderRadius: 18,
+    marginRight: 12,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    alignItems: "center",
+    justifyContent: "flex-start",
+    paddingBottom: 16,
+    paddingHorizontal: 8,
+    ...(Platform.OS === "web" && {
+      width: 180,
+      height: 240,
+      marginRight: 16,
+    }),
   },
   // Estilos del marketplace
   grid: {
@@ -555,7 +595,7 @@ const styles = StyleSheet.create({
     width: "44%",
     minWidth: 150,
     maxWidth: 220,
-    height: 170,
+    height: 190,
     backgroundColor: "#fff4e4",
     borderRadius: 18,
     marginBottom: 24,
@@ -567,13 +607,17 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-start",
     paddingBottom: 16,
+    paddingHorizontal: 8,
   },
   imagePlaceholder: {
     width: "100%",
-    height: 110,
+    height: 120,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     backgroundColor: "#e9e3de",
+    ...(Platform.OS === "web" && {
+      height: 140,
+    }),
   },
   priceTagShadow: {
     marginTop: -18,
@@ -601,9 +645,12 @@ const styles = StyleSheet.create({
   },
   bookImage: {
     width: "100%",
-    height: 110,
+    height: 120,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
+    ...(Platform.OS === "web" && {
+      height: 140,
+    }),
   },
   bookTitle: {
     fontSize: 14,
@@ -611,16 +658,31 @@ const styles = StyleSheet.create({
     color: "#3B2412",
     textAlign: "center",
     marginTop: 8,
-    marginHorizontal: 8,
+    marginHorizontal: 4,
     lineHeight: 18,
+    height: 20,
+    justifyContent: "center",
+    ...(Platform.OS === "web" && {
+      fontSize: 16,
+      height: 24,
+      lineHeight: 20,
+    }),
   },
   bookAuthor: {
     fontSize: 12,
     color: "#7c4a2d",
     textAlign: "center",
-    marginTop: 2,
-    marginHorizontal: 8,
+    marginTop: 6,
+    marginHorizontal: 4,
     fontStyle: "italic",
+    height: 18,
+    ...(Platform.OS === "web" && {
+      fontSize: 15,
+      height: 24,
+      marginTop: 10,
+      lineHeight: 18,
+      fontWeight: "500",
+    }),
   },
   loadingContainer: {
     alignItems: "center",

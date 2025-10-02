@@ -388,7 +388,9 @@ export default function MisPublicaciones() {
                   <Text style={styles.pubTitle} numberOfLines={2}>
                     {pub.titulo}
                   </Text>
-                  {/* Chip de estado de la compra */}
+                  <Text style={styles.vendedorText} numberOfLines={1}>
+                    {pub.autor}
+                  </Text>
                   <View
                     style={[
                       styles.estadoTag,
@@ -482,7 +484,7 @@ export default function MisPublicaciones() {
 
 const CARD_GAP = 18;
 const CARD_WIDTH_PERCENT = Platform.OS === "web" ? "29%" : "28%";
-const CARD_HEIGHT = 170;
+const CARD_HEIGHT = 200;
 
 const styles = StyleSheet.create({
   container: {
@@ -623,7 +625,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     textAlign: "center",
     marginTop: 6,
-    marginBottom: 0,
+    marginBottom: 2,
     paddingHorizontal: 2,
   },
   ventaEstado: {
@@ -633,18 +635,22 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginTop: 4,
   },
+  vendedorText: {
+    fontSize: 12,
+    color: "#7c4a2d",
+    textAlign: "center",
+    marginBottom: 4,
+    paddingHorizontal: 2,
+  },
   placeholderText: {
     color: "#7c4a2d",
     fontSize: 14,
   },
   estadoTag: {
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginTop: 6,
-    alignSelf: "center",
-    alignItems: "center",
-    marginHorizontal: 12,
+    paddingVertical: 2,
+    borderRadius: 8,
+    marginTop: 2,
   },
   estadoText: {
     fontSize: 11,

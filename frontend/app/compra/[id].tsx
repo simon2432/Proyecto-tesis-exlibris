@@ -677,7 +677,7 @@ export default function CompraDetalleScreen() {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Puntuación de vendedor:</Text>
               <Text style={styles.detailValue}>
-                {compra.vendedor.puntuacionVendedor} ⭐
+                {compra.vendedor.puntuacionVendedor.toFixed(1)} ⭐
               </Text>
             </View>
 

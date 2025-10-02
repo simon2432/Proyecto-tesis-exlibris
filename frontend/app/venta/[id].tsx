@@ -382,21 +382,21 @@ export default function DetalleVenta() {
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Libros vendidos:</Text>
               <Text style={styles.detailValue}>
-                {venta.comprador.librosVendidos || 0}
+                {venta.comprador.librosVendidos}
               </Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Libros comprados:</Text>
               <Text style={styles.detailValue}>
-                {venta.comprador.librosComprados || 0}
+                {venta.comprador.librosComprados}
               </Text>
             </View>
 
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Puntuación de comprador:</Text>
               <Text style={styles.detailValue}>
-                {venta.comprador.puntuacionVendedor || 0} ⭐
+                {venta.comprador.puntuacionVendedor.toFixed(1)} ⭐
               </Text>
             </View>
 

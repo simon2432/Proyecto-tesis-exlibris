@@ -4,6 +4,67 @@ const prisma = new PrismaClient();
 // Importar función para verificar logros
 const { verificarLogros } = require("./userController");
 
+// Función helper para actualizar contadores de libros vendidos/comprados
+const actualizarContadoresLibros = async (vendedorId, compradorId) => {
+  try {
+    console.log(
+      `[DEBUG] Iniciando actualización de contadores para vendedor ${vendedorId} y comprador ${compradorId}`
+    );
+
+    // Obtener valores actuales antes de actualizar
+    const vendedorAntes = await prisma.user.findUnique({
+      where: { id: vendedorId },
+      select: { librosVendidos: true, nombre: true },
+    });
+
+    const compradorAntes = await prisma.user.findUnique({
+      where: { id: compradorId },
+      select: { librosComprados: true, nombre: true },
+    });
+
+    console.log(
+      `[DEBUG] Vendedor ${vendedorAntes?.nombre} (ID: ${vendedorId}) - librosVendidos ANTES: ${vendedorAntes?.librosVendidos}`
+    );
+    console.log(
+      `[DEBUG] Comprador ${compradorAntes?.nombre} (ID: ${compradorId}) - librosComprados ANTES: ${compradorAntes?.librosComprados}`
+    );
+
+    // Actualizar contador de libros vendidos del vendedor
+    const vendedorActualizado = await prisma.user.update({
+      where: { id: vendedorId },
+      data: {
+        librosVendidos: {
+          increment: 1,
+        },
+      },
+      select: { librosVendidos: true, nombre: true },
+    });
+
+    // Actualizar contador de libros comprados del comprador
+    const compradorActualizado = await prisma.user.update({
+      where: { id: compradorId },
+      data: {
+        librosComprados: {
+          increment: 1,
+        },
+      },
+      select: { librosComprados: true, nombre: true },
+    });
+
+    console.log(
+      `[DEBUG] Vendedor ${vendedorActualizado?.nombre} - librosVendidos DESPUÉS: ${vendedorActualizado?.librosVendidos}`
+    );
+    console.log(
+      `[DEBUG] Comprador ${compradorActualizado?.nombre} - librosComprados DESPUÉS: ${compradorActualizado?.librosComprados}`
+    );
+    console.log(`[Compra] ✅ Contadores actualizados exitosamente`);
+  } catch (error) {
+    console.error("[Compra] ❌ Error actualizando contadores:", error);
+    console.error("[Compra] Stack trace:", error.stack);
+    // No fallar la operación principal por errores en contadores
+  }
+};
+
 // Crear una nueva compra
 exports.crearCompra = async (req, res) => {
   try {
@@ -439,10 +500,17 @@ exports.confirmarComprador = async (req, res) => {
       // Si ya está en comprador_confirmado, completar la compra
       nuevoEstado = "completado";
     } else {
-      // Para otros estados, usar la lógica original
-      nuevoEstado = compra.vendedorConfirmado
-        ? "completado"
-        : "comprador_confirmado";
+      // Para encuentros, usar lógica específica
+      if (compra.tipoEntrega === "encuentro") {
+        nuevoEstado = compra.vendedorConfirmado
+          ? "completado"
+          : "comprador_confirmado";
+      } else {
+        // Para envíos, usar lógica original
+        nuevoEstado = compra.vendedorConfirmado
+          ? "completado"
+          : "comprador_confirmado";
+      }
     }
 
     const compraActualizada = await prisma.compra.update({
@@ -494,6 +562,9 @@ exports.confirmarComprador = async (req, res) => {
         console.error("Error verificando logros del comprador:", logrosError);
         // No fallar la operación principal por errores en logros
       }
+
+      // Actualizar contadores de libros vendidos/comprados
+      await actualizarContadoresLibros(compra.vendedorId, compra.compradorId);
     }
 
     console.log(
@@ -531,25 +602,42 @@ exports.confirmarVendedor = async (req, res) => {
       return res.status(404).json({ error: "Venta no encontrada" });
     }
 
-    // Solo permitir confirmar si está en estado de encuentro o comprador_confirmado
+    // Solo permitir confirmar si está en estado de encuentro, vendedor_confirmado, o comprador_confirmado
     if (
       compra.estado !== "encuentro" &&
+      compra.estado !== "vendedor_confirmado" &&
       compra.estado !== "comprador_confirmado"
     ) {
       return res.status(400).json({
         error:
-          "Solo se puede confirmar transacciones en estado de encuentro o cuando el comprador ya confirmó",
+          "Solo se puede confirmar transacciones en estado de encuentro, cuando el vendedor ya confirmó, o cuando el comprador ya confirmó",
       });
     }
 
     // Marcar como confirmado por el vendedor
+    let nuevoEstado;
+    if (compra.estado === "vendedor_confirmado") {
+      // Si ya está en vendedor_confirmado, completar la compra
+      nuevoEstado = "completado";
+    } else {
+      // Para encuentros, usar lógica específica
+      if (compra.tipoEntrega === "encuentro") {
+        nuevoEstado = compra.compradorConfirmado
+          ? "completado"
+          : "vendedor_confirmado";
+      } else {
+        // Para envíos, usar lógica original
+        nuevoEstado = compra.compradorConfirmado
+          ? "completado"
+          : "vendedor_confirmado";
+      }
+    }
+
     const compraActualizada = await prisma.compra.update({
       where: { id: parseInt(id) },
       data: {
         vendedorConfirmado: true,
-        estado: compra.compradorConfirmado
-          ? "completado"
-          : "vendedor_confirmado",
+        estado: nuevoEstado,
       },
     });
 
@@ -594,6 +682,9 @@ exports.confirmarVendedor = async (req, res) => {
         console.error("Error verificando logros del comprador:", logrosError);
         // No fallar la operación principal por errores en logros
       }
+
+      // Actualizar contadores de libros vendidos/comprados
+      await actualizarContadoresLibros(compra.vendedorId, compra.compradorId);
     }
 
     console.log("[Compra] Vendedor confirmó pago:", compraActualizada.id);
@@ -628,14 +719,16 @@ exports.confirmarPagoVendedor = async (req, res) => {
       return res.status(404).json({ error: "Compra no encontrada" });
     }
 
-    // Solo permitir confirmar pago si está en estado pago_pendiente (para envíos) o comprador_confirmado (para encuentros)
+    // Solo permitir confirmar pago si está en estado pago_pendiente (para envíos) o encuentro/vendedor_confirmado/comprador_confirmado (para encuentros)
     if (
       compra.estado !== "pago_pendiente" &&
+      compra.estado !== "encuentro" &&
+      compra.estado !== "vendedor_confirmado" &&
       compra.estado !== "comprador_confirmado"
     ) {
       return res.status(400).json({
         error:
-          "Solo se puede confirmar pago en estado de pago pendiente o cuando el comprador ya confirmó",
+          "Solo se puede confirmar pago en estado de pago pendiente, encuentro, cuando el vendedor ya confirmó, o cuando el comprador ya confirmó",
       });
     }
 
@@ -644,9 +737,15 @@ exports.confirmarPagoVendedor = async (req, res) => {
     if (compra.tipoEntrega === "envio") {
       nuevoEstado = "envio_pendiente";
     } else if (compra.tipoEntrega === "encuentro") {
-      nuevoEstado = compra.compradorConfirmado
-        ? "completado"
-        : "vendedor_confirmado";
+      if (compra.estado === "vendedor_confirmado") {
+        // Si ya está en vendedor_confirmado, completar la compra
+        nuevoEstado = "completado";
+      } else {
+        // Para otros estados, usar la lógica original
+        nuevoEstado = compra.compradorConfirmado
+          ? "completado"
+          : "vendedor_confirmado";
+      }
     }
 
     const compraActualizada = await prisma.compra.update({
@@ -698,6 +797,9 @@ exports.confirmarPagoVendedor = async (req, res) => {
         console.error("Error verificando logros del comprador:", logrosError);
         // No fallar la operación principal por errores en logros
       }
+
+      // Actualizar contadores de libros vendidos/comprados
+      await actualizarContadoresLibros(compra.vendedorId, compra.compradorId);
     }
 
     console.log(

@@ -77,7 +77,7 @@ export default function MarketScreen() {
           </Text>
         </View>
       </View>
-      <Text style={styles.bookTitle} numberOfLines={2}>
+      <Text style={styles.bookTitle} numberOfLines={1}>
         {publicacion.titulo}
       </Text>
       <Text style={styles.bookAuthor} numberOfLines={1}>
@@ -89,7 +89,7 @@ export default function MarketScreen() {
   return (
     <View style={styles.container}>
       <HeaderMarketplace onSearch={handleSearch} />
-      <ScrollView contentContainerStyle={{ paddingBottom: 90 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
         {/* Botones superiores */}
         <View style={styles.topButtonsRow}>
           <TouchableOpacity
@@ -158,7 +158,7 @@ export default function MarketScreen() {
 
 const CARD_GAP = 18;
 const CARD_WIDTH_PERCENT = Platform.OS === "web" ? "22%" : "44%";
-const CARD_HEIGHT = 170;
+const CARD_HEIGHT = 190;
 
 const styles = StyleSheet.create({
   container: {
@@ -222,13 +222,22 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-start",
     paddingBottom: 16,
+    paddingHorizontal: 8,
+    ...(Platform.OS === "web" && {
+      minWidth: 180,
+      maxWidth: 250,
+      height: 240,
+    }),
   },
   imagePlaceholder: {
     width: "100%",
-    height: 110,
+    height: 120,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     backgroundColor: "#e9e3de",
+    ...(Platform.OS === "web" && {
+      height: 140,
+    }),
   },
   priceTagShadow: {
     marginTop: -18,
@@ -256,9 +265,12 @@ const styles = StyleSheet.create({
   },
   bookImage: {
     width: "100%",
-    height: 110,
+    height: 120,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
+    ...(Platform.OS === "web" && {
+      height: 140,
+    }),
   },
   bookTitle: {
     fontSize: 14,
@@ -266,16 +278,31 @@ const styles = StyleSheet.create({
     color: "#3B2412",
     textAlign: "center",
     marginTop: 8,
-    marginHorizontal: 8,
+    marginHorizontal: 4,
     lineHeight: 18,
+    height: 20,
+    justifyContent: "center",
+    ...(Platform.OS === "web" && {
+      fontSize: 16,
+      height: 24,
+      lineHeight: 20,
+    }),
   },
   bookAuthor: {
     fontSize: 12,
     color: "#7c4a2d",
     textAlign: "center",
-    marginTop: 2,
-    marginHorizontal: 8,
+    marginTop: 6,
+    marginHorizontal: 4,
     fontStyle: "italic",
+    height: 18,
+    ...(Platform.OS === "web" && {
+      fontSize: 15,
+      height: 24,
+      marginTop: 10,
+      lineHeight: 18,
+      fontWeight: "500",
+    }),
   },
   loadingContainer: {
     alignItems: "center",
