@@ -118,11 +118,6 @@ export default function AgregarLecturaBuscar() {
                   </Text>
                 </TouchableOpacity>
               ))}
-              {/* Si la fila tiene menos de 3, agregar espacios vacíos */}
-              {fila.length < 3 &&
-                Array.from({ length: 3 - fila.length }).map((_, i) => (
-                  <View key={"empty-" + i} style={styles.coverWrapper} />
-                ))}
             </View>
           ))}
         </ScrollView>

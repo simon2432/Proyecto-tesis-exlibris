@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -12,42 +12,107 @@ import {
 } from "react-native";
 import HeaderMarketplace from "../components/HeaderMarketplace";
 import CustomTabBar from "../components/CustomTabBar";
+import FiltrosMarketplace, {
+  FiltrosState,
+} from "../components/FiltrosMarketplace";
 import { useRouter } from "expo-router";
 import { usePublicaciones } from "../hooks/usePublicaciones";
 import { API_BASE_URL } from "../constants/ApiConfig";
+import axios from "axios";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function MarketScreen() {
   const router = useRouter();
-  const { publicaciones, loading, error } = usePublicaciones();
+  const {
+    publicaciones: publicacionesBase,
+    loading: loadingBase,
+    error: errorBase,
+  } = usePublicaciones();
   const [searchText, setSearchText] = useState("");
+  const [publicaciones, setPublicaciones] = useState(publicacionesBase);
+  const [loading, setLoading] = useState(loadingBase);
+  const [error, setError] = useState(errorBase);
+  const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  const [filtros, setFiltros] = useState<FiltrosState>({
+    tipoBusqueda: "titulo",
+    estadosLibro: [],
+    ubicacion: "",
+  });
 
-  // Filtrar publicaciones según el texto de búsqueda
-  const filteredPublicaciones = useMemo(() => {
-    if (!searchText.trim()) {
-      return publicaciones;
+  // Actualizar publicaciones cuando cambien los datos base
+  useEffect(() => {
+    setPublicaciones(publicacionesBase);
+    setLoading(loadingBase);
+    setError(errorBase);
+  }, [publicacionesBase, loadingBase, errorBase]);
+
+  // Función para buscar con filtros
+  const buscarConFiltros = async (
+    texto: string,
+    filtrosAplicar?: FiltrosState
+  ) => {
+    setLoading(true);
+
+    try {
+      const token = await AsyncStorage.getItem("token");
+      const params = new URLSearchParams();
+      const filtrosFinales = filtrosAplicar || filtros;
+
+      // Agregar búsqueda según el tipo seleccionado
+      if (texto.trim()) {
+        if (filtrosFinales.tipoBusqueda === "titulo") {
+          params.append("titulo", texto.trim());
+        } else if (filtrosFinales.tipoBusqueda === "autor") {
+          params.append("autor", texto.trim());
+        } else {
+          // Búsqueda general
+          params.append("search", texto.trim());
+        }
+      }
+
+      // Agregar filtros adicionales
+      if (
+        filtrosFinales.estadosLibro &&
+        filtrosFinales.estadosLibro.length > 0
+      ) {
+        // Agregar cada estado como un parámetro separado
+        filtrosFinales.estadosLibro.forEach((estado) => {
+          params.append("estadoLibro", estado);
+        });
+      }
+      if (filtrosFinales.ubicacion) {
+        params.append("ubicacion", filtrosFinales.ubicacion);
+      }
+
+      const response = await axios.get(
+        `${API_BASE_URL}/publicaciones?${params.toString()}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setPublicaciones(response.data);
+      setError(null);
+    } catch (error) {
+      console.error("Error al buscar con filtros:", error);
+      setError("Error al cargar publicaciones");
+    } finally {
+      setLoading(false);
     }
-
-    const searchLower = searchText.toLowerCase().trim();
-    return publicaciones.filter((publicacion) => {
-      const tituloMatch = publicacion.titulo
-        ?.toLowerCase()
-        .includes(searchLower);
-      const autorMatch = publicacion.autor?.toLowerCase().includes(searchLower);
-      const generoMatch = publicacion.genero
-        ?.toLowerCase()
-        .includes(searchLower);
-      const editorialMatch = publicacion.editorial
-        ?.toLowerCase()
-        .includes(searchLower);
-
-      return tituloMatch || autorMatch || generoMatch || editorialMatch;
-    });
-  }, [publicaciones, searchText]);
+  };
 
   const handleSearch = (text: string) => {
     setSearchText(text);
+    buscarConFiltros(text);
+  };
+
+  const handleFiltrosPress = () => {
+    setMostrarFiltros(true);
+  };
+
+  const handleAplicarFiltros = (nuevosFiltros: FiltrosState) => {
+    setFiltros(nuevosFiltros);
+    buscarConFiltros(searchText, nuevosFiltros);
   };
 
   const renderPublicacion = (publicacion: any) => (
@@ -88,7 +153,10 @@ export default function MarketScreen() {
 
   return (
     <View style={styles.container}>
-      <HeaderMarketplace onSearch={handleSearch} />
+      <HeaderMarketplace
+        onSearch={handleSearch}
+        onFiltrosPress={handleFiltrosPress}
+      />
       <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
         {/* Botones superiores */}
         <View style={styles.topButtonsRow}>
@@ -105,10 +173,11 @@ export default function MarketScreen() {
             <Text style={styles.topButtonText}>Historial de compras</Text>
           </TouchableOpacity>
         </View>
+
         {/* Título */}
         <Text style={styles.sectionTitle}>
-          {searchText.trim()
-            ? `Resultados para "${searchText}" (${filteredPublicaciones.length})`
+          {publicaciones.length !== publicacionesBase.length
+            ? `Resultados de búsqueda (${publicaciones.length})`
             : "Encuentra tu siguiente libro"}
         </Text>
 
@@ -130,13 +199,13 @@ export default function MarketScreen() {
         {/* Grilla de publicaciones */}
         {!loading && !error && (
           <View style={styles.grid}>
-            {filteredPublicaciones.length > 0 ? (
-              filteredPublicaciones.map(renderPublicacion)
+            {publicaciones.length > 0 ? (
+              publicaciones.map(renderPublicacion)
             ) : (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>
-                  {searchText.trim()
-                    ? `No se encontraron publicaciones para "${searchText}"`
+                  {publicaciones.length !== publicacionesBase.length
+                    ? "No se encontraron publicaciones con los filtros aplicados"
                     : "No hay publicaciones disponibles"}
                 </Text>
               </View>
@@ -151,6 +220,14 @@ export default function MarketScreen() {
           else if (tab === "market") router.replace("/market");
           else if (tab === "perfil") router.replace("/perfil");
         }}
+      />
+
+      {/* Modal de Filtros */}
+      <FiltrosMarketplace
+        visible={mostrarFiltros}
+        onClose={() => setMostrarFiltros(false)}
+        onAplicarFiltros={handleAplicarFiltros}
+        filtrosActuales={filtros}
       />
     </View>
   );
@@ -169,7 +246,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     gap: 12,
-    marginTop: 18,
+    marginTop: 24,
     marginHorizontal: 18,
   },
   topButton: {
@@ -191,11 +268,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   sectionTitle: {
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: "bold",
     color: "#3B2412",
-    marginTop: 24,
-    marginBottom: 12,
+    marginTop: 20,
+    marginBottom: 16,
     marginLeft: 18,
   },
   grid: {

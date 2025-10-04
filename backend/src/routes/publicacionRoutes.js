@@ -12,6 +12,7 @@ router.post(
 );
 router.get("/", publicacionController.obtenerPublicaciones);
 router.get("/mis", publicacionController.obtenerMisPublicaciones);
+router.get("/ubicaciones", publicacionController.obtenerUbicacionesDisponibles);
 router.put(
   "/:id",
   publicacionController.uploadPublicacionImage,

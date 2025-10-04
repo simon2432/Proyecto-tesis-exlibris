@@ -7,15 +7,18 @@ import {
   Image,
   StyleSheet,
   Platform,
-  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 interface HeaderMarketplaceProps {
   onSearch?: (searchText: string) => void;
+  onFiltrosPress?: () => void;
 }
 
-const HeaderMarketplace = ({ onSearch }: HeaderMarketplaceProps) => {
+const HeaderMarketplace = ({
+  onSearch,
+  onFiltrosPress,
+}: HeaderMarketplaceProps) => {
   const [searchText, setSearchText] = useState("");
 
   const handleSearchChange = (text: string) => {
@@ -36,7 +39,10 @@ const HeaderMarketplace = ({ onSearch }: HeaderMarketplaceProps) => {
           style={styles.logo}
           resizeMode="contain"
         />
+        <Text style={styles.logoText}>EXLIBRIS</Text>
       </View>
+
+      {/* Barra de búsqueda */}
       <View style={styles.searchContainer}>
         <TouchableOpacity onPress={handleSearchPress}>
           <Ionicons
@@ -55,6 +61,9 @@ const HeaderMarketplace = ({ onSearch }: HeaderMarketplaceProps) => {
           returnKeyType="search"
           onSubmitEditing={handleSearchPress}
         />
+        <TouchableOpacity style={styles.filterButton} onPress={onFiltrosPress}>
+          <Text style={styles.filterButtonText}>Filtros</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -64,26 +73,20 @@ const styles = StyleSheet.create({
   header: {
     backgroundColor: "#FFF4E4",
     paddingTop:
-      Platform.OS === "android" ? 80 : Platform.OS === "web" ? 40 : 28,
+      Platform.OS === "android" ? 50 : Platform.OS === "web" ? 20 : 28,
     paddingBottom: 20,
-    paddingHorizontal: "4%",
+    paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: "#e0d3c2",
     width: "100%",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
     zIndex: 10,
-    height: 70,
+    minHeight: 100,
   },
   logoContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 0,
+    marginBottom: 16,
     paddingLeft: 0,
-    position: "relative",
-    left: 0,
-    top: 0,
     width: "auto",
     height: 44,
   },
@@ -91,37 +94,49 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     resizeMode: "contain",
-    marginTop: 0,
-    marginBottom: 25,
-    marginLeft: 0,
-    marginRight: 10,
+    marginRight: 12,
+  },
+  logoText: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#3B2412",
   },
   searchContainer: {
-    flex: 1,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: "#fff",
-    borderRadius: 16,
-    paddingHorizontal: 12,
+    borderRadius: 20,
+    paddingHorizontal: 16,
     paddingVertical: 0,
-    marginBottom: 25,
-    marginLeft: 0,
     elevation: 2,
-    minHeight: 38,
-    maxHeight: 44,
-    alignSelf: "center",
-    marginTop: 0,
-    height: 44,
+    height: 48,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
   },
   searchInput: {
     flex: 1,
-    fontSize: 15,
+    fontSize: 16,
     color: "#4b2e1e",
-    marginLeft: 6,
+    marginLeft: 8,
     backgroundColor: "transparent",
-    paddingVertical: 2,
+    paddingVertical: 4,
     borderWidth: 0,
+    height: 44,
     ...(Platform.OS === "web" ? { outlineStyle: "none" as any } : {}),
+  },
+  filterButton: {
+    backgroundColor: "#332018",
+    borderRadius: 12,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    marginLeft: 8,
+  },
+  filterButtonText: {
+    color: "#f3e8da",
+    fontWeight: "bold",
+    fontSize: 15,
   },
 });
 

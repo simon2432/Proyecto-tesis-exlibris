@@ -97,11 +97,107 @@ exports.crearPublicacion = async (req, res) => {
 
 exports.obtenerPublicaciones = async (req, res) => {
   try {
+    const {
+      estadoLibro,
+      ubicacion,
+      titulo,
+      autor,
+      genero,
+      editorial,
+      search, // Para búsqueda general
+    } = req.query;
+
+    // Construir filtros dinámicamente
+    const where = {
+      estado: "activa",
+      vendedorId: { not: req.userId }, // Excluir publicaciones del usuario actual
+    };
+
+    // Filtro por estado del libro (soporte para múltiples estados)
+    if (estadoLibro) {
+      // Si es un array de estados, usar 'in'
+      if (Array.isArray(estadoLibro)) {
+        where.estadoLibro = { in: estadoLibro };
+      } else {
+        // Si es un solo estado, usar igualdad
+        where.estadoLibro = estadoLibro;
+      }
+    }
+
+    // Filtro por ubicación
+    if (ubicacion) {
+      where.ubicacion = {
+        contains: ubicacion,
+        mode: "insensitive",
+      };
+    }
+
+    // Filtro por título
+    if (titulo) {
+      where.titulo = {
+        contains: titulo,
+        mode: "insensitive",
+      };
+    }
+
+    // Filtro por autor
+    if (autor) {
+      where.autor = {
+        contains: autor,
+        mode: "insensitive",
+      };
+    }
+
+    // Filtro por género
+    if (genero) {
+      where.genero = {
+        contains: genero,
+        mode: "insensitive",
+      };
+    }
+
+    // Filtro por editorial
+    if (editorial) {
+      where.editorial = {
+        contains: editorial,
+        mode: "insensitive",
+      };
+    }
+
+    // Búsqueda general (si no hay filtros específicos)
+    if (search && !titulo && !autor && !genero && !editorial) {
+      where.OR = [
+        {
+          titulo: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        {
+          autor: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        {
+          genero: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+        {
+          editorial: {
+            contains: search,
+            mode: "insensitive",
+          },
+        },
+      ];
+    }
+
+    console.log("Filtros aplicados:", where);
+
     const publicaciones = await prisma.publicacion.findMany({
-      where: {
-        estado: "activa",
-        vendedorId: { not: req.userId }, // Excluir publicaciones del usuario actual
-      },
+      where,
       include: {
         vendedor: {
           select: {
@@ -114,8 +210,10 @@ exports.obtenerPublicaciones = async (req, res) => {
       },
       orderBy: { fechaPublicacion: "desc" },
     });
+
     res.json(publicaciones);
   } catch (error) {
+    console.error("Error al obtener publicaciones:", error);
     res.status(500).json({ error: "Error al obtener publicaciones" });
   }
 };
@@ -249,5 +347,32 @@ exports.eliminarPublicacion = async (req, res) => {
   } catch (error) {
     console.error("Error al eliminar publicación:", error);
     res.status(500).json({ error: "Error al eliminar la publicación" });
+  }
+};
+
+// Obtener ubicaciones disponibles para filtros
+exports.obtenerUbicacionesDisponibles = async (req, res) => {
+  try {
+    const ubicaciones = await prisma.publicacion.findMany({
+      distinct: ["ubicacion"],
+      select: {
+        ubicacion: true,
+      },
+      where: {
+        estado: "activa",
+        ubicacion: { not: null },
+        vendedorId: { not: req.userId }, // Excluir ubicaciones del usuario actual
+      },
+    });
+
+    const ubicacionesUnicas = ubicaciones
+      .map((u) => u.ubicacion)
+      .filter((ubicacion) => ubicacion && ubicacion.trim() !== "")
+      .sort();
+
+    res.json(ubicacionesUnicas);
+  } catch (error) {
+    console.error("Error al obtener ubicaciones disponibles:", error);
+    res.status(500).json({ error: "Error al obtener ubicaciones disponibles" });
   }
 };
