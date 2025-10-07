@@ -3,6 +3,7 @@ const cors = require("cors");
 const dotenv = require("dotenv");
 const { PrismaClient } = require("@prisma/client");
 const path = require("path");
+const xss = require("xss");
 
 dotenv.config();
 
@@ -11,6 +12,29 @@ const prisma = new PrismaClient();
 
 app.use(cors());
 app.use(express.json());
+
+// Middleware XSS Sanitizer - Limpia contenido malicioso
+app.use((req, res, next) => {
+  if (req.body && typeof req.body === "object") {
+    // Sanitizar todos los campos de texto en req.body
+    Object.keys(req.body).forEach((key) => {
+      if (typeof req.body[key] === "string") {
+        req.body[key] = xss(req.body[key]);
+      }
+    });
+  }
+
+  if (req.query && typeof req.query === "object") {
+    // Sanitizar también query parameters
+    Object.keys(req.query).forEach((key) => {
+      if (typeof req.query[key] === "string") {
+        req.query[key] = xss(req.query[key]);
+      }
+    });
+  }
+
+  next();
+});
 
 // Middleware de logging simplificado
 app.use((req, res, next) => {

@@ -176,19 +176,49 @@ export default function Register() {
 
   const validatePassword = (value: string): string => {
     if (!value) return "La contraseña es obligatoria";
-    if (value.length < 6)
-      return "La contraseña debe tener al menos 6 caracteres";
-    if (value.length > 50)
-      return "La contraseña no puede exceder 50 caracteres";
 
-    // Validar que tenga al menos una letra
-    if (!/[a-zA-Z]/.test(value)) {
-      return "La contraseña debe contener al menos una letra";
+    // Longitud mínima 8 caracteres
+    if (value.length < 8) {
+      return "La contraseña debe tener al menos 8 caracteres";
     }
 
-    // Validar que tenga al menos un número
+    // Longitud máxima para prevenir ataques
+    if (value.length > 100) {
+      return "La contraseña no puede exceder 100 caracteres";
+    }
+
+    // Al menos una letra minúscula
+    if (!/[a-z]/.test(value)) {
+      return "La contraseña debe contener al menos una letra minúscula";
+    }
+
+    // Al menos una letra mayúscula
+    if (!/[A-Z]/.test(value)) {
+      return "La contraseña debe contener al menos una letra mayúscula";
+    }
+
+    // Al menos un número
     if (!/\d/.test(value)) {
       return "La contraseña debe contener al menos un número";
+    }
+
+    // Al menos un carácter especial
+    if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(value)) {
+      return "La contraseña debe contener al menos un carácter especial (!@#$%^&*()_+-=[]{}|;':\",./<>?)";
+    }
+
+    // Prevenir contraseñas comunes
+    const commonPasswords = [
+      "password",
+      "123456",
+      "qwerty",
+      "abc123",
+      "password123",
+      "admin",
+      "letmein",
+    ];
+    if (commonPasswords.includes(value.toLowerCase())) {
+      return "Esta contraseña es muy común, elige una más segura";
     }
 
     return "";

@@ -3,7 +3,24 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || "supersecret";
+// Validar JWT Secret al iniciar
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  console.error("❌ CRÍTICO: JWT_SECRET no configurado. Sistema inseguro.");
+  process.exit(1);
+}
+
+if (JWT_SECRET.length < 32) {
+  console.error("❌ CRÍTICO: JWT_SECRET muy corto. Mínimo 32 caracteres.");
+  process.exit(1);
+}
+
+console.log("✅ JWT Secret configurado correctamente");
+
+// Configurar tiempo de expiración del token
+const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
+console.log("✅ JWT Expires In configurado:", JWT_EXPIRES_IN);
 
 exports.register = async (req, res) => {
   try {
@@ -13,12 +30,16 @@ exports.register = async (req, res) => {
     });
     const { nombre, email, telefono, password, documento, ubicacion } =
       req.body;
-    if (!nombre || !email || !telefono || !password) {
+
+    // Las validaciones básicas ya se hicieron en el middleware
+    // Solo verificamos que los datos lleguen (redundante pero seguro)
+    if (!nombre || !email || !telefono || !password || !documento) {
       console.log("Missing fields:", {
         nombre: !!nombre,
         email: !!email,
         telefono: !!telefono,
         password: !!password,
+        documento: !!documento,
       });
       return res.status(400).json({ error: "Faltan campos obligatorios" });
     }
@@ -38,14 +59,14 @@ exports.register = async (req, res) => {
         email,
         telefono,
         password: hashedPassword,
-        documento: documento ? parseInt(documento) : undefined,
+        documento: parseInt(documento),
         ubicacion,
       },
     });
 
     // Generar token para el usuario registrado
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
-      expiresIn: "7d",
+      expiresIn: JWT_EXPIRES_IN,
     });
 
     // No enviar password al frontend
@@ -69,6 +90,8 @@ exports.login = async (req, res) => {
   try {
     console.log("Login attempt:", { email: req.body.email });
     const { email, password } = req.body;
+
+    // Las validaciones básicas ya se hicieron en el middleware
     if (!email || !password) {
       console.log("Missing fields:", { email: !!email, password: !!password });
       return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -94,7 +117,7 @@ exports.login = async (req, res) => {
 
     console.log("Password valid, generating token");
     const token = jwt.sign({ userId: user.id }, JWT_SECRET, {
-      expiresIn: "7d",
+      expiresIn: JWT_EXPIRES_IN,
     });
     // No enviar password al frontend
     const { password: _, ...userData } = user;
@@ -140,12 +163,10 @@ exports.forgotPassword = async (req, res) => {
     });
   } catch (error) {
     console.error("Forgot password error:", error);
-    return res
-      .status(500)
-      .json({
-        error: "Error al procesar la solicitud",
-        details: error.message,
-      });
+    return res.status(500).json({
+      error: "Error al procesar la solicitud",
+      details: error.message,
+    });
   }
 };
 
@@ -203,11 +224,9 @@ exports.resetPassword = async (req, res) => {
     }
   } catch (error) {
     console.error("Reset password error:", error);
-    return res
-      .status(500)
-      .json({
-        error: "Error al actualizar la contraseña",
-        details: error.message,
-      });
+    return res.status(500).json({
+      error: "Error al actualizar la contraseña",
+      details: error.message,
+    });
   }
 };
