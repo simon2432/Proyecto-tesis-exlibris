@@ -21,7 +21,7 @@ import {
 } from "../utils/imageUtils";
 
 const { width } = Dimensions.get("window");
-const COVER_SIZE = Platform.OS === "web" ? width / 5 - 20 : width / 2.5 - 16;
+const COVER_SIZE = Platform.OS === "web" ? width / 5 - 20 : width / 3.2 - 12;
 
 export default function FavoritosBuscar() {
   const router = useRouter();
@@ -173,7 +173,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   scrollContent: {
-    padding: Platform.OS === "web" ? 4 : 16,
+    padding: Platform.OS === "web" ? 4 : 12,
     paddingBottom: 40,
   },
   row: {
@@ -186,7 +186,7 @@ const styles = StyleSheet.create({
     height: COVER_SIZE * 1.45 + 32,
     borderRadius: 14,
     backgroundColor: "#FFF4E4",
-    marginHorizontal: Platform.OS === "web" ? 8 : 4,
+    marginHorizontal: Platform.OS === "web" ? 8 : 6,
     marginBottom: 0,
     alignItems: "center",
     justifyContent: "flex-end",

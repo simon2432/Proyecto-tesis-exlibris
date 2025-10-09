@@ -651,7 +651,7 @@ const callLLMForPicks = async (signals) => {
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -662,15 +662,15 @@ const callLLMForPicks = async (signals) => {
             content: prompt.user,
           },
         ],
-        max_tokens: 800,
-        temperature: 0.3,
+        max_tokens: 2500,
+        temperature: 0.7,
       },
       {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${OPENAI_API_KEY}`,
         },
-        timeout: 30000, // 30 segundos
+        timeout: 60000, // 60 segundos - más tiempo para respuestas complejas
       }
     );
 
@@ -814,7 +814,7 @@ const retryLLMWithCorrection = async (signals) => {
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o",
         messages: [
           {
             role: "system",
@@ -833,7 +833,7 @@ const retryLLMWithCorrection = async (signals) => {
           "Content-Type": "application/json",
           Authorization: `Bearer ${OPENAI_API_KEY}`,
         },
-        timeout: 30000,
+        timeout: 60000, // 60 segundos - más tiempo para respuestas complejas
       }
     );
 

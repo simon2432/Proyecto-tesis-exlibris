@@ -1,11 +1,10 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Dimensions,
   Platform,
   Image,
   ActivityIndicator,
@@ -20,8 +19,6 @@ import { usePublicaciones } from "../hooks/usePublicaciones";
 import { API_BASE_URL } from "../constants/ApiConfig";
 import axios from "axios";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
-const { width: SCREEN_WIDTH } = Dimensions.get("window");
 
 export default function MarketScreen() {
   const router = useRouter();
@@ -157,7 +154,11 @@ export default function MarketScreen() {
         onSearch={handleSearch}
         onFiltrosPress={handleFiltrosPress}
       />
-      <ScrollView contentContainerStyle={{ paddingBottom: 20 }}>
+      <ScrollView
+        contentContainerStyle={{
+          paddingBottom: Platform.OS === "android" ? 100 : 20,
+        }}
+      >
         {/* Botones superiores */}
         <View style={styles.topButtonsRow}>
           <TouchableOpacity
