@@ -3,7 +3,6 @@ import {
   View,
   Text,
   StyleSheet,
-  Image,
   TouchableOpacity,
   ScrollView,
   Platform,
@@ -13,6 +12,7 @@ import {
   TextInput,
 } from "react-native";
 import { Image as ExpoImage } from "expo-image";
+import { BlurView } from "expo-blur";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import axios from "axios";
 import { API_BASE_URL } from "../../constants/ApiConfig";
@@ -64,6 +64,17 @@ export default function LecturaHistorialDetalle() {
   const [reviewCharCount, setReviewCharCount] = useState(0);
   const [showDeleteReviewModal, setShowDeleteReviewModal] = useState(false);
   const [showNoReviewsSection, setShowNoReviewsSection] = useState(false);
+
+  // Estados para reseñas de otros usuarios
+  const [resenasOtros, setResenasOtros] = useState<any[]>([]);
+  const [loadingResenas, setLoadingResenas] = useState(false);
+  const [promedioOtros, setPromedioOtros] = useState(0);
+  const [spoilerVisible, setSpoilerVisible] = useState<{
+    [key: number]: boolean;
+  }>({});
+  const [avatarError, setAvatarError] = useState<{ [key: number]: boolean }>(
+    {}
+  );
 
   useEffect(() => {
     // Precargar imagen placeholder
@@ -235,10 +246,68 @@ export default function LecturaHistorialDetalle() {
     }
   };
 
-  const handleVerResenasOtros = () => {
-    // Por ahora mostramos la sección de "no hay reseñas"
-    // En el futuro aquí se podría implementar la lógica para buscar reseñas de otros usuarios
-    setShowNoReviewsSection(!showNoReviewsSection);
+  const handleVerResenasOtros = async () => {
+    // Alternar visibilidad
+    if (showNoReviewsSection) {
+      setShowNoReviewsSection(false);
+      return;
+    }
+
+    // Si ya cargamos las reseñas antes, solo mostrar
+    if (resenasOtros.length > 0) {
+      setShowNoReviewsSection(true);
+      return;
+    }
+
+    // Cargar reseñas de otros usuarios
+    try {
+      setLoadingResenas(true);
+      const res = await axios.get(
+        `${API_BASE_URL}/lecturas/reviews/${lectura.libroId}`
+      );
+
+      if (res.data.resenas && res.data.resenas.length > 0) {
+        // Filtrar para excluir la reseña del usuario actual (si tiene)
+        const userId = await AsyncStorage.getItem("userId");
+        const resenasOtrosUsuarios = res.data.resenas.filter(
+          (r: any) => r.userId !== parseInt(userId || "0")
+        );
+
+        setResenasOtros(resenasOtrosUsuarios);
+        setShowNoReviewsSection(true);
+
+        // Calcular promedio
+        if (resenasOtrosUsuarios.length > 0) {
+          const sum = resenasOtrosUsuarios.reduce(
+            (acc: number, r: any) => acc + (r.reviewRating || 0),
+            0
+          );
+          setPromedioOtros(sum / resenasOtrosUsuarios.length);
+        }
+      } else {
+        // No hay reseñas, mostrar mensaje
+        setResenasOtros([]);
+        setShowNoReviewsSection(true);
+      }
+    } catch (error) {
+      console.error("Error cargando reseñas de otros usuarios:", error);
+      setResenasOtros([]);
+      setShowNoReviewsSection(true);
+    } finally {
+      setLoadingResenas(false);
+    }
+  };
+
+  // Función para obtener la URL absoluta de la foto de perfil
+  const getFotoPerfilUrl = (fotoPerfil: string | null | undefined) => {
+    if (!fotoPerfil) return require("../../assets/images/perfil.png");
+    if (fotoPerfil.startsWith("http")) return { uri: fotoPerfil };
+    return {
+      uri: `${API_BASE_URL.replace(/\/$/, "")}/${fotoPerfil.replace(
+        /^\//,
+        ""
+      )}`,
+    };
   };
 
   if (!lectura) return <Text>Cargando...</Text>;
@@ -1066,16 +1135,155 @@ export default function LecturaHistorialDetalle() {
         </Text>
       </TouchableOpacity>
 
-      {/* Sección de "no hay reseñas" */}
+      {/* Sección de reseñas de otros usuarios */}
       {showNoReviewsSection && (
-        <View style={styles.noReviewsSection}>
-          <Text style={styles.noReviewsTitle}>Reseñas de otros usuarios</Text>
-          <Text style={styles.noReviewsMessage}>
-            No hay reseñas de otros usuarios sobre este libro.
-          </Text>
-          <Text style={styles.noReviewsInfo}>
-            Sé el primero en compartir tu opinión sobre este libro.
-          </Text>
+        <View style={styles.otherReviewsSection}>
+          {loadingResenas ? (
+            <Text style={styles.loadingText}>Cargando reseñas...</Text>
+          ) : resenasOtros.length > 0 ? (
+            <>
+              {/* Promedio de valoración */}
+              <View style={styles.promedioContainer}>
+                <Text style={styles.promedioText}>Valoración promedio:</Text>
+                {[1, 2, 3, 4, 5].map((star) => (
+                  <Text
+                    key={star}
+                    style={{
+                      fontSize: 18,
+                      color: promedioOtros >= star ? "#FFD700" : "#CCC",
+                    }}
+                  >
+                    ★
+                  </Text>
+                ))}
+                <Text style={styles.promedioNumero}>
+                  {promedioOtros.toFixed(1)}
+                </Text>
+              </View>
+
+              {/* Lista de reseñas */}
+              <ScrollView style={{ maxHeight: 350 }}>
+                {resenasOtros.map((r) => (
+                  <View key={r.id} style={styles.otherReviewCard}>
+                    <View
+                      style={{
+                        flexDirection: "row",
+                        alignItems: "center",
+                        marginBottom: 4,
+                      }}
+                    >
+                      <ExpoImage
+                        source={
+                          avatarError[r.id] || !r.fotoPerfil
+                            ? require("../../assets/images/perfil.png")
+                            : getFotoPerfilUrl(r.fotoPerfil)
+                        }
+                        style={styles.reviewAvatar}
+                        contentFit="cover"
+                        onError={() =>
+                          setAvatarError((e) => ({ ...e, [r.id]: true }))
+                        }
+                      />
+                      <Text style={styles.reviewUserName}>
+                        {r.nombre || "Usuario"}
+                      </Text>
+                      <View style={{ flexDirection: "row", marginLeft: 8 }}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Text
+                            key={star}
+                            style={{
+                              fontSize: 15,
+                              color:
+                                r.reviewRating >= star ? "#FFD700" : "#CCC",
+                            }}
+                          >
+                            ★
+                          </Text>
+                        ))}
+                      </View>
+                    </View>
+
+                    {/* Comentario con detección de spoiler */}
+                    <View style={{ position: "relative" }}>
+                      {r.esSpoiler ? (
+                        <TouchableOpacity
+                          activeOpacity={1}
+                          onPress={() =>
+                            setSpoilerVisible((s) => ({
+                              ...s,
+                              [r.id]: !s[r.id],
+                            }))
+                          }
+                          style={{ minHeight: 36 }}
+                        >
+                          <Text
+                            style={[
+                              styles.reviewCommentText,
+                              {
+                                color: "#3B2412",
+                                opacity: spoilerVisible[r.id] ? 1 : 0.3,
+                              },
+                            ]}
+                          >
+                            {r.reviewComment}
+                          </Text>
+                          {!spoilerVisible[r.id] && (
+                            <BlurView
+                              intensity={100}
+                              tint="dark"
+                              style={[
+                                StyleSheet.absoluteFill,
+                                {
+                                  borderRadius: 8,
+                                  overflow: "hidden",
+                                  justifyContent: "center",
+                                  alignItems: "center",
+                                  backgroundColor: "rgba(60,60,60,0.85)",
+                                },
+                              ]}
+                              pointerEvents="none"
+                            >
+                              <Text
+                                style={{
+                                  color: "#F8F2E9",
+                                  fontWeight: "bold",
+                                  fontSize: 18,
+                                  textShadowColor: "rgba(0,0,0,0.4)",
+                                  textShadowOffset: { width: 0, height: 2 },
+                                  textShadowRadius: 4,
+                                }}
+                              >
+                                ⚠️ Alerta de spoiler
+                              </Text>
+                              <Text
+                                style={{
+                                  color: "#F8F2E9",
+                                  fontSize: 12,
+                                  marginTop: 4,
+                                }}
+                              >
+                                Toca para revelar
+                              </Text>
+                            </BlurView>
+                          )}
+                        </TouchableOpacity>
+                      ) : (
+                        <Text style={styles.reviewCommentText}>
+                          {r.reviewComment}
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </ScrollView>
+            </>
+          ) : (
+            <View style={styles.reviewsPlaceholder}>
+              <Text style={styles.noReviewsMessage}>
+                No hay reseñas de otros usuarios sobre este libro.
+              </Text>
+            </View>
+          )}
         </View>
       )}
 
@@ -1322,39 +1530,65 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 8,
   },
-  noReviewsSection: {
-    backgroundColor: "#FFF4E4",
-    borderRadius: 16,
+  otherReviewsSection: {
     marginHorizontal: 18,
-    marginTop: 12,
-    marginBottom: Platform.OS === "android" ? 30 : 20,
-    padding: 16,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 2,
-    elevation: 2,
+    marginBottom: Platform.OS === "android" ? 30 : 24,
   },
-  noReviewsTitle: {
-    fontSize: 18,
+  loadingText: {
+    fontSize: 15,
+    color: "#7c4a2d",
+    textAlign: "center",
+    marginVertical: 20,
+  },
+  promedioContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  promedioText: {
     fontWeight: "bold",
     color: "#3B2412",
-    marginBottom: 8,
-    textAlign: "center",
+    fontSize: 16,
+    marginRight: 8,
+  },
+  promedioNumero: {
+    marginLeft: 8,
+    color: "#3B2412",
+    fontSize: 15,
+  },
+  otherReviewCard: {
+    backgroundColor: "#FFF4E4",
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 12,
+  },
+  reviewAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginRight: 12,
+  },
+  reviewUserName: {
+    fontSize: 15,
+    fontWeight: "bold",
+    color: "#3B2412",
+  },
+  reviewCommentText: {
+    fontSize: 15,
+    color: "#3B2412",
+  },
+  reviewsPlaceholder: {
+    minHeight: 80,
+    backgroundColor: "#FFF4E4",
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 18,
   },
   noReviewsMessage: {
-    fontSize: 16,
-    color: "#3B2412",
-    marginBottom: 8,
+    fontSize: 15,
+    color: "#7c4a2d",
     textAlign: "center",
-    lineHeight: 22,
-  },
-  noReviewsInfo: {
-    fontSize: 14,
-    color: "#666",
-    textAlign: "center",
-    fontStyle: "italic",
   },
   // Estilos del modal de confirmación
   modalOverlay: {

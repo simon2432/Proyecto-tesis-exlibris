@@ -1,16 +1,38 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CONTROLADOR DE RECOMENDACIONES
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Maneja las recomendaciones personalizadas de libros:
+ * - Recomendaciones del home (ChatGPT + Google Books)
+ * - Publicaciones locales (en venta cerca del usuario)
+ * - Gestión de caché de recomendaciones
+ *
+ * FUNCIONALIDADES:
+ * - Algoritmo inteligente con ChatGPT (ver homeRecs.js)
+ * - Caché persistente por sesión
+ * - Publicaciones filtradas por ubicación del usuario
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
 const {
   getHomeRecommendations,
-  invalidateRecommendationsCache,
-  checkCacheStatus,
   clearUserCache,
-  clearAllCache,
 } = require("../services/recs/homeRecs");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ENDPOINTS DE RECOMENDACIONES
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
- * GET /api/recommendations/home
+ * GET /api/recommendations/home?userId={userId}
  * Obtiene recomendaciones personalizadas para el home del usuario
+ *
+ * RETORNA: 10+10 libros (te_podrian_gustar + descubri_nuevas_lecturas)
+ * ESTRATEGIA: ChatGPT analiza gustos → Busca en Google Books → Filtra/valida
+ * CACHÉ: Persistente durante toda la sesión del usuario
  */
 exports.getHomeRecommendations = async (req, res) => {
   try {
@@ -53,108 +75,11 @@ exports.getHomeRecommendations = async (req, res) => {
 };
 
 /**
- * POST /api/recommendations/invalidate
- * Invalida el cache de recomendaciones para un usuario específico
- */
-exports.invalidateRecommendations = async (req, res) => {
-  try {
-    const { userId } = req.body;
-
-    if (!userId) {
-      return res.status(400).json({
-        error: "userId es requerido en el body",
-      });
-    }
-
-    if (isNaN(parseInt(userId))) {
-      return res.status(400).json({
-        error: "userId debe ser un número válido",
-      });
-    }
-
-    console.log(`[Recommendations] Invalidando cache para usuario ${userId}`);
-
-    invalidateRecommendationsCache(userId);
-
-    res.json({
-      message: "Cache de recomendaciones invalidado exitosamente",
-      userId: parseInt(userId),
-    });
-  } catch (error) {
-    console.error("[Recommendations] Error al invalidar cache:", error);
-    res.status(500).json({
-      error: "Error interno del servidor al invalidar cache",
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
-  }
-};
-
-/**
- * GET /api/recommendations/health
- * Endpoint de salud para verificar el estado del servicio
- */
-exports.getHealth = async (req, res) => {
-  try {
-    res.json({
-      status: "healthy",
-      service: "recommendations",
-      timestamp: new Date().toISOString(),
-      features: {
-        llm: !!process.env.OPENAI_API_KEY,
-        googleBooks: !!process.env.GOOGLE_BOOKS_API_KEY,
-        cache: true,
-      },
-    });
-  } catch (error) {
-    console.error("[Recommendations] Health check error:", error);
-    res.status(500).json({
-      status: "unhealthy",
-      error: error.message,
-    });
-  }
-};
-
-/**
- * GET /api/recommendations/cache-status
- * Verifica el estado del caché para un usuario específico
- */
-exports.getCacheStatus = async (req, res) => {
-  try {
-    const { userId } = req.query;
-
-    if (!userId) {
-      return res.status(400).json({
-        error: "userId es requerido como query parameter",
-      });
-    }
-
-    if (isNaN(parseInt(userId))) {
-      return res.status(400).json({
-        error: "userId debe ser un número válido",
-      });
-    }
-
-    console.log(
-      `[Recommendations] Verificando estado del caché para usuario ${userId}`
-    );
-
-    const cacheStatus = checkCacheStatus(userId);
-
-    res.json(cacheStatus);
-  } catch (error) {
-    console.error("[Recommendations] Error al verificar caché:", error);
-    res.status(500).json({
-      error: "Error interno del servidor al verificar caché",
-      details:
-        process.env.NODE_ENV === "development" ? error.message : undefined,
-    });
-  }
-};
-
-/**
  * POST /api/recommendations/clear-cache
- * Limpia el cache de recomendaciones para un usuario específico (al cerrar sesión)
+ * Limpia el caché de recomendaciones de un usuario al cerrar sesión
+ *
+ * USO: Llamado automáticamente desde UserContext cuando el usuario hace logout
+ * EFECTO: El usuario verá nuevas recomendaciones en su próxima sesión
  */
 exports.clearUserRecommendationsCache = async (req, res) => {
   try {
@@ -192,8 +117,16 @@ exports.clearUserRecommendationsCache = async (req, res) => {
 };
 
 /**
- * GET /api/recommendations/local-sales
- * Obtiene publicaciones locales en venta para el usuario
+ * GET /api/recommendations/local-sales?userId={userId}
+ * Obtiene publicaciones en venta en la MISMA ciudad del usuario
+ *
+ * FLUJO:
+ * 1. Obtiene la ubicación (ciudad) del usuario
+ * 2. Busca publicaciones activas en la misma ciudad
+ * 3. Excluye las publicaciones del propio usuario
+ * 4. Retorna hasta 15 publicaciones ordenadas por fecha
+ *
+ * USO: Sección "En venta cerca tuyo" del home
  */
 exports.getLocalSales = async (req, res) => {
   try {

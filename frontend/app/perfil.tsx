@@ -259,10 +259,6 @@ export default function PerfilScreen() {
             transition={200}
           />
           <Text style={styles.profileName}>{user?.nombre || "Usuario"}</Text>
-          <Text style={styles.profileGenre}>
-            Género más leído:{" "}
-            <Text style={{ fontWeight: "bold" }}>Ciencia ficción</Text>
-          </Text>
           <Text style={styles.profileBooks}>
             Libros leídos:{" "}
             <Text style={{ fontWeight: "bold" }}>
@@ -490,15 +486,10 @@ const styles = StyleSheet.create({
     color: "#3B2412",
     marginBottom: 2,
   },
-  profileGenre: {
-    fontSize: 15,
-    color: "#3B2412",
-    marginBottom: 2,
-  },
   profileBooks: {
     fontSize: 15,
     color: "#3B2412",
-    marginBottom: 2,
+    marginBottom: 8,
   },
   sectionRow: {
     flexDirection: "row",

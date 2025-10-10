@@ -1,4 +1,25 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CONTROLADOR DE CHAT (Asistente conversacional)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Maneja el chat conversacional con Exlibris (la lechuza):
+ * - Conversación natural sobre libros
+ * - Recomendaciones personalizadas por chat
+ * - Mantiene historial de conversación
+ *
+ * MODELO: GPT-3.5-turbo (económico para conversaciones)
+ * TEMPERATURA: 0.8 (alta para respuestas creativas y conversacionales)
+ *
+ * PERSONALIDAD: "Exlibris" - Una lechuza sabia y apasionada por la literatura
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
 const axios = require("axios");
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN DEL ASISTENTE
+// ═══════════════════════════════════════════════════════════════════════════
 
 const SYSTEM_PROMPT = `
 Sos Exlibris, un asistente conversacional dentro de una app de libros. Tenés la forma de una lechuza sabia y encantadora que lo sabe todo sobre el mundo de la literatura. Tu único propósito es recomendar libros personalizados a cada usuario, pero también estás preparado para explicar cómo funciona la app cuando te lo consultan.
@@ -33,6 +54,26 @@ Siempre iniciá la conversación con un mensaje amable que invite al usuario a h
 - Hola, viajero literario. ¿Qué historia querés vivir hoy?
 `;
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ENDPOINT DE CHAT
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /chat
+ * Chat conversacional con Exlibris (la lechuza asistente)
+ *
+ * FLUJO:
+ * 1. Recibe mensaje del usuario + historial de conversación
+ * 2. Construye contexto completo (system prompt + historial + nuevo mensaje)
+ * 3. Envía a ChatGPT (GPT-3.5-turbo, temperature 0.8)
+ * 4. Retorna respuesta conversacional
+ *
+ * CARACTERÍSTICAS:
+ * - Mantiene contexto de conversación
+ * - Personalidad definida (Exlibris, la lechuza)
+ * - Siempre enfocado en literatura
+ * - Termina con preguntas abiertas para continuar la conversación
+ */
 exports.chatWithAssistant = async (req, res) => {
   const { message, history } = req.body;
   if (!message) return res.status(400).json({ error: "Falta el mensaje" });
@@ -62,81 +103,6 @@ exports.chatWithAssistant = async (req, res) => {
 
     const reply = response.data.choices[0].message.content;
     res.json({ reply });
-  } catch (error) {
-    console.error(error.response?.data || error);
-    res.status(500).json({ error: "Error al comunicarse con OpenAI" });
-  }
-};
-
-exports.describeBook = async (req, res) => {
-  const {
-    title,
-    authors,
-    publisher,
-    publishedDate,
-    categories,
-    language,
-    pageCount,
-  } = req.body;
-  if (!title)
-    return res.status(400).json({ error: "Falta el título del libro" });
-
-  let bookInfo = `Título: ${title}`;
-  if (authors && authors.length > 0)
-    bookInfo += `\nAutor(es): ${
-      Array.isArray(authors) ? authors.join(", ") : authors
-    }`;
-  if (publisher) bookInfo += `\nEditorial: ${publisher}`;
-  if (publishedDate) bookInfo += `\nAño de publicación: ${publishedDate}`;
-  if (categories && categories.length > 0)
-    bookInfo += `\nGénero(s): ${
-      Array.isArray(categories) ? categories.join(", ") : categories
-    }`;
-  if (language) bookInfo += `\nIdioma: ${language}`;
-  if (pageCount) bookInfo += `\nCantidad de páginas: ${pageCount}`;
-
-  const prompt = `Genera una descripción atractiva, informativa y breve (máximo 200 palabras) para este libro basándote en la información disponible. Si conoces el libro, genera una descripción detallada. Si no lo conoces pero tienes información del título, autor, género o editorial, genera una descripción plausible basada en esos datos. Solo responde "Descripción no encontrada" si absolutamente no tienes información suficiente para generar algo coherente.
-
-Información del libro:
-${bookInfo}
-
-Genera una descripción que incluya:
-- Un resumen atractivo del contenido
-- El contexto o género literario
-- Por qué podría interesar a los lectores
-- Sin spoilers importantes`;
-
-  try {
-    const messages = [
-      {
-        role: "system",
-        content:
-          "Eres un experto en literatura que genera descripciones atractivas e informativas de libros. Siempre intenta generar una descripción útil basada en la información disponible. Solo responde 'Descripción no encontrada' como último recurso cuando sea imposible generar algo coherente.",
-      },
-      { role: "user", content: prompt },
-    ];
-
-    const response = await axios.post(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        model: "gpt-3.5-turbo",
-        messages,
-        max_tokens: 300,
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
-        },
-      }
-    );
-
-    const reply = response.data.choices[0].message.content;
-    res.json({
-      description: reply.trim(),
-      descriptionGenerated: true,
-    });
   } catch (error) {
     console.error(error.response?.data || error);
     res.status(500).json({ error: "Error al comunicarse con OpenAI" });

@@ -43,26 +43,51 @@ const getBookImageIndividual = async (bookId) => {
   }
 };
 
-// Función auxiliar para generar descripción con OpenAI
+// ═══════════════════════════════════════════════════════════════════════════
+// GENERACIÓN DE DESCRIPCIONES CON CHATGPT
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Genera una descripción REAL de un libro usando ChatGPT
+ *
+ * IMPORTANTE: Solo genera descripciones si ChatGPT CONOCE el libro
+ * NO inventa ni especula sobre contenido desconocido
+ *
+ * MODELO: GPT-4o-mini (mejor conocimiento literario que GPT-3.5)
+ * TEMPERATURA: 0.5
+ *
+ * USO: Se llama automáticamente cuando un libro no tiene descripción en Google Books
+ */
 const generateDescription = async (bookInfo) => {
   try {
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o-mini", // Modelo más inteligente para descripciones reales
         messages: [
           {
             role: "system",
             content:
-              "Eres un experto en literatura que genera descripciones atractivas e informativas de libros. Siempre genera una descripción basada en la información disponible del libro, incluso si es limitada. Nunca respondas 'Descripción no encontrada'.",
+              "Eres un experto en literatura que genera descripciones REALES de libros basándote en tu conocimiento de la obra. IMPORTANTE: Solo genera descripciones si CONOCES el libro. NO INVENTES ni ESPECULES sobre el contenido. Si no conoces el libro, responde ÚNICAMENTE 'Descripción no disponible'.",
           },
           {
             role: "user",
-            content: `Genera una descripción atractiva y breve (máximo 200 palabras) para este libro basándote en la información disponible: ${bookInfo}`,
+            content: `Genera una descripción real y precisa (máximo 200 palabras) SOLO si conoces este libro. Si no lo conoces, responde "Descripción no disponible".
+
+Información del libro:
+${bookInfo}
+
+La descripción debe incluir:
+- Un resumen del contenido real (sin inventar)
+- El género o estilo literario
+- Por qué es relevante o interesante
+- Sin spoilers importantes
+
+RECUERDA: Solo describe si CONOCES el libro. NO inventes contenido.`,
           },
         ],
         max_tokens: 300,
-        temperature: 0.7,
+        temperature: 0.5,
       },
       {
         headers: {
@@ -134,6 +159,31 @@ const authorMatchesSearch = (authors, searchQuery) => {
   });
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ENDPOINTS DE BÚSQUEDA
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * GET /books/search?q={query}&generateDescriptions={true/false}&filter={libro|autor|genero}
+ * Busca libros en Google Books API con filtros y opciones
+ *
+ * PARÁMETROS:
+ * - q: Término de búsqueda
+ * - generateDescriptions: Si debe generar descripciones con ChatGPT (opcional)
+ * - filter: Tipo de búsqueda (libro, autor, genero)
+ *
+ * FLUJO:
+ * 1. Busca en Google Books API según el filtro
+ * 2. Filtra resultados por relevancia
+ * 3. Prioriza versión del caché si existe (consistencia)
+ * 4. Si generateDescriptions=true, completa descripciones faltantes con ChatGPT
+ * 5. Retorna hasta 20 libros ordenados por calidad
+ *
+ * OPTIMIZACIONES:
+ * - Prioriza libros con imagen real
+ * - Mantiene consistencia con recomendaciones del home
+ * - Filtra resúmenes y guías de estudio
+ */
 exports.searchGoogleBooks = async (req, res) => {
   const { q, generateDescriptions = "false", filter } = req.query;
   if (!q)
@@ -447,6 +497,17 @@ exports.searchGoogleBooks = async (req, res) => {
   }
 };
 
+/**
+ * POST /books/generate-description
+ * Genera una descripción para un libro específico usando ChatGPT
+ *
+ * USO: Llamado desde pantallas de detalle cuando un libro no tiene descripción
+ *
+ * FLUJO:
+ * 1. Recibe información del libro (título, autor, editorial, etc.)
+ * 2. Llama a generateDescription (ChatGPT GPT-4o-mini)
+ * 3. Retorna la descripción generada o "Descripción no disponible"
+ */
 exports.generateBookDescription = async (req, res) => {
   const { bookId, title, authors, publisher, publishedDate, categories } =
     req.body;

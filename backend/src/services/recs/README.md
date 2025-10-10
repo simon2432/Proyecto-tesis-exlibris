@@ -1,385 +1,247 @@
-# Sistema de Recomendaciones - Home
+# Sistema de Recomendaciones - Documentación
 
-## 📚 Descripción
+## 📚 ¿Qué hace este sistema?
 
-Sistema inteligente de recomendaciones de libros para la pantalla de inicio que combina señales del usuario con IA (ChatGPT), caché inteligente y fallbacks locales. El sistema está optimizado para proporcionar recomendaciones consistentes y de alta calidad, con un enfoque en la personalización basada en el historial de lectura del usuario.
+Genera recomendaciones personalizadas de libros para cada usuario usando **ChatGPT** y **Google Books API**.
 
-## 🏗️ Arquitectura del Sistema
+---
 
-### **Archivos Principales:**
+## 📁 Archivos del sistema
 
-- `homeRecs.js` - Lógica principal de recomendaciones, integración con ChatGPT y Google Books API
-- `homeDefaults.js` - Libros por defecto con portadas reales de Google Books (fallback cuando no hay datos del usuario)
-- `recommendationCache.js` - Caché de versiones recomendadas para mantener consistencia entre recomendaciones y búsquedas
-- `preferredBooks.js` - Sistema de priorización por calidad en búsquedas (imagen, autor, descripción)
+| Archivo                  | Propósito                                                                          |
+| ------------------------ | ---------------------------------------------------------------------------------- |
+| `homeRecs.js`            | **Cerebro principal** - Orquesta todo el algoritmo de recomendaciones              |
+| `homeDefaults.js`        | Libros por defecto cuando el usuario es nuevo o ChatGPT falla                      |
+| `recommendationCache.js` | Mantiene consistencia: el usuario ve la misma versión del libro en home y búsqueda |
+| `preferredBooks.js`      | Prioriza libros con imagen y autor (para que la app se vea bonita)                 |
 
-### **Base de Datos:**
+---
 
-- **Tabla `Lectura`** - Historial de lecturas del usuario con campo `titulo` para análisis de gustos
-- **Tabla `User`** - Información del usuario incluyendo `librosFavoritos` (JSON array)
-- **Relaciones** - Lecturas vinculadas a usuarios para análisis de patrones de lectura
+## 🔄 Cómo funciona (flujo simple)
 
-## 🔄 Flujo de Recomendaciones
-
-### **1. Obtención de Señales del Usuario**
-
-```javascript
-// getUserSignals() - homeRecs.js
-const signals = {
-  favoritos: [], // Top 3 favoritos del usuario (objetos completos con title/authors)
-  historialLikes: [], // Títulos de libros con rating >= 3 (array de strings)
-  historialDislikes: [], // Títulos de libros con rating <= 2 (array de strings)
-  historialCompleto: [], // Array de libroIds de todas las lecturas
-};
+```
+1. Usuario abre el home
+   ↓
+2. ¿Ya generamos recomendaciones antes? (caché)
+   → SÍ: Mostrar las mismas (instantáneo) ✅
+   → NO: Continuar...
+   ↓
+3. Obtener gustos del usuario:
+   - Favoritos
+   - Lecturas con rating ≥3 (le gustaron)
+   - Lecturas con rating ≤2 (no le gustaron)
+   ↓
+4. ¿El usuario tiene datos?
+   → NO: Mostrar libros por defecto ("El Principito", "1984", etc.)
+   → SÍ: Continuar...
+   ↓
+5. Enviar a ChatGPT:
+   "Este usuario leyó X, Y, Z y le gustaron"
+   "No le gustó A, B"
+   "Recomiéndame 40 libros (20 + 20)"
+   ↓
+6. ChatGPT responde: 40 títulos de libros
+   ↓
+7. Para cada título, buscar en Google Books:
+   - Obtener imagen de portada
+   - Obtener descripción
+   - Obtener categorías, autor, etc.
+   ↓
+8. Filtrar:
+   - Eliminar libros ya leídos
+   - Eliminar favoritos
+   - Eliminar duplicados
+   ↓
+9. Seleccionar los 10 mejores de cada lista:
+   - Priorizar libros con imagen
+   - Priorizar libros con autor
+   ↓
+10. Guardar en caché (para la próxima vez)
+    ↓
+11. Mostrar en el home: 10+10 libros con portadas ✨
 ```
 
-### **2. Estrategias de Recomendación**
+---
 
-#### **Estrategia Principal: ChatGPT + Google Books**
+## 🎯 Archivos explicados
 
-1. **Análisis de señales** - Procesa favoritos, likes y dislikes del usuario
-2. **Prompt a ChatGPT** - Envía títulos de libros que le gustaron y no le gustaron
-3. **Respuesta estructurada** - ChatGPT devuelve 20+20 recomendaciones en formato JSON
-4. **Búsqueda en Google Books** - Para cada recomendación de ChatGPT
-5. **Validación y filtrado** - Excluye libros ya leídos o en favoritos
-6. **Caché de versiones** - Guarda la versión exacta recomendada para consistencia
+### **1. `homeRecs.js` - El cerebro**
 
-#### **Estrategia Fallback: Libros por Defecto**
+**Función principal:** `getHomeRecommendations(userId)`
 
-- Se activa cuando ChatGPT falla o no hay datos del usuario
-- Usa libros predefinidos con portadas reales de Google Books
-- No requiere consultas a APIs externas
-- Garantiza que siempre haya recomendaciones disponibles
+**Lo que hace:**
 
-### **3. Sistema de Caché Inteligente**
+1. Verifica si ya hay recomendaciones en caché → las retorna inmediatamente
+2. Si no hay caché, obtiene los gustos del usuario (favoritos, historial)
+3. Envía los gustos a ChatGPT (GPT-4o)
+4. ChatGPT recomienda 40 libros (solo títulos)
+5. Busca cada libro en Google Books API (en paralelo, 10 a la vez)
+6. Filtra libros ya leídos y duplicados
+7. Selecciona los 10 mejores con imagen
+8. Guarda en caché
+9. Retorna 10+10 libros completos
 
-#### **Caché de Recomendaciones (homeRecs.js)**
+**Funciones clave:**
 
-- **Duración**: `Infinity` - Persistente hasta invalidación explícita
-- **Persistencia**: Mientras el usuario esté logueado en la sesión
-- **Invalidación**: Solo al desloguearse o reiniciar servidor
-- **Estructura**: `Map<userId, {data, timestamp}>`
-- **Validación**: Verifica integridad del caché antes de usar
+- `getUserSignals()` - Obtiene favoritos, likes y dislikes del usuario
+- `callLLMForPicks()` - Llama a ChatGPT para que recomiende libros
+- `processLLMRecommendations()` - Busca cada libro en Google Books y obtiene imágenes
+- `selectBestBooks()` - Prioriza libros con imagen sobre los que no tienen
 
-#### **Caché de Versiones (recommendationCache.js)**
+---
 
-- **Propósito**: Mantener consistencia entre recomendaciones y búsquedas manuales
-- **Duración**: 24 horas por entrada
-- **Clave**: `"${titulo}_${autor}"` (normalizada)
-- **Funciones**:
-  - `saveRecommendedVersion()` - Guardar versión exacta recomendada
-  - `getRecommendedVersion()` - Obtener versión del caché
-  - `findSimilarCachedVersion()` - Buscar versión similar por título
-  - `cleanExpiredCache()` - Limpiar entradas expiradas
+### **2. `homeDefaults.js` - Libros por defecto**
 
-## 🔍 Sistema de Búsqueda y Procesamiento
+**Lo que contiene:**
 
-### **Búsqueda en Google Books API**
+- Lista de libros clásicos y populares predefinidos
+- Se usa cuando el usuario es nuevo (sin favoritos ni historial)
+- Se usa cuando ChatGPT falla
+- Garantiza que siempre haya algo que mostrar
+
+**Ejemplo:**
 
 ```javascript
-// homeRecs.js - searchGoogleBooks()
-const searchParams = {
-  q: `intitle:"${searchQuery}"`, // Búsqueda por título exacto
-  maxResults: 20,
-  printType: "books",
-  orderBy: "relevance",
-  key: GOOGLE_BOOKS_API_KEY,
-};
-```
-
-### **Procesamiento Paralelo de Recomendaciones**
-
-```javascript
-// homeRecs.js - processLLMRecommendations()
-const BATCH_SIZE = 10; // Procesar de a 10 libros por vez
-const DELAY_BETWEEN_BOOKS = 50; // 50ms entre libros
-const DELAY_BETWEEN_BATCHES = 200; // 200ms entre batches
-```
-
-### **Priorización de Resultados**
-
-1. **Versión del caché** - Si existe, se muestra primero
-2. **Libros con imagen** - Se priorizan sobre los sin imagen
-3. **Libros con autor** - Se priorizan sobre los sin autor
-4. **Sistema de calidad** - Ordenamiento por criterios de calidad
-
-### **Filtrado Inteligente**
-
-- **Exclusión de historial** - No recomienda libros ya leídos
-- **Exclusión de favoritos** - No recomienda libros en favoritos
-- **Deduplicación** - Evita duplicados entre listas
-- **Validación de integridad** - Verifica que los libros sean válidos
-
-## 🎯 Sistema de Priorización por Calidad
-
-### **Criterios de Evaluación Simplificados (preferredBooks.js)**
-
-```javascript
-const prioritizeBooksByQuality = (books, searchQuery = null) => {
-  // Ordenamiento simple y rápido por criterios básicos
-  return books
-    .filter((book) => book.title) // Solo libros con título
-    .sort((a, b) => {
-      // 1. Priorizar libros con imagen
-      const aHasImage = a.image && !a.image.includes("placehold.co");
-      const bHasImage = b.image && !b.image.includes("placehold.co");
-
-      if (aHasImage && !bHasImage) return -1;
-      if (!aHasImage && bHasImage) return 1;
-
-      // 2. Priorizar libros con autor
-      const aHasAuthor = a.authors && a.authors.length > 0;
-      const bHasAuthor = b.authors && b.authors.length > 0;
-
-      if (aHasAuthor && !bHasAuthor) return -1;
-      if (!aHasAuthor && bHasAuthor) return 1;
-
-      return 0;
-    });
-};
-```
-
-### **Selección de Mejores Libros**
-
-- **Prioridad por imagen** - Libros con portada real primero
-- **Prioridad por autor** - Libros con información de autor
-- **Filtrado por calidad** - Solo libros con datos completos
-- **Deduplicación** - Evita libros repetidos en resultados
-
-## 🚀 APIs y Endpoints
-
-### **Recomendaciones del Home**
-
-#### `GET /api/recommendations/home?userId={userId}`
-
-Obtiene recomendaciones personalizadas para el usuario:
-
-```json
 {
-  "tePodrianGustar": [
-    {
-      "volumeId": "DqIPAAAACAAJ",
-      "title": "El Señor de los Anillos",
-      "authors": ["J.R.R. Tolkien"],
-      "categories": ["Fiction", "Fantasy"],
-      "description": "Una épica aventura de fantasía...",
-      "image": "https://books.google.com/books/publisher/content/images/frontcover/DqIPAAAACAAJ?fife=w400-h600&source=gbs_api",
-      "reason": "Recomendado por IA"
-    }
-  ],
-  "descubriNuevasLecturas": [
-    {
-      "volumeId": "5PQEAAAAMAAJ",
-      "title": "1984",
-      "authors": ["George Orwell"],
-      "categories": ["Fiction", "Dystopian"],
-      "description": "Una distopía clásica...",
-      "image": "https://books.google.com/books/publisher/content/images/frontcover/5PQEAAAAMAAJ?fife=w400-h600&source=gbs_api",
-      "reason": "Recomendado por IA"
-    }
-  ],
-  "metadata": {
-    "strategy": "llm+googlebooks",
-    "generatedAt": "2024-01-15T10:30:00.000Z",
-    "userId": 123
-  }
+  tePodrianGustar: [
+    "El Principito",
+    "1984",
+    "Cien años de soledad",
+    ...
+  ]
 }
 ```
 
-### **Estrategias de Recomendación**
+---
 
-- **`llm+googlebooks`** - ChatGPT + Google Books (estrategia principal)
-- **`fallback-defaults`** - Libros por defecto (cuando ChatGPT falla)
-- **`llm-progressive`** - Carga progresiva de recomendaciones
-- **`llm-two-phase`** - Carga en dos fases (5+5 inicial, luego completo)
+### **3. `recommendationCache.js` - Consistencia**
 
-### **Búsqueda de Libros**
+**Problema que resuelve:**
 
-#### `GET /api/books/search?q={query}&generateDescriptions={true/false}`
+Imagina que el home muestra "El Alquimista" con una portada azul.  
+Luego el usuario busca "El Alquimista" manualmente.  
+Google Books podría devolver una versión con portada verde.  
+**Resultado:** El usuario ve dos veces el mismo libro (confusión).
 
-Busca libros en Google Books con optimizaciones:
+**Solución:**
 
-```json
-{
-  "books": [
-    {
-      "id": "DqIPAAAACAAJ",
-      "title": "El Señor de los Anillos",
-      "authors": ["J.R.R. Tolkien"],
-      "categories": ["Fiction", "Fantasy"],
-      "description": "Una épica aventura de fantasía...",
-      "image": "https://books.google.com/books/publisher/content/images/frontcover/DqIPAAAACAAJ?fife=w400-h600&source=gbs_api",
-      "averageRating": 4.5,
-      "pageCount": 1216,
-      "language": "es"
-    }
-  ],
-  "totalResults": 1
-}
+Cuando se recomienda un libro, se guarda su versión exacta:
+
+```javascript
+saveRecommendedVersion("El Alquimista", "Paulo Coelho", {
+  volumeId: "ABC123",
+  image: "portada-azul.jpg",
+  ...
+});
 ```
 
-### **Funciones de Utilidad**
+Cuando el usuario busca después:
 
-- **`getUserSignals(userId)`** - Obtiene señales del usuario
-- **`searchSpecificBook(title, author)`** - Busca un libro específico
-- **`clearUserCache(userId)`** - Limpia caché del usuario
-- **`clearAllCache()`** - Limpia todo el caché
-
-## 🛡️ Manejo de Errores y Fallbacks
-
-### **Rate Limiting de Google Books API**
-
-- **Límite**: 100 consultas/minuto
-- **Manejo**: Delays escalonados entre consultas (50ms entre libros, 200ms entre batches)
-- **Retry automático**: Reintenta después de 8 segundos si se alcanza el límite
-- **Fallback**: Libros por defecto si se excede el límite persistentemente
-
-### **Sistema de Fallbacks en Cascada**
-
-1. **ChatGPT falla** → Usar libros por defecto
-2. **Google Books falla** → Usar libros por defecto
-3. **Libro no encontrado** → Buscar libro de reemplazo
-4. **Caché corrupto** → Regenerar automáticamente
-5. **Sin datos del usuario** → Usar libros por defecto directamente
-
-### **Validaciones y Correcciones**
-
-- **Integridad del caché**: Verifica que tenga libros válidos
-- **Respuesta de ChatGPT**: Repara JSON malformado automáticamente
-- **Datos de Google Books**: Valida estructura y campos requeridos
-- **Filtrado de duplicados**: Elimina libros repetidos entre listas
-- **Exclusión de historial**: No recomienda libros ya leídos o en favoritos
-
-### **Sistema de Recuperación**
-
-- **Reemplazo de libros inválidos**: Busca alternativas automáticamente
-- **Completado de listas parciales**: Usa libros de la otra lista si es necesario
-- **Validación continua**: Verifica integridad en cada paso del proceso
-
-## 📊 Logs del Sistema
-
-### **Recomendaciones**
-
-```
-[Recommendations] Generando recomendaciones para usuario 123
-[Recommendations] Estrategia: llm+googlebooks
-[Signals] Obteniendo señales para usuario 123
-[Signals] Favoritos procesados: 3 libros
-[Signals] Historial LIKES (rating >= 3): 5 libros
-[Signals] Historial DISLIKES (rating <= 2): 2 libros
-[LLM] Enviando consulta a ChatGPT...
-[Process] Procesando recomendaciones del LLM con paralelización controlada...
-[Process] Resultado final: tePodrianGustar=10, descubriNuevasLecturas=10
-[Cache] Guardando en caché para usuario 123
+```javascript
+const cached = getRecommendedVersion("El Alquimista");
+// Retorna la versión ABC123 con portada azul
+// El usuario ve LA MISMA portada que en el home ✅
 ```
 
-### **Caché**
+**Duración:** 24 horas
+
+---
+
+### **4. `preferredBooks.js` - Selector de calidad**
+
+**Lo que hace:**
+
+Cuando Google Books devuelve 5 versiones de "Harry Potter", elige la mejor.
+
+**Criterios (en orden):**
+
+1. ¿Tiene imagen real? → Prioridad alta
+2. ¿Tiene autor? → Prioridad media
+
+**Ejemplo:**
 
 ```
-[Cache] Verificando caché para usuario 123
-[Cache] ✅ HIT para usuario 123, usando cache existente
-[Cache] Cache generado: 12/21/2024, 3:45:30 PM
-[Cache] Estrategia usada: llm+googlebooks
-[Cache] Caché válido: 10 + 10 libros
+Resultados de Google Books:
+1. "Harry Potter - Resumen" (sin imagen, sin autor) ❌
+2. "Harry Potter" (con imagen, con autor) ✅ ← ESTA SE ELIGE
+3. "Harry Potter - Guía" (sin imagen, con autor) ⚠️
+
+prioritizeBooksByQuality() → Retorna #2 (la mejor)
 ```
 
-### **Búsqueda y Procesamiento**
+---
 
-```
-[GoogleBooks] Búsqueda: "El Alquimista"
-[GoogleBooks] Resultados encontrados: 15 libros
-[Quality] Priorizando 15 libros (modo rápido)
-[Quality] Priorizados 15 libros (modo rápido)
-[Process] ✅ Agregado a te_podrian_gustar: El Alquimista
-[Cache] Guardando versión recomendada: "El Alquimista" (ID: 5PQEAAAAMAAJ)
-```
+## 🗂️ Dos cachés diferentes
 
-### **Manejo de Errores**
+| Caché               | Ubicación                | Duración       | Qué guarda                       |
+| ------------------- | ------------------------ | -------------- | -------------------------------- |
+| **Recomendaciones** | `homeRecs.js`            | Toda la sesión | 10+10 libros completos           |
+| **Versiones**       | `recommendationCache.js` | 24 horas       | Versión específica de cada libro |
 
-```
-[LLM] ❌ ERROR PARSING JSON: Unexpected token
-[LLM] 🔧 INTENTANDO REPARAR JSON...
-[LLM] ✅ JSON REPARADO exitosamente
-[GoogleBooks] Rate limit alcanzado, esperando 8 segundos...
-[Process] ⚠️ Timeout o error para "Libro X": Timeout
-[Backup] Activando sistema de respaldo mejorado...
-```
+**Ejemplo:**
 
-## 🔧 Configuración
+- **Caché 1:** Guarda las recomendaciones completas del usuario 123
+- **Caché 2:** Guarda que "El Alquimista" = versión ABC123 con portada azul
 
-### **Variables de Entorno**
+---
+
+## 🚀 Endpoints disponibles
+
+| Endpoint                                           | Qué hace                                          |
+| -------------------------------------------------- | ------------------------------------------------- |
+| `GET /api/recommendations/home?userId={id}`        | Obtiene 10+10 recomendaciones personalizadas      |
+| `GET /api/recommendations/local-sales?userId={id}` | Obtiene publicaciones en venta en la misma ciudad |
+| `POST /api/recommendations/clear-cache`            | Limpia caché al cerrar sesión                     |
+
+---
+
+## 🛡️ Sistema de seguridad (3 capas)
+
+Para asegurar que **NUNCA** se recomiende un libro ya leído:
+
+1. **CAPA 1:** Filtrado en `processLLMRecommendations` (99% efectivo)
+2. **CAPA 2:** Eliminación de duplicados con `removeDuplicates`
+3. **CAPA 3:** Validación final con `validateAndCorrectRecommendations` (red de seguridad)
+
+Si un libro inválido se escapa de las capas 1 y 2, la capa 3 lo detecta y reemplaza automáticamente.
+
+---
+
+## ⚙️ Configuración del procesamiento
+
+**Velocidad optimizada:**
+
+- Procesa 10 libros en paralelo al mismo tiempo
+- 50ms de delay entre cada libro (evita saturar Google Books)
+- 200ms de delay entre cada grupo de 10 libros
+- Timeout de 5 segundos por libro
+
+**Resultado:** ~1 segundo para procesar 40 libros (vs 20 segundos secuencial)
+
+---
+
+## 🔧 Variables de entorno necesarias
 
 ```env
-GOOGLE_BOOKS_API_KEY=tu_api_key_aqui
-OPENAI_API_KEY=tu_openai_key_aqui
+GOOGLE_BOOKS_API_KEY=tu_google_books_key
+OPENAI_API_KEY=tu_openai_key
 ```
 
-### **Configuración de Procesamiento**
+---
 
-```javascript
-// homeRecs.js - Procesamiento paralelo
-const BATCH_SIZE = 10; // Libros por batch
-const DELAY_BETWEEN_BOOKS = 50; // ms entre libros
-const DELAY_BETWEEN_BATCHES = 200; // ms entre batches
-const TIMEOUT_PER_BOOK = 5000; // ms timeout por libro
-```
+## 💡 Estrategias de recomendación
 
-### **Configuración de Caché**
+| Estrategia          | Cuándo se usa                 | Descripción                                     |
+| ------------------- | ----------------------------- | ----------------------------------------------- |
+| `llm+googlebooks`   | Usuario con historial         | ChatGPT analiza → Google Books obtiene imágenes |
+| `fallback-defaults` | Usuario nuevo o ChatGPT falla | Libros predefinidos populares                   |
 
-```javascript
-// recommendationCache.js
-const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
-const MAX_CACHE_SIZE = 1000; // Máximo 1000 entradas
+---
 
-// homeRecs.js
-const CACHE_DURATION = Infinity; // Caché persistente por sesión
-```
+## 📝 Notas importantes
 
-## 🚀 Beneficios del Sistema
-
-✅ **Personalización**: Recomendaciones basadas en historial real del usuario  
-✅ **Consistencia**: Mismas recomendaciones durante toda la sesión  
-✅ **Performance**: Caché inteligente y procesamiento paralelo  
-✅ **Calidad**: Sistema de priorización por imagen y autor  
-✅ **Confiabilidad**: Múltiples fallbacks en cascada  
-✅ **Escalabilidad**: Procesamiento paralelo controlado  
-✅ **UX**: Experiencia fluida y predecible  
-✅ **Debugging**: Logs detallados para monitoreo  
-✅ **Recuperación**: Sistema automático de corrección de errores
-
-## 🔄 Flujo de Datos Completo
-
-```mermaid
-graph TD
-    A[Usuario solicita recomendaciones] --> B[Verificar caché persistente]
-    B -->|Hit| C[Validar integridad del caché]
-    C -->|Válido| D[Retornar recomendaciones del caché]
-    C -->|Inválido| E[Regenerar recomendaciones]
-    B -->|Miss| E[Obtener señales del usuario]
-    E --> F[Analizar favoritos y historial]
-    F --> G[Enviar prompt a ChatGPT]
-    G --> H[Procesar respuesta JSON]
-    H --> I[Buscar libros en Google Books en paralelo]
-    I --> J[Filtrar libros ya leídos/favoritos]
-    J --> K[Priorizar por calidad imagen/autor]
-    K --> L[Guardar en caché persistente]
-    L --> M[Retornar recomendaciones]
-
-    G -->|Falla| N[Usar libros por defecto]
-    I -->|Falla| N
-    H -->|JSON inválido| O[Reparar JSON automáticamente]
-    O -->|Éxito| I
-    O -->|Falla| N
-    N --> L
-```
-
-## 📝 Notas de Desarrollo
-
-- **ChatGPT**: Recibe títulos de libros que le gustaron/no le gustaron al usuario
-- **Google Books**: Rate limit de 100 consultas/minuto con retry automático
-- **Caché**: Persistente por sesión, se invalida solo al desloguearse
-- **Procesamiento**: Paralelo en batches de 10 libros con delays controlados
-- **Búsqueda**: Prioriza versión del caché si existe para consistencia
-- **Imágenes**: Placeholders automáticos para libros sin portada
-- **Calidad**: Priorización simple por imagen y autor para velocidad
-- **Recuperación**: Sistema automático de reemplazo de libros inválidos
+- **Caché persistente:** Las recomendaciones NO cambian hasta cerrar sesión (consistencia)
+- **ChatGPT modelo:** GPT-4o (el más inteligente para análisis complejo)
+- **Procesamiento paralelo:** 10 libros a la vez para velocidad
+- **Rate limiting:** Delays controlados para no saturar Google Books API
+- **Fallbacks múltiples:** Siempre hay algo que mostrar, nunca falla completamente

@@ -1,8 +1,31 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CONTROLADOR DE LECTURAS
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Maneja el historial de lecturas de los usuarios:
+ * - Crear, editar y eliminar lecturas
+ * - Marcar fechas de inicio y fin
+ * - Agregar reseñas con rating (1-5 estrellas)
+ * - Detección automática de spoilers con ChatGPT
+ * - Caché de portadas de libros
+ *
+ * FUNCIONALIDADES ESPECIALES:
+ * - Detecta spoilers en comentarios usando ChatGPT
+ * - Verifica logros al completar lecturas
+ * - Obtiene reseñas públicas por libro
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const axios = require("axios");
 
-// Cache simple para portadas de libros
+// ═══════════════════════════════════════════════════════════════════════════
+// CACHÉ DE PORTADAS
+// ═══════════════════════════════════════════════════════════════════════════
+// Guarda las portadas de libros por 24 horas para optimizar llamadas a Google Books API
+
 const portadasCache = new Map();
 const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 horas
 
@@ -282,7 +305,21 @@ exports.limpiarCachePortada = (req, res) => {
   res.json({ ok: true });
 };
 
-// Función auxiliar para detectar spoilers en reseñas usando OpenAI
+// ═══════════════════════════════════════════════════════════════════════════
+// DETECCIÓN DE SPOILERS CON CHATGPT
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Detecta si un comentario/reseña contiene spoilers usando ChatGPT
+ *
+ * PROCESO:
+ * 1. Envía el comentario y la info del libro a ChatGPT (GPT-3.5-turbo)
+ * 2. ChatGPT responde solo "spoiler" o "no spoiler"
+ * 3. Retorna true si es spoiler, false si no lo es
+ *
+ * USO: Se llama automáticamente al guardar una reseña
+ * MODELO: GPT-3.5-turbo (temperature 0 para consistencia)
+ */
 const detectarSpoilerEnResena = async (reviewComment, bookInfo) => {
   try {
     const response = await axios.post(

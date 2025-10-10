@@ -1,7 +1,29 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CONTROLADOR DE PUBLICACIONES (Marketplace)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Maneja las publicaciones de libros en venta:
+ * - Crear, editar y eliminar publicaciones
+ * - Subir imagen de portada con Multer
+ * - Filtrar publicaciones (por ciudad, estado, vendedor)
+ * - Obtener ubicaciones disponibles
+ *
+ * ESTADOS DE PUBLICACIÓN:
+ * - activa: Disponible para compra
+ * - vendida: Ya fue vendida
+ * - eliminada: Eliminada por el usuario
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const multer = require("multer");
 const path = require("path");
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN DE MULTER (upload de imágenes)
+// ═══════════════════════════════════════════════════════════════════════════
 
 // Configuración de multer para publicaciones
 const storage = multer.diskStorage({

@@ -1,3 +1,28 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CONTROLADOR DE COMPRAS (Sistema de transacciones)
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Maneja TODO el proceso de compra-venta de libros entre usuarios:
+ * - Crear compras
+ * - Flujo de confirmaciones (comprador → vendedor → entrega)
+ * - Estados de transacción
+ * - Valoración de vendedores
+ * - Verificación automática de logros
+ *
+ * FLUJO DE COMPRA:
+ * 1. Comprador crea compra (estado: pendiente_comprador)
+ * 2. Comprador confirma (estado: pendiente_vendedor)
+ * 3. Vendedor confirma pago (estado: confirmado)
+ * 4. Vendedor confirma envío (estado: en_transito)
+ * 5. Comprador confirma recepción (estado: completado)
+ *
+ * ESTADOS POSIBLES:
+ * - pendiente_comprador, pendiente_vendedor, confirmado, en_transito,
+ *   completado, cancelado_comprador, cancelado_vendedor
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 

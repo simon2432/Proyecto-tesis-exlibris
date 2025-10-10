@@ -1,9 +1,35 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CONTROLADOR DE USUARIOS
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Maneja la información y configuración de usuarios:
+ * - Perfil del usuario (editar, foto de perfil)
+ * - Favoritos (libros marcados como favoritos)
+ * - Estadísticas (lecturas, compras, ventas)
+ * - Sistema de logros y gamificación
+ *
+ * SISTEMA DE LOGROS:
+ * - Lector Frecuente, Coleccionista, Vendedor Estrella, etc.
+ * - Se verifican automáticamente al completar acciones
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
 const path = require("path");
 const { PrismaClient } = require("@prisma/client");
 const prisma = new PrismaClient();
 const bcrypt = require("bcryptjs");
 
-// POST /api/usuario/foto-perfil
+// ═══════════════════════════════════════════════════════════════════════════
+// ENDPOINTS DE USUARIO
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /api/usuario/foto-perfil
+ * Sube y actualiza la foto de perfil del usuario
+ *
+ * USO: Configuración con Multer en userRoutes.js
+ */
 exports.uploadProfilePhoto = async (req, res) => {
   try {
     if (!req.file) {

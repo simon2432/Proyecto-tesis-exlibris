@@ -1,9 +1,32 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * CONTROLADOR DE AUTENTICACIÓN
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Maneja todo lo relacionado con autenticación de usuarios:
+ * - Registro de nuevos usuarios
+ * - Login (inicio de sesión)
+ * - Recuperación de contraseña (forgot password)
+ * - Reset de contraseña
+ *
+ * SEGURIDAD:
+ * - Contraseñas hasheadas con bcrypt
+ * - Tokens JWT con expiración configurable
+ * - Validación estricta de JWT_SECRET
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const prisma = new PrismaClient();
-// Validar JWT Secret al iniciar
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN Y VALIDACIÓN DE SEGURIDAD
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Validar JWT Secret al iniciar (crítico para seguridad)
 const JWT_SECRET = process.env.JWT_SECRET;
 
 if (!JWT_SECRET) {
@@ -22,6 +45,22 @@ console.log("✅ JWT Secret configurado correctamente");
 const JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || "7d";
 console.log("✅ JWT Expires In configurado:", JWT_EXPIRES_IN);
 
+// ═══════════════════════════════════════════════════════════════════════════
+// ENDPOINTS DE AUTENTICACIÓN
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * POST /auth/register
+ * Registra un nuevo usuario en el sistema
+ *
+ * FLUJO:
+ * 1. Valida que todos los campos obligatorios estén presentes
+ * 2. Verifica que el email no esté ya registrado
+ * 3. Hashea la contraseña con bcrypt
+ * 4. Crea el usuario en la base de datos
+ * 5. Genera token JWT automáticamente
+ * 6. Retorna token + datos del usuario (sin password)
+ */
 exports.register = async (req, res) => {
   try {
     console.log("Register attempt:", {
@@ -86,6 +125,17 @@ exports.register = async (req, res) => {
   }
 };
 
+/**
+ * POST /auth/login
+ * Inicia sesión de un usuario existente
+ *
+ * FLUJO:
+ * 1. Valida que email y password estén presentes
+ * 2. Busca el usuario en la base de datos
+ * 3. Compara la contraseña con bcrypt
+ * 4. Genera token JWT con expiración de 7 días
+ * 5. Retorna token + datos del usuario (sin password)
+ */
 exports.login = async (req, res) => {
   try {
     console.log("Login attempt:", { email: req.body.email });
@@ -131,6 +181,17 @@ exports.login = async (req, res) => {
   }
 };
 
+/**
+ * POST /auth/forgot-password
+ * Inicia el proceso de recuperación de contraseña
+ *
+ * FLUJO:
+ * 1. Verifica que el email exista en la base de datos
+ * 2. Genera token JWT de reseteo (válido por 1 hora)
+ * 3. Retorna el token (en producción debería enviarse por email)
+ *
+ * NOTA: Actualmente retorna el token directamente (desarrollo)
+ */
 exports.forgotPassword = async (req, res) => {
   try {
     console.log("Forgot password attempt for email:", req.body.email);
@@ -170,6 +231,16 @@ exports.forgotPassword = async (req, res) => {
   }
 };
 
+/**
+ * POST /auth/reset-password
+ * Completa el proceso de reseteo de contraseña con el token
+ *
+ * FLUJO:
+ * 1. Valida el token JWT de reseteo
+ * 2. Verifica que las contraseñas coincidan
+ * 3. Hashea la nueva contraseña con bcrypt
+ * 4. Actualiza la contraseña en la base de datos
+ */
 exports.resetPassword = async (req, res) => {
   try {
     console.log("Reset password attempt");

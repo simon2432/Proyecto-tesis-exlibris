@@ -1,6 +1,30 @@
+/**
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SISTEMA DE RECOMENDACIONES INTELIGENTES - HOME
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * Este archivo contiene el algoritmo principal de recomendaciones que combina:
+ *
+ * 1. ChatGPT (GPT-4o): Analiza los gustos del usuario y recomienda 40 libros
+ * 2. Google Books API: Busca cada libro recomendado y obtiene imágenes/descripciones
+ * 3. Sistema de Caché: Guarda las recomendaciones por sesión para consistencia
+ * 4. Fallbacks: Usa libros por defecto si algo falla
+ *
+ * FLUJO PRINCIPAL:
+ * Usuario → Verificar caché → Obtener señales (favoritos/historial) →
+ * ChatGPT → Buscar en Google Books → Filtrar/Validar → Guardar en caché →
+ * Retornar 10+10 libros con imágenes
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ */
+
 const axios = require("axios");
 const { PrismaClient } = require("@prisma/client");
 const { getDefaultRecommendations } = require("./homeDefaults");
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN E INICIALIZACIÓN
+// ═══════════════════════════════════════════════════════════════════════════
 
 // Verificar que PrismaClient esté disponible
 let prisma;
@@ -41,10 +65,18 @@ const getPrismaClient = () => {
     }
   }
 };
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIGURACIÓN DE APIs Y CACHÉ
+// ═══════════════════════════════════════════════════════════════════════════
+
 const GOOGLE_BOOKS_API_KEY = process.env.GOOGLE_BOOKS_API_KEY;
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-// Cache persistente por sesión (solo se invalida al relogear)
+// CACHÉ DE RECOMENDACIONES:
+// - Persistente durante toda la sesión del usuario
+// - Se invalida solo al cerrar sesión (logout) o reiniciar servidor
+// - Garantiza que el usuario vea las MISMAS recomendaciones durante toda su sesión
+// - Evita llamadas innecesarias a ChatGPT y Google Books
 const recommendationsCache = new Map();
 const CACHE_DURATION = Infinity; // Caché permanente hasta invalidación explícita
 
@@ -68,18 +100,13 @@ const clearUserCache = (userId) => {
   return deleted;
 };
 
-// Función para limpiar todo el cache (al reiniciar servidor)
-const clearAllCache = () => {
-  const size = recommendationsCache.size;
-  recommendationsCache.clear();
-  console.log(`[Cache] Todo el cache limpiado: ${size} entradas eliminadas`);
-};
-
-// Cache de timestamps para debugging
-const cacheTimestamps = new Map();
+// ═══════════════════════════════════════════════════════════════════════════
+// UTILIDADES PARA MANEJO DE RESPUESTAS DE CHATGPT
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Detecta si una respuesta JSON está cortada
+ * Detecta si una respuesta JSON de ChatGPT está cortada o incompleta
+ * Verifica que tenga la estructura completa esperada
  */
 const isJSONTruncated = (jsonString) => {
   const trimmed = jsonString.trim();
@@ -91,7 +118,8 @@ const isJSONTruncated = (jsonString) => {
 };
 
 /**
- * Intenta reparar un JSON mal formateado
+ * Intenta reparar un JSON mal formateado de ChatGPT
+ * Aplica correcciones comunes: comillas sin cerrar, backslashes, etc.
  */
 const tryRepairJSON = (jsonString) => {
   try {
@@ -111,39 +139,20 @@ const tryRepairJSON = (jsonString) => {
   }
 };
 
-/**
- * Busca información de un libro en Google Books API
- */
-const searchBookInfo = async (volumeId) => {
-  try {
-    const response = await axios.get(
-      `https://www.googleapis.com/books/v1/volumes/${volumeId}?key=${GOOGLE_BOOKS_API_KEY}`
-    );
-
-    if (response.data && response.data.volumeInfo) {
-      const info = response.data.volumeInfo;
-      return {
-        title: info.title || `Libro ${volumeId}`,
-        authors: info.authors || [],
-        categories: info.categories || [],
-      };
-    }
-  } catch (error) {
-    console.error(
-      `[Signals] Error buscando libro ${volumeId} en Google Books:`,
-      error.message
-    );
-  }
-
-  return {
-    title: `Libro ${volumeId}`,
-    authors: [],
-    categories: [],
-  };
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// OBTENCIÓN DE SEÑALES DEL USUARIO
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Obtiene las señales del usuario (favoritos, historial, likes/dislikes)
+ * Obtiene las "señales" del usuario para personalizar recomendaciones
+ *
+ * SEÑALES QUE OBTIENE:
+ * - favoritos: Top 3 libros favoritos (objetos completos con título/autores)
+ * - historialLikes: Títulos de libros con rating >= 3 (le gustaron)
+ * - historialDislikes: Títulos de libros con rating <= 2 (no le gustaron)
+ * - historialCompleto: IDs de TODOS los libros leídos (para filtrar)
+ *
+ * ESTAS SEÑALES SE ENVÍAN A CHATGPT para que entienda los gustos del usuario
  */
 const getUserSignals = async (userId) => {
   try {
@@ -291,141 +300,27 @@ const getUserSignals = async (userId) => {
   }
 };
 
-/**
- * Busca candidatos en Google Books basándose en las señales del usuario
- */
-const fetchShortlistFromGoogleBooks = async (signals) => {
-  if (!GOOGLE_BOOKS_API_KEY) {
-    console.warn("Google Books API key no configurada");
-    return [];
-  }
-
-  try {
-    const shortlist = [];
-    const seenIds = new Set();
-
-    // Combinar favoritos y likes para generar queries
-    const positiveSignals = [...signals.favoritos, ...signals.historialLikes];
-
-    for (const signal of positiveSignals) {
-      // Buscar por autor
-      if (signal.authors && signal.authors.length > 0) {
-        for (const author of signal.authors.slice(0, 2)) {
-          // Máximo 2 autores por libro
-          const query = `inauthor:"${encodeURIComponent(author)}"`;
-          const results = await searchGoogleBooks(query, 20);
-          addToShortlist(
-            results,
-            shortlist,
-            seenIds,
-            signals.historialCompleto,
-            signals.favoritos
-          );
-        }
-      }
-
-      // Buscar por categoría
-      if (signal.categories && signal.categories.length > 0) {
-        for (const category of signal.categories.slice(0, 2)) {
-          // Máximo 2 categorías por libro
-          const query = `subject:"${encodeURIComponent(category)}"`;
-          const results = await searchGoogleBooks(query, 15);
-          addToShortlist(
-            results,
-            shortlist,
-            seenIds,
-            signals.historialCompleto,
-            signals.favoritos
-          );
-        }
-      }
-
-      // Buscar por palabras clave del título
-      if (signal.title) {
-        const keywords = signal.title
-          .split(" ")
-          .filter((word) => word.length > 3)
-          .slice(0, 3);
-        for (const keyword of keywords) {
-          const query = `intitle:"${encodeURIComponent(keyword)}"`;
-          const results = await searchGoogleBooks(query, 10);
-          addToShortlist(
-            results,
-            shortlist,
-            seenIds,
-            signals.historialCompleto,
-            signals.favoritos
-          );
-        }
-      }
-    }
-
-    // Si no hay suficientes resultados, agregar búsquedas genéricas
-    if (shortlist.length < 60) {
-      const genericQueries = [
-        'subject:"Fiction"',
-        'subject:"Science Fiction"',
-        'subject:"Fantasy"',
-        'subject:"Mystery"',
-        'subject:"Romance"',
-      ];
-
-      for (const query of genericQueries) {
-        const results = await searchGoogleBooks(query, 10);
-        addToShortlist(
-          results,
-          shortlist,
-          seenIds,
-          signals.historialCompleto,
-          signals.favoritos
-        );
-
-        if (shortlist.length >= 120) break; // Límite máximo
-      }
-    }
-
-    return shortlist.slice(0, 120); // Máximo 120 items
-  } catch (error) {
-    console.error("Error fetching shortlist from Google Books:", error);
-    return [];
-  }
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// BÚSQUEDA EN GOOGLE BOOKS API
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Busca libros en Google Books API
- */
-const searchGoogleBooks = async (query, maxResults = 20) => {
-  try {
-    const response = await axios.get(
-      `https://www.googleapis.com/books/v1/volumes?q=${query}&maxResults=${maxResults}&key=${GOOGLE_BOOKS_API_KEY}`
-    );
-
-    if (!response.data.items) return [];
-
-    return response.data.items
-      .filter((item) => item.id && item.volumeInfo.title) // Validar que tenga id y título
-      .map((item) => ({
-        volumeId: item.id,
-        title: item.volumeInfo.title,
-        authors: item.volumeInfo.authors || [],
-        categories: item.volumeInfo.categories || [],
-        description: item.volumeInfo.description,
-        language: item.volumeInfo.language,
-        pageCount: item.volumeInfo.pageCount,
-        averageRating: item.volumeInfo.averageRating,
-        image:
-          item.volumeInfo.imageLinks?.thumbnail ||
-          item.volumeInfo.imageLinks?.smallThumbnail ||
-          "https://placehold.co/160x230/FFF4E4/3B2412?text=Sin+imagen",
-      }));
-  } catch (error) {
-    console.error(`Error searching Google Books with query "${query}":`, error);
-    return [];
-  }
-};
-
-/**
- * Busca un libro específico en Google Books por título (más eficiente)
+ * Busca un libro específico en Google Books API y retorna la MEJOR versión
+ *
+ * ENTRADA: Título y autor (ej: "El Alquimista", "Paulo Coelho")
+ * PROCESO:
+ *   1. Busca en Google Books API con el query "El Alquimista Paulo Coelho"
+ *   2. Obtiene hasta 5 resultados
+ *   3. Prioriza por calidad (imagen > autor > descripción)
+ *   4. Retorna el mejor resultado
+ *
+ * SALIDA: Libro completo con imagen, descripción, categorías, etc.
+ *
+ * OPTIMIZACIONES:
+ * - Solo busca 5 resultados (más rápido)
+ * - Timeout de 5 segundos
+ * - Retry automático si hay rate limiting (error 429)
+ * - Usa prioritizeBooksByQuality para elegir la mejor versión
  */
 const searchSpecificBook = async (titulo, autor) => {
   // Usar búsqueda flexible como la barra de búsqueda
@@ -569,52 +464,28 @@ const searchSpecificBook = async (titulo, autor) => {
   }
 };
 
-/**
- * Agrega resultados a la shortlist evitando duplicados y libros ya leídos
- */
-const addToShortlist = (
-  results,
-  shortlist,
-  seenIds,
-  historialCompleto,
-  favoritos
-) => {
-  for (const book of results) {
-    // Verificar que el libro tenga un volumeId válido
-    if (!book.volumeId || book.volumeId.trim() === "") continue;
-
-    // Verificar que el libro no esté ya en la shortlist
-    if (seenIds.has(book.volumeId)) continue;
-
-    // Verificar que el libro no esté en el historial de lecturas (MÁS ESTRICTO)
-    if (historialCompleto.includes(book.volumeId)) {
-      console.log(
-        `[Filter] Excluyendo libro del historial: ${book.volumeId} - ${book.title}`
-      );
-      continue;
-    }
-
-    // Verificar que el libro no esté en favoritos (MÁS ESTRICTO)
-    if (favoritos.some((fav) => fav.volumeId === book.volumeId)) {
-      console.log(
-        `[Filter] Excluyendo libro de favoritos: ${book.volumeId} - ${book.title}`
-      );
-      continue;
-    }
-
-    // Verificar que no excedamos el límite
-    if (shortlist.length >= 120) break;
-
-    seenIds.add(book.volumeId);
-    shortlist.push(book);
-    console.log(
-      `[Filter] Agregando libro válido: ${book.volumeId} - ${book.title}`
-    );
-  }
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// INTEGRACIÓN CON CHATGPT (GPT-4o)
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Llama a ChatGPT para seleccionar los libros recomendados
+ * Llama a ChatGPT (GPT-4o) para generar recomendaciones personalizadas
+ *
+ * ENTRADA: Señales del usuario (favoritos, likes, dislikes)
+ * PROCESO:
+ *   1. Construye prompt con los gustos del usuario
+ *   2. Envía a ChatGPT: "Este usuario leyó X, le gustó Y, no le gustó Z"
+ *   3. ChatGPT analiza y recomienda 40 libros (20 + 20)
+ *   4. Parsea la respuesta JSON
+ *   5. Si falla, intenta reparar el JSON automáticamente
+ *   6. Si aún falla, reintenta con prompt de corrección
+ *
+ * SALIDA: { te_podrian_gustar: [20 libros], descubri_nuevas_lecturas: [20 libros] }
+ *         (solo título + autor, sin imágenes todavía)
+ *
+ * MODELO: GPT-4o (más inteligente para recomendaciones complejas)
+ * TOKENS: Máximo 2500
+ * TEMPERATURE: 0.7 (balance entre creatividad y precisión)
  */
 const callLLMForPicks = async (signals) => {
   if (!OPENAI_API_KEY) {
@@ -826,7 +697,7 @@ const retryLLMWithCorrection = async (signals) => {
           },
         ],
         max_tokens: 2000,
-        temperature: 0.1,
+        temperature: 0.5,
       },
       {
         headers: {
@@ -1048,11 +919,19 @@ ${signals.historialDislikes.map((d, i) => `${i + 1}. "${d}"`).join("\n")}
   return { system: systemPrompt, user: userPrompt };
 };
 
-/**
- * Valida y completa la respuesta del LLM con datos de la shortlist
- */
+// ═══════════════════════════════════════════════════════════════════════════
+// SELECCIÓN Y PRIORIZACIÓN DE LIBROS
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
  * Selecciona los mejores libros de una lista, priorizando los que tienen imagen
+ *
+ * PRIORIDAD:
+ *   1º: Libros con imagen real (no placeholder)
+ *   2º: Libros sin imagen (solo si es necesario)
+ *
+ * MOTIVO: La experiencia visual es crucial para el usuario
+ *         Es mejor mostrar 10 libros con portadas bonitas que 15 con placeholders
  */
 const selectBestBooks = (books, maxCount = 10) => {
   if (books.length <= maxCount) {
@@ -1091,8 +970,29 @@ const selectBestBooks = (books, maxCount = 10) => {
   return selectedBooks;
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// PROCESAMIENTO DE RECOMENDACIONES DE CHATGPT
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
- * Procesa las recomendaciones del LLM con paralelización controlada
+ * Convierte las recomendaciones de ChatGPT en libros completos con imágenes
+ *
+ * ENTRADA: 40 títulos de ChatGPT (solo título + autor)
+ * PROCESO:
+ *   1. Para cada título, busca en Google Books API (en paralelo)
+ *   2. Obtiene imagen, descripción, categorías, etc.
+ *   3. Filtra libros ya leídos o en favoritos
+ *   4. Guarda cada libro en caché para futuras búsquedas
+ *   5. Selecciona los 10 mejores de cada lista (priorizando imágenes)
+ *
+ * SALIDA: 20 libros completos (10 + 10) con toda la información
+ *
+ * PARALELIZACIÓN:
+ * - Procesa 10 libros a la vez para velocidad
+ * - Delays controlados para evitar rate limiting de Google Books
+ * - Timeout de 5 segundos por libro para evitar cuelgues
+ *
+ * Este es el CORAZÓN del algoritmo - convierte nombres en libros reales
  */
 const processLLMRecommendations = async (llmResponse, signals) => {
   console.log(
@@ -1107,18 +1007,34 @@ const processLLMRecommendations = async (llmResponse, signals) => {
   const descubriNuevasLecturas = [];
   const usedBookIds = new Set(); // Para evitar duplicados entre listas
 
-  // Configuración de paralelización máxima velocidad
-  const BATCH_SIZE = 10; // Procesar de a 10 libros por vez (máxima velocidad)
-  const DELAY_BETWEEN_BOOKS = 50; // 50ms entre libros (ultra rápido)
-  const DELAY_BETWEEN_BATCHES = 200; // 200ms entre batches (ultra rápido)
+  // ═══════════════════════════════════════════════════════════════════════════
+  // CONFIGURACIÓN DE PARALELIZACIÓN
+  // ═══════════════════════════════════════════════════════════════════════════
+  // Estos valores están optimizados para balance entre velocidad y rate limiting
+  const BATCH_SIZE = 10; // Procesar 10 libros simultáneamente
+  const DELAY_BETWEEN_BOOKS = 50; // 50ms entre cada libro del batch (evita saturar API)
+  const DELAY_BETWEEN_BATCHES = 200; // 200ms entre batches (da tiempo a Google Books)
+  //
+  // Ejemplo de timeline:
+  //   0ms: Batch 1 (libros 1-10) en paralelo
+  //   250ms: Batch 2 (libros 11-20) en paralelo
+  //   500ms: ✅ Terminado "te_podrian_gustar"
+  //   500ms: Batch 1 de "descubri_nuevas_lecturas"
+  //   750ms: Batch 2 de "descubri_nuevas_lecturas"
+  //   1000ms: ✅ TODO listo (vs 20 segundos si fuera secuencial)
+  // ═══════════════════════════════════════════════════════════════════════════
 
-  // Función para procesar un batch de libros
+  // ───────────────────────────────────────────────────────────────────────────
+  // FUNCIÓN INTERNA: processBatch
+  // Procesa un grupo de libros EN PARALELO para máxima velocidad
+  // ───────────────────────────────────────────────────────────────────────────
   const processBatch = async (items, listName) => {
     const results = [];
     console.log(
       `[Process] Procesando batch de ${items.length} libros para "${listName}"`
     );
 
+    // Dividir en grupos de 10 libros (BATCH_SIZE)
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
       const batch = items.slice(i, i + BATCH_SIZE);
       console.log(
@@ -1127,16 +1043,17 @@ const processLLMRecommendations = async (llmResponse, signals) => {
         } libros`
       );
 
-      // Procesar batch en paralelo con delays escalonados
+      // PROCESAMIENTO PARALELO: Busca los 10 libros del batch SIMULTÁNEAMENTE
       const batchPromises = batch.map(async (item, index) => {
-        // Delay escalonado dentro del batch
+        // Delay escalonado: libro 1 empieza ya, libro 2 espera 50ms, libro 3 espera 100ms, etc.
+        // Esto evita saturar Google Books API con 10 requests al mismo instante
         await new Promise((resolve) =>
           setTimeout(resolve, index * DELAY_BETWEEN_BOOKS)
         );
 
         console.log(`[Process] Buscando: "${item.titulo}" por "${item.autor}"`);
 
-        // Timeout de 10 segundos por libro para evitar cuelgues
+        // TIMEOUT: Si Google Books tarda más de 5 segundos, cancelar y continuar
         const bookPromise = searchSpecificBook(item.titulo, item.autor);
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error("Timeout")), 5000)
@@ -1152,15 +1069,18 @@ const processLLMRecommendations = async (llmResponse, signals) => {
         );
 
         if (book) {
-          // Guardar en cache para uso futuro en búsquedas
+          // CACHÉ: Guardar este libro para futuras búsquedas del usuario
+          // Si el usuario busca "El Alquimista" luego, le mostramos esta MISMA versión
           const { saveRecommendedVersion } = require("./recommendationCache");
           saveRecommendedVersion(item.titulo, item.autor, book);
 
-          // Verificar que no esté en historial o favoritos (permitir duplicados entre listas)
+          // FILTRO (CAPA 1): Verificar que el usuario NO haya leído este libro
+          // Este es el primer nivel de seguridad contra libros ya leídos
           if (
             !signals.historialCompleto.includes(book.volumeId) &&
             !signals.favoritos.some((fav) => fav.volumeId === book.volumeId)
           ) {
+            // ✅ Libro válido: No está leído ni en favoritos
             const bookData = {
               volumeId: book.volumeId,
               title: book.title,
@@ -1173,10 +1093,12 @@ const processLLMRecommendations = async (llmResponse, signals) => {
               image: book.image,
               reason: "Recomendado por IA",
             };
-            usedBookIds.add(book.volumeId); // Marcar como usado
+            usedBookIds.add(book.volumeId);
             console.log(`[Process] ✅ Agregado a ${listName}: ${book.title}`);
             return bookData;
           } else {
+            // ❌ Libro inválido: Usuario ya lo leyó o está en favoritos
+            // Lo descartamos para no mostrar libros repetidos
             const reason = signals.historialCompleto.includes(book.volumeId)
               ? "ya leído"
               : signals.favoritos.some((fav) => fav.volumeId === book.volumeId)
@@ -1191,10 +1113,14 @@ const processLLMRecommendations = async (llmResponse, signals) => {
         return null;
       });
 
+      // Esperar a que TODOS los libros del batch terminen (Promise.all)
       const batchResults = await Promise.all(batchPromises);
+
+      // Agregar solo los libros válidos (filter elimina los null)
       results.push(...batchResults.filter((book) => book !== null));
 
-      // Delay entre batches (excepto en el último)
+      // Delay entre batches para no saturar Google Books API
+      // (excepto en el último batch)
       if (i + BATCH_SIZE < items.length) {
         console.log(
           `[Process] Esperando ${DELAY_BETWEEN_BATCHES}ms antes del siguiente batch...`
@@ -1208,7 +1134,11 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     return results;
   };
 
-  // Procesar "te_podrian_gustar" con paralelización controlada
+  // ───────────────────────────────────────────────────────────────────────────
+  // Procesar AMBAS listas de recomendaciones de ChatGPT
+  // ───────────────────────────────────────────────────────────────────────────
+
+  // Lista 1: "Te podrían gustar" (20 títulos de ChatGPT)
   console.log(
     `[Process] Iniciando búsqueda paralela de ${llmResponse.te_podrian_gustar.length} libros para "te_podrian_gustar"...`
   );
@@ -1218,7 +1148,7 @@ const processLLMRecommendations = async (llmResponse, signals) => {
   );
   tePodrianGustar.push(...tePodrianGustarResults);
 
-  // Procesar "descubri_nuevas_lecturas" con paralelización controlada
+  // Lista 2: "Descubrí nuevas lecturas" (20 títulos de ChatGPT)
   console.log(
     `[Process] Iniciando búsqueda paralela de ${llmResponse.descubri_nuevas_lecturas.length} libros para "descubri_nuevas_lecturas"...`
   );
@@ -1232,7 +1162,10 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     `[Process] Resultado inicial: te_podrian_gustar=${tePodrianGustar.length}, descubri_nuevas_lecturas=${descubriNuevasLecturas.length}`
   );
 
-  // Seleccionar los mejores libros, pero asegurar mínimo 10 por lista
+  // ───────────────────────────────────────────────────────────────────────────
+  // Seleccionar los 10 MEJORES libros de cada lista
+  // Prioriza libros con imagen real sobre libros con placeholder
+  // ───────────────────────────────────────────────────────────────────────────
   let selectedTePodrianGustar = selectBestBooks(tePodrianGustar, 10);
   let selectedDescubriNuevasLecturas = selectBestBooks(
     descubriNuevasLecturas,
@@ -1243,7 +1176,10 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     `[Process] Selección inicial: te_podrian_gustar=${selectedTePodrianGustar.length}, descubri_nuevas_lecturas=${selectedDescubriNuevasLecturas.length}`
   );
 
-  // Sistema de respaldo mejorado: asegurar mínimo 8 libros por lista
+  // ───────────────────────────────────────────────────────────────────────────
+  // SISTEMA DE RESPALDO NIVEL 1: Asegurar mínimo 8 libros por lista
+  // ───────────────────────────────────────────────────────────────────────────
+  // Si alguna lista tiene menos de 8 libros, completa con libros de la otra
   if (
     selectedTePodrianGustar.length < 8 ||
     selectedDescubriNuevasLecturas.length < 8
@@ -1301,7 +1237,11 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     `[Process] Selección final con respaldo: te_podrian_gustar=${selectedTePodrianGustar.length}, descubri_nuevas_lecturas=${selectedDescubriNuevasLecturas.length}`
   );
 
-  // Fallback: usar defaults SOLO si fallan TODOS los libros
+  // ───────────────────────────────────────────────────────────────────────────
+  // FALLBACK ABSOLUTO: Si TODO falló (0 libros encontrados)
+  // ───────────────────────────────────────────────────────────────────────────
+  // Solo se activa si ChatGPT recomendó libros pero NINGUNO se encontró en Google Books
+  // o todos fueron descartados por estar ya leídos
   if (
     selectedTePodrianGustar.length === 0 &&
     selectedDescubriNuevasLecturas.length === 0
@@ -1319,7 +1259,9 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     `[Process] Resultado final: tePodrianGustar=${selectedTePodrianGustar.length}, descubriNuevasLecturas=${selectedDescubriNuevasLecturas.length}`
   );
 
-  // Log detallado de filtrado
+  // ───────────────────────────────────────────────────────────────────────────
+  // ESTADÍSTICAS (para debugging y monitoreo)
+  // ───────────────────────────────────────────────────────────────────────────
   console.log(`[Process] 📊 ESTADÍSTICAS DE FILTRADO:`);
   console.log(
     `- Libros procesados por ChatGPT: ${
@@ -1347,7 +1289,10 @@ const processLLMRecommendations = async (llmResponse, signals) => {
     ).toFixed(1)}%`
   );
 
-  // Sistema de recuperación: completar listas que tengan menos de 10 libros
+  // ───────────────────────────────────────────────────────────────────────────
+  // SISTEMA DE RESPALDO NIVEL 2: Completar hasta 10 libros por lista
+  // ───────────────────────────────────────────────────────────────────────────
+  // Si alguna lista tiene menos de 10, completa con libros de la otra lista
   const finalResult = await completePartialLists(
     selectedTePodrianGustar,
     selectedDescubriNuevasLecturas,
@@ -1357,15 +1302,31 @@ const processLLMRecommendations = async (llmResponse, signals) => {
   return finalResult;
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// SISTEMA DE RESPALDO PARA LISTAS INCOMPLETAS
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
- * Completa listas parciales usando libros de la otra lista o defaults
+ * Completa listas que tienen menos de 10 libros tomando de la otra lista
+ *
+ * PROBLEMA QUE RESUELVE:
+ *   Si ChatGPT recomienda 20 libros pero solo 7 se encuentran en Google Books,
+ *   este método completa hasta 10 tomando libros de la otra lista.
+ *
+ * EJEMPLO:
+ *   - "te_podrian_gustar": 7 libros (necesita 3 más)
+ *   - "descubri_nuevas_lecturas": 12 libros
+ *   → Toma 3 de "descubri_nuevas_lecturas" para completar "te_podrian_gustar"
+ *   → Resultado: 10 + 10 libros
+ *
+ * IMPORTANTE: Solo completa con libros VÁLIDOS (ya filtrados previamente)
  */
 const completePartialLists = async (
   tePodrianGustar,
   descubriNuevasLecturas,
   signals
 ) => {
-  const TARGET_COUNT = 10; // Meta de 10 libros por lista
+  const TARGET_COUNT = 10; // Meta: 10 libros por lista
 
   console.log(
     `[Complete] Verificando listas: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
@@ -1451,245 +1412,42 @@ const completePartialLists = async (
   };
 };
 
-/**
- * Fallback local usando scoring simple y MMR para diversidad
- */
-const buildFallbackLocal = (shortlist, signals) => {
-  console.log(
-    `[Fallback] Iniciando con shortlist de ${shortlist.length} libros`
-  );
-
-  // Scoring simple basado en afinidad
-  const scoredBooks = shortlist.map((book) => {
-    let score = 0;
-
-    // Puntos por autor similar
-    for (const favorite of signals.favoritos) {
-      if (
-        favorite.authors.some((author) =>
-          book.authors.some(
-            (bookAuthor) =>
-              bookAuthor.toLowerCase().includes(author.toLowerCase()) ||
-              author.toLowerCase().includes(bookAuthor.toLowerCase())
-          )
-        )
-      ) {
-        score += 3;
-      }
-    }
-
-    // Puntos por categoría similar
-    for (const favorite of signals.favoritos) {
-      if (
-        favorite.categories.some((cat) =>
-          book.categories.some(
-            (bookCat) =>
-              bookCat.toLowerCase().includes(cat.toLowerCase()) ||
-              cat.toLowerCase().includes(bookCat.toLowerCase())
-          )
-        )
-      ) {
-        score += 2;
-      }
-    }
-
-    // Penalizar si es similar a dislikes
-    for (const dislike of signals.historialDislikes) {
-      if (
-        dislike.authors.some((author) =>
-          book.authors.some(
-            (bookAuthor) =>
-              bookAuthor.toLowerCase().includes(author.toLowerCase()) ||
-              author.toLowerCase().includes(bookAuthor.toLowerCase())
-          )
-        )
-      ) {
-        score -= 2;
-      }
-    }
-
-    return { ...book, score };
-  });
-
-  // Ordenar por score
-  scoredBooks.sort((a, b) => b.score - a.score);
-  console.log(`[Fallback] Libros con scoring: ${scoredBooks.length}`);
-
-  // Garantizar que tengamos suficientes libros para ambas listas
-  if (scoredBooks.length < 24) {
-    const needed = 24 - scoredBooks.length;
-    console.log(
-      `[Fallback] Necesitamos ${needed} libros más, duplicando con variaciones`
-    );
-
-    // Si no hay suficientes, duplicar algunos libros con diferentes razones
-    for (let i = 0; i < needed; i++) {
-      const book = scoredBooks[i % scoredBooks.length];
-      scoredBooks.push({
-        ...book,
-        volumeId: `${book.volumeId}_${i}`,
-        reason: `Alternativa ${i + 1} - ${
-          book.reason || "Recomendación adicional"
-        }`,
-      });
-    }
-  }
-
-  // Seleccionar top 10 para "te podrian gustar"
-  const tePodrianGustar = scoredBooks.slice(0, 10).map((book) => ({
-    volumeId: book.volumeId,
-    title: book.title,
-    authors: book.authors,
-    categories: book.categories,
-    description: book.description,
-    language: book.language,
-    pageCount: book.pageCount,
-    averageRating: book.averageRating,
-    image: book.image,
-    reason: book.reason || `Recomendado por afinidad (score: ${book.score})`,
-  }));
-
-  console.log(`[Fallback] tePodrianGustar: ${tePodrianGustar.length} libros`);
-
-  // MMR para "descubri nuevas lecturas" (diversidad)
-  const descubriNuevasLecturas = [];
-  const remainingBooks = scoredBooks.slice(10);
-
-  console.log(`[Fallback] Libros restantes para MMR: ${remainingBooks.length}`);
-
-  // Garantizar que tengamos exactamente 10 libros para la segunda lista
-  let booksToSelect = 10;
-
-  if (remainingBooks.length > 0) {
-    descubriNuevasLecturas.push({
-      volumeId: remainingBooks[0].volumeId,
-      title: remainingBooks[0].title,
-      authors: remainingBooks[0].authors,
-      categories: remainingBooks[0].categories,
-      reason: remainingBooks[0].reason || "Exploración de nuevos géneros",
-    });
-    booksToSelect--;
-
-    // MMR con λ = 0.7
-    const lambda = 0.7;
-    const selectedIds = new Set([remainingBooks[0].volumeId]);
-
-    for (let i = 1; i < booksToSelect && i < remainingBooks.length; i++) {
-      let bestBook = remainingBooks[i];
-      let bestScore = -1;
-
-      for (let j = i; j < remainingBooks.length; j++) {
-        const book = remainingBooks[j];
-        if (selectedIds.has(book.volumeId)) continue;
-
-        // Calcular diversidad con libros ya seleccionados
-        let diversity = 0;
-        for (const selectedId of selectedIds) {
-          const selectedBook = remainingBooks.find(
-            (b) => b.volumeId === selectedId
-          );
-          if (selectedBook) {
-            // Penalizar por autor repetido
-            if (
-              book.authors.some((author) =>
-                selectedBook.authors.some(
-                  (selAuthor) =>
-                    author.toLowerCase().includes(selAuthor.toLowerCase()) ||
-                    selAuthor.toLowerCase().includes(author.toLowerCase())
-                )
-              )
-            ) {
-              diversity -= 1;
-            }
-            // Penalizar por categoría repetida
-            if (
-              book.categories.some((cat) =>
-                selectedBook.categories.some(
-                  (selCat) =>
-                    cat.toLowerCase().includes(selCat.toLowerCase()) ||
-                    selCat.toLowerCase().includes(cat.toLowerCase())
-                )
-              )
-            ) {
-              diversity -= 0.5;
-            }
-          }
-        }
-
-        const mmrScore = lambda * book.score + (1 - lambda) * diversity;
-        if (mmrScore > bestScore) {
-          bestScore = mmrScore;
-          bestBook = book;
-        }
-      }
-
-      if (bestBook) {
-        descubriNuevasLecturas.push({
-          volumeId: bestBook.volumeId,
-          title: bestBook.title,
-          authors: bestBook.authors,
-          categories: bestBook.categories,
-          description: bestBook.description,
-          language: bestBook.language,
-          pageCount: bestBook.pageCount,
-          averageRating: bestBook.averageRating,
-          image: bestBook.image,
-          reason: bestBook.reason || "Diversificación de lecturas",
-        });
-        selectedIds.add(bestBook.volumeId);
-      }
-    }
-  }
-
-  console.log(
-    `[Fallback] descubriNuevasLecturas antes de completar: ${descubriNuevasLecturas.length} libros`
-  );
-
-  // Si aún no tenemos 10 libros, completar con los que falten
-  while (descubriNuevasLecturas.length < 10) {
-    const remainingIndex = descubriNuevasLecturas.length + 9;
-    if (remainingIndex < scoredBooks.length) {
-      const book = scoredBooks[remainingIndex];
-      descubriNuevasLecturas.push({
-        volumeId: book.volumeId,
-        title: book.title,
-        authors: book.authors,
-        categories: book.categories,
-        description: book.description,
-        language: book.language,
-        pageCount: book.pageCount,
-        averageRating: book.averageRating,
-        image: book.image,
-        reason: book.reason || "Completando recomendaciones",
-      });
-    } else {
-      // Si no hay más libros, duplicar el último con variación
-      const lastBook =
-        descubriNuevasLecturas[descubriNuevasLecturas.length - 1];
-      if (lastBook) {
-        descubriNuevasLecturas.push({
-          ...lastBook,
-          volumeId: `${lastBook.volumeId}_alt`,
-          reason: "Alternativa adicional",
-        });
-      }
-      break;
-    }
-  }
-
-  console.log(
-    `[Fallback] Final: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
-  );
-
-  return [...tePodrianGustar, ...descubriNuevasLecturas];
-};
+// ═══════════════════════════════════════════════════════════════════════════
+// 🎯 FUNCIÓN PRINCIPAL - ORQUESTADOR DEL ALGORITMO
+// ═══════════════════════════════════════════════════════════════════════════
 
 /**
- * Función principal para obtener recomendaciones del home
+ * FUNCIÓN PRINCIPAL: Obtiene recomendaciones personalizadas para el home
+ *
+ * ESTA ES LA FUNCIÓN QUE UNE TODO EL ALGORITMO
+ *
+ * FLUJO COMPLETO:
+ *   1. ¿Hay caché? → SÍ → Retorna inmediatamente (sin llamar a APIs)
+ *   2. ¿Hay caché? → NO → Continúa...
+ *   3. Obtiene señales del usuario (favoritos, historial, likes, dislikes)
+ *   4. ¿Usuario sin datos? → SÍ → Usa libros por defecto
+ *   5. ¿Usuario con datos? → SÍ → Llama a ChatGPT
+ *   6. ChatGPT devuelve 40 títulos
+ *   7. Busca cada título en Google Books (en paralelo)
+ *   8. Filtra libros ya leídos (CAPA 1)
+ *   9. Elimina duplicados (CAPA 2)
+ *   10. Valida y corrige libros inválidos (CAPA 3 - red de seguridad)
+ *   11. Guarda en caché para la próxima vez
+ *   12. Retorna 10+10 libros completos con imágenes
+ *
+ * ESTRATEGIAS POSIBLES:
+ *   - "llm+googlebooks": ChatGPT + Google Books (lo ideal)
+ *   - "fallback-defaults": Libros predefinidos (si algo falla)
+ *
+ * GARANTÍA: SIEMPRE retorna recomendaciones, nunca falla completamente
  */
 const getHomeRecommendations = async (userId) => {
   try {
-    // Verificar cache - Caché persistente por sesión
+    // ─────────────────────────────────────────────────────────────────────────
+    // PASO 1: VERIFICAR CACHÉ (optimización de rendimiento)
+    // ─────────────────────────────────────────────────────────────────────────
+    // Si ya generamos recomendaciones para este usuario en esta sesión,
+    // las retornamos inmediatamente sin llamar a ChatGPT ni Google Books
     const cacheKey = `home_recs_${userId}`;
     const cached = recommendationsCache.get(cacheKey);
 
@@ -1776,13 +1534,21 @@ const getHomeRecommendations = async (userId) => {
       `[Cache] Miss para usuario ${userId}, generando nuevas recomendaciones`
     );
 
-    // Obtener señales del usuario
+    // ─────────────────────────────────────────────────────────────────────────
+    // PASO 2: OBTENER SEÑALES DEL USUARIO
+    // ─────────────────────────────────────────────────────────────────────────
+    // Obtenemos favoritos, historial de lecturas, likes y dislikes
+    // para personalizar las recomendaciones
     const signals = await getUserSignals(userId);
     console.log(
       `[Recommendations] Usuario ${userId}: ${signals.favoritos.length} favoritos, ${signals.historialCompleto.length} lecturas`
     );
 
-    // Caso A: Sin favoritos y sin historial
+    // ─────────────────────────────────────────────────────────────────────────
+    // DECISIÓN: ¿Qué estrategia usar?
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // CASO A: Usuario nuevo sin datos → Usar libros por defecto
     if (
       signals.favoritos.length === 0 &&
       signals.historialCompleto.length === 0
@@ -1823,10 +1589,14 @@ const getHomeRecommendations = async (userId) => {
       return result;
     }
 
-    // Caso B/C: Con favoritos o historial - Generar recomendaciones con LLM
+    // ─────────────────────────────────────────────────────────────────────────
+    // CASO B: Usuario con datos → Usar ChatGPT + Google Books (INTELIGENTE)
+    // ─────────────────────────────────────────────────────────────────────────
+    // Este es el flujo principal y más sofisticado del algoritmo
 
-    // Intentar con LLM
-    console.log("[Recommendations] Intentando con LLM...");
+    console.log(
+      "[Recommendations] Usuario con datos, intentando con ChatGPT..."
+    );
     const llmResponse = await callLLMForPicks(signals);
 
     if (llmResponse) {
@@ -1840,7 +1610,9 @@ const getHomeRecommendations = async (userId) => {
         `[Recommendations] LLM devolvió: ${tePodrianGustar.length} + ${descubriNuevasLecturas.length} libros`
       );
 
-      // Usar las recomendaciones que devolvió ChatGPT, sin importar la cantidad
+      // ─────────────────────────────────────────────────────────────────────────
+      // ChatGPT tuvo éxito - Procesar las recomendaciones
+      // ─────────────────────────────────────────────────────────────────────────
       if (tePodrianGustar.length > 0 || descubriNuevasLecturas.length > 0) {
         console.log(
           `[Recommendations] LLM devolvió: ${tePodrianGustar.length} + ${descubriNuevasLecturas.length} libros`
@@ -1855,24 +1627,26 @@ const getHomeRecommendations = async (userId) => {
           metadata: {
             userId,
             generatedAt: new Date().toISOString(),
-            strategy: "llm+googlebooks",
+            strategy: "llm+googlebooks", // Estrategia exitosa: ChatGPT + Google Books
             shortlistSize: 0,
           },
         };
 
-        // Eliminar duplicados
+        // CAPA 2: Eliminar duplicados entre ambas listas
         result = removeDuplicates(result);
 
-        // Validar y corregir libros inválidos
+        // CAPA 3: Validación final y corrección de libros inválidos (red de seguridad)
         const correctedResult = await validateAndCorrectRecommendations(
           result,
           signals
         );
         if (correctedResult) {
           console.log(
-            `[VALIDATION] ✅ Recomendaciones corregidas exitosamente`
+            `[VALIDATION] ✅ Recomendaciones validadas y corregidas exitosamente`
           );
           result = correctedResult;
+
+          // Guardar en caché para que persista durante toda la sesión
           console.log(`[Cache] 💾 Guardando en caché para usuario ${userId}`);
           console.log(`[Cache] Estrategia: ${result.metadata.strategy}`);
           setCacheAndSave(cacheKey, {
@@ -1886,18 +1660,26 @@ const getHomeRecommendations = async (userId) => {
         }
       }
 
-      // Si el LLM no devolvió ninguna recomendación, usar fallback local
+      // ChatGPT no devolvió ningún libro válido
       console.log(
         `[LLM] No devolvió recomendaciones: tePodrianGustar=${tePodrianGustar.length}, descubriNuevasLecturas=${descubriNuevasLecturas.length}`
       );
-      console.log("[LLM] Usando fallback local");
+      console.log("[LLM] Usando fallback a defaults");
     } else {
-      console.log("[Recommendations] LLM falló, usando fallback local");
+      console.log(
+        "[Recommendations] LLM falló o no respondió, usando fallback"
+      );
     }
 
-    // Fallback local - Usar defaults directamente (sin consultas a Google Books)
+    // ─────────────────────────────────────────────────────────────────────────
+    // FALLBACK FINAL: Usar libros por defecto cuando ChatGPT falla
+    // ─────────────────────────────────────────────────────────────────────────
+    // Se activa cuando:
+    // - ChatGPT no responde (timeout, error de API, etc.)
+    // - ChatGPT responde pero el JSON es inválido
+    // - Ningún libro de ChatGPT se encuentra en Google Books
     console.log(
-      "[Recommendations] LLM falló, usando defaults sin consultas adicionales"
+      "[Recommendations] Activando fallback: usando libros por defecto predefinidos"
     );
     const defaults = getDefaultRecommendations();
     const result = {
@@ -1905,11 +1687,13 @@ const getHomeRecommendations = async (userId) => {
       metadata: {
         ...defaults.metadata,
         userId,
-        strategy: "fallback-defaults",
+        strategy: "fallback-defaults", // Indica que se usó el fallback
       },
     };
+
+    // Guardar en caché el fallback (para no intentar ChatGPT en cada reload)
     console.log(
-      `[Cache] 💾 Guardando fallback local en caché para usuario ${userId}`
+      `[Cache] 💾 Guardando fallback en caché para usuario ${userId}`
     );
     console.log(`[Cache] Estrategia: ${result.metadata.strategy}`);
     setCacheAndSave(cacheKey, {
@@ -1941,8 +1725,15 @@ const getHomeRecommendations = async (userId) => {
   }
 };
 
+// ═══════════════════════════════════════════════════════════════════════════
+// VALIDACIÓN Y CORRECCIÓN DE RECOMENDACIONES
+// ═══════════════════════════════════════════════════════════════════════════
+
 /**
- * Elimina duplicados de las recomendaciones
+ * CAPA 2: Elimina duplicados entre ambas listas
+ *
+ * Asegura que un mismo libro no aparezca en ambas listas
+ * (te_podrian_gustar Y descubri_nuevas_lecturas)
  */
 const removeDuplicates = (result) => {
   const seenIds = new Set();
@@ -1971,52 +1762,41 @@ const removeDuplicates = (result) => {
 };
 
 /**
- * Valida que las recomendaciones no incluyan libros del historial o favoritos
- */
-const validateRecommendations = (result, signals) => {
-  const historialIds = new Set(signals.historialCompleto);
-  const favoritoIds = new Set(signals.favoritos.map((fav) => fav.volumeId));
-
-  // Verificar tePodrianGustar
-  for (const book of result.tePodrianGustar) {
-    if (historialIds.has(book.volumeId) || favoritoIds.has(book.volumeId)) {
-      console.log(
-        `[Validation] ❌ Libro inválido en tePodrianGustar: ${book.title}`
-      );
-      return false;
-    }
-  }
-
-  // Verificar descubriNuevasLecturas
-  for (const book of result.descubriNuevasLecturas) {
-    if (historialIds.has(book.volumeId) || favoritoIds.has(book.volumeId)) {
-      console.log(
-        `[Validation] ❌ Libro inválido en descubriNuevasLecturas: ${book.title}`
-      );
-      return false;
-    }
-  }
-
-  return true;
-};
-
-/**
- * Valida y corrige recomendaciones reemplazando libros inválidos
+ * CAPA 3 (ÚLTIMA RED DE SEGURIDAD): Valida y corrige libros inválidos
+ *
+ * PROBLEMA QUE RESUELVE:
+ *   Por si acaso un libro ya leído/favorito se escapó del filtro en Capa 1,
+ *   este método lo detecta y REEMPLAZA automáticamente.
+ *
+ * PROCESO:
+ *   1. Revisa CADA libro de ambas listas
+ *   2. Si encuentra uno ya leído o en favoritos → llama a findReplacementBook
+ *   3. findReplacementBook busca un clásico popular que el usuario NO haya leído
+ *   4. Reemplaza el libro inválido con el nuevo
+ *
+ * EJEMPLO:
+ *   - Detecta: "El Alquimista" (usuario ya lo leyó)
+ *   - Llama: findReplacementBook()
+ *   - Encuentra: "1984" (usuario no lo leyó)
+ *   - Reemplaza: "El Alquimista" → "1984"
+ *
+ * Esta es una medida de ÚLTIMO RECURSO - 99% del tiempo no hace nada
+ * porque la Capa 1 ya filtró todo correctamente.
  */
 const validateAndCorrectRecommendations = async (result, signals) => {
   const historialIds = new Set(signals.historialCompleto);
   const favoritoIds = new Set(signals.favoritos.map((fav) => fav.volumeId));
   let hasInvalidBooks = false;
 
-  // Corregir tePodrianGustar
+  // Revisar y corregir "te_podrian_gustar"
   for (let i = 0; i < result.tePodrianGustar.length; i++) {
     const book = result.tePodrianGustar[i];
     if (historialIds.has(book.volumeId) || favoritoIds.has(book.volumeId)) {
       console.log(
-        `[Validation] ❌ Reemplazando libro inválido en tePodrianGustar: ${book.title}`
+        `[Validation] ❌ ALERTA: Libro inválido detectado en tePodrianGustar: ${book.title}`
       );
 
-      // Buscar un libro de reemplazo
+      // Buscar un libro de reemplazo de la lista de clásicos
       const replacementBook = await findReplacementBook(
         signals,
         result.tePodrianGustar
@@ -2072,14 +1852,33 @@ const validateAndCorrectRecommendations = async (result, signals) => {
 };
 
 /**
- * Busca un libro de reemplazo que no esté en el historial o favoritos
+ * Busca un libro de reemplazo de emergencia cuando se detecta uno inválido
+ *
+ * CÓMO FUNCIONA:
+ *   1. Tiene una lista HARDCODEADA de 10 clásicos populares (solo título + autor)
+ *   2. Para cada clásico, busca su info completa en Google Books API
+ *   3. Verifica que el usuario NO lo haya leído ni esté en favoritos
+ *   4. Retorna el PRIMER libro válido que encuentre
+ *
+ * LISTA HARDCODEADA:
+ *   Solo guarda título + autor (no imágenes, para no quedar desactualizado)
+ *   Las imágenes y descripciones se obtienen en tiempo real de Google Books
+ *
+ * USO:
+ *   Este método solo se llama cuando validateAndCorrectRecommendations
+ *   detecta un libro inválido que se escapó del filtro inicial.
+ *   Es una medida de EMERGENCIA - raramente se ejecuta.
  */
 const findReplacementBook = async (signals, existingBooks) => {
   const historialIds = new Set(signals.historialCompleto);
   const favoritoIds = new Set(signals.favoritos.map((fav) => fav.volumeId));
   const existingIds = new Set(existingBooks.map((book) => book.volumeId));
 
-  // Lista de libros de reemplazo populares
+  // ─────────────────────────────────────────────────────────────────────────
+  // Lista de clásicos populares para usar como reemplazo de emergencia
+  // Solo guardamos título + autor (lo mínimo)
+  // La info completa (imagen, descripción) se obtiene de Google Books
+  // ─────────────────────────────────────────────────────────────────────────
   const replacementBooks = [
     { title: "1984", author: "George Orwell" },
     { title: "El Gran Gatsby", author: "F. Scott Fitzgerald" },
@@ -2093,8 +1892,10 @@ const findReplacementBook = async (signals, existingBooks) => {
     { title: "Los miserables", author: "Victor Hugo" },
   ];
 
+  // Buscar el primer libro válido de la lista
   for (const book of replacementBooks) {
     try {
+      // Buscar en Google Books API para obtener info completa (imagen, descripción, etc.)
       const foundBook = await searchSpecificBook(book.title, book.author);
       if (
         foundBook &&
@@ -2115,281 +1916,7 @@ const findReplacementBook = async (signals, existingBooks) => {
   return null;
 };
 
-/**
- * Obtiene recomendaciones progresivas (5+5 inicial, luego completar)
- */
-const getProgressiveRecommendations = async (userId) => {
-  try {
-    // Verificar cache primero
-    const cacheKey = `home_recs_${userId}`;
-    const cached = recommendationsCache.get(cacheKey);
-
-    if (cached) {
-      console.log(
-        `[Progressive] ✅ Usando cache existente para usuario ${userId}`
-      );
-
-      // Si ya tenemos 10+10 libros, devolver progresivamente
-      if (
-        cached.data.tePodrianGustar.length >= 10 &&
-        cached.data.descubriNuevasLecturas.length >= 10
-      ) {
-        // Primera llamada: devolver 5+5
-        if (!cached.progressiveLoaded) {
-          const progressiveData = {
-            ...cached.data,
-            tePodrianGustar: cached.data.tePodrianGustar.slice(0, 5),
-            descubriNuevasLecturas: cached.data.descubriNuevasLecturas.slice(
-              0,
-              5
-            ),
-            metadata: {
-              ...cached.data.metadata,
-              progressive: true,
-              hasMore: true,
-              totalTePodrianGustar: cached.data.tePodrianGustar.length,
-              totalDescubriNuevasLecturas:
-                cached.data.descubriNuevasLecturas.length,
-              loadedTePodrianGustar: 5,
-              loadedDescubriNuevasLecturas: 5,
-            },
-          };
-
-          // Marcar como progresivamente cargado
-          cached.progressiveLoaded = true;
-          recommendationsCache.set(cacheKey, cached);
-
-          return progressiveData;
-        } else {
-          // Segunda llamada: devolver todos
-          return {
-            ...cached.data,
-            metadata: {
-              ...cached.data.metadata,
-              progressive: true,
-              hasMore: false,
-              totalTePodrianGustar: cached.data.tePodrianGustar.length,
-              totalDescubriNuevasLecturas:
-                cached.data.descubriNuevasLecturas.length,
-              loadedTePodrianGustar: cached.data.tePodrianGustar.length,
-              loadedDescubriNuevasLecturas:
-                cached.data.descubriNuevasLecturas.length,
-            },
-          };
-        }
-      }
-    }
-
-    // Si no hay cache, generar nuevas recomendaciones
-    console.log(
-      `[Progressive] Generando nuevas recomendaciones para usuario ${userId}`
-    );
-
-    // Obtener señales del usuario
-    const signals = await getUserSignals(userId);
-
-    // Generar recomendaciones con LLM
-    const llmResponse = await callLLMForPicks(signals);
-
-    if (llmResponse) {
-      console.log(`[Progressive] Procesando recomendaciones del LLM...`);
-      const { tePodrianGustar, descubriNuevasLecturas } =
-        await processLLMRecommendations(llmResponse, signals);
-
-      // Seleccionar los mejores libros
-      const selectedTePodrianGustar = selectBestBooks(tePodrianGustar, 10);
-      const selectedDescubriNuevasLecturas = selectBestBooks(
-        descubriNuevasLecturas,
-        10
-      );
-
-      // No completar con defaults - usar solo los libros encontrados
-      const finalTePodrianGustar = [...selectedTePodrianGustar];
-      const finalDescubriNuevasLecturas = [...selectedDescubriNuevasLecturas];
-
-      console.log(
-        `[Progressive] Usando solo libros encontrados: tePodrianGustar=${finalTePodrianGustar.length}, descubriNuevasLecturas=${finalDescubriNuevasLecturas.length}`
-      );
-
-      const result = {
-        tePodrianGustar: finalTePodrianGustar,
-        descubriNuevasLecturas: finalDescubriNuevasLecturas,
-        metadata: {
-          strategy: "llm-progressive",
-          generatedAt: new Date().toISOString(),
-          userId,
-          progressive: true,
-          hasMore: true,
-          totalTePodrianGustar: finalTePodrianGustar.length,
-          totalDescubriNuevasLecturas: finalDescubriNuevasLecturas.length,
-          loadedTePodrianGustar: 5,
-          loadedDescubriNuevasLecturas: 5,
-        },
-      };
-
-      // Cachear el resultado completo
-      recommendationsCache.set(cacheKey, {
-        data: result,
-        timestamp: Date.now(),
-        progressiveLoaded: true,
-      });
-
-      // Devolver solo los primeros 5+5
-      return {
-        ...result,
-        tePodrianGustar: result.tePodrianGustar.slice(0, 5),
-        descubriNuevasLecturas: result.descubriNuevasLecturas.slice(0, 5),
-      };
-    } else {
-      // Fallback a defaults
-      console.log(`[Progressive] LLM falló, usando defaults`);
-      const defaults = getDefaultRecommendations();
-      const result = {
-        ...defaults,
-        metadata: {
-          ...defaults.metadata,
-          userId,
-          strategy: "fallback-defaults-progressive",
-          progressive: true,
-          hasMore: true,
-          totalTePodrianGustar: defaults.tePodrianGustar.length,
-          totalDescubriNuevasLecturas: defaults.descubriNuevasLecturas.length,
-          loadedTePodrianGustar: 5,
-          loadedDescubriNuevasLecturas: 5,
-        },
-      };
-
-      // Cachear
-      recommendationsCache.set(cacheKey, {
-        data: result,
-        timestamp: Date.now(),
-        progressiveLoaded: true,
-      });
-
-      return {
-        ...result,
-        tePodrianGustar: result.tePodrianGustar.slice(0, 5),
-        descubriNuevasLecturas: result.descubriNuevasLecturas.slice(0, 5),
-      };
-    }
-  } catch (error) {
-    console.error("Error en getProgressiveRecommendations:", error);
-    return null;
-  }
-};
-
-/**
- * Obtiene recomendaciones en dos fases: 5+5 rápido, luego 5+5 adicional
- */
-const getTwoPhaseRecommendations = async (userId, phase = 1) => {
-  try {
-    console.log(`[TwoPhase] Iniciando fase ${phase} para usuario ${userId}`);
-
-    if (phase === 1) {
-      // FASE 1: Procesar completamente pero solo devolver 5+5
-      console.log(`[TwoPhase] Fase 1: Procesando recomendaciones completas...`);
-
-      // Usar el algoritmo original completo
-      const fullResult = await getHomeRecommendations(userId);
-
-      if (fullResult) {
-        // Aplicar selección por calidad para la fase 1 (priorizar imágenes)
-        const selectedTePodrianGustar = selectBestBooks(
-          fullResult.tePodrianGustar,
-          5
-        );
-        const selectedDescubriNuevasLecturas = selectBestBooks(
-          fullResult.descubriNuevasLecturas,
-          5
-        );
-
-        const phase1Result = {
-          tePodrianGustar: selectedTePodrianGustar,
-          descubriNuevasLecturas: selectedDescubriNuevasLecturas,
-          metadata: {
-            ...fullResult.metadata,
-            strategy: "llm-two-phase-1",
-            phase: 1,
-            hasMore: true,
-            totalPhases: 2,
-          },
-        };
-
-        // Cachear el resultado completo para la fase 2
-        const cacheKey = `two_phase_${userId}`;
-        recommendationsCache.set(cacheKey, {
-          fullResult,
-          phase1Result,
-          timestamp: Date.now(),
-        });
-
-        console.log(
-          `[TwoPhase] Fase 1: Devuelto 5+5, cacheado resultado completo`
-        );
-        return phase1Result;
-      } else {
-        // NO usar defaults - devolver arrays vacíos si el LLM falla
-        console.log(`[TwoPhase] Fase 1: LLM falló, devolviendo arrays vacíos`);
-        return {
-          tePodrianGustar: [],
-          descubriNuevasLecturas: [],
-          metadata: {
-            strategy: "llm-failed-two-phase-1",
-            generatedAt: new Date().toISOString(),
-            userId,
-            phase: 1,
-            hasMore: false, // No hay más fases si falló
-            totalPhases: 2,
-          },
-        };
-      }
-    } else if (phase === 2) {
-      // FASE 2: Usar el cache de la fase 1
-      console.log(
-        `[TwoPhase] Fase 2: Recuperando resultado completo del cache...`
-      );
-
-      const cacheKey = `two_phase_${userId}`;
-      const cached = recommendationsCache.get(cacheKey);
-
-      if (!cached || !cached.fullResult) {
-        console.log(
-          `[TwoPhase] Fase 2: No hay cache, generando nueva consulta completa`
-        );
-        return await getHomeRecommendations(userId); // Fallback al algoritmo original
-      }
-
-      // Devolver el resultado completo (ya procesado en fase 1)
-      const completeResult = {
-        ...cached.fullResult,
-        metadata: {
-          ...cached.fullResult.metadata,
-          strategy: "llm-two-phase-complete",
-          phase: 2,
-          hasMore: false,
-          totalPhases: 2,
-        },
-      };
-
-      // Limpiar cache temporal
-      recommendationsCache.delete(cacheKey);
-
-      console.log(`[TwoPhase] Fase 2: Devolviendo resultado completo (10+10)`);
-      return completeResult;
-    }
-  } catch (error) {
-    console.error(`Error en getTwoPhaseRecommendations fase ${phase}:`, error);
-    return null;
-  }
-};
-
 module.exports = {
   getHomeRecommendations,
-  getProgressiveRecommendations,
-  getTwoPhaseRecommendations,
-  getUserSignals,
-  searchSpecificBook,
-  searchGoogleBooks,
   clearUserCache,
-  clearAllCache,
 };
