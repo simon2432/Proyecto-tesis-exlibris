@@ -53,13 +53,22 @@ export default function LibroDetalleScreen() {
           if (
             res.data &&
             res.data.description &&
+            res.data.description !== "Descripción no disponible" &&
             res.data.description !== "Descripción no encontrada"
           ) {
             setDescripcion(res.data.description.trim());
             setDescripcionGenerada(true);
+          } else {
+            // Si no se pudo generar descripción, dejar vacío
+            setDescripcion("");
+            setDescripcionGenerada(false);
           }
         })
-        .catch(() => {});
+        .catch((error) => {
+          console.error("Error generando descripción:", error);
+          setDescripcion("");
+          setDescripcionGenerada(false);
+        });
     }
     // Obtener userId actual
     AsyncStorage.getItem("user").then((user) => {

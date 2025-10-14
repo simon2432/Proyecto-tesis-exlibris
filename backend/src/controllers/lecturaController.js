@@ -313,19 +313,19 @@ exports.limpiarCachePortada = (req, res) => {
  * Detecta si un comentario/reseña contiene spoilers usando ChatGPT
  *
  * PROCESO:
- * 1. Envía el comentario y la info del libro a ChatGPT (GPT-3.5-turbo)
+ * 1. Envía el comentario y la info del libro a ChatGPT (GPT-4o-mini)
  * 2. ChatGPT responde solo "spoiler" o "no spoiler"
  * 3. Retorna true si es spoiler, false si no lo es
  *
  * USO: Se llama automáticamente al guardar una reseña
- * MODELO: GPT-3.5-turbo (temperature 0 para consistencia)
+ * MODELO: GPT-4o-mini (mejor detección que GPT-3.5-turbo, temperature 0 para consistencia)
  */
 const detectarSpoilerEnResena = async (reviewComment, bookInfo) => {
   try {
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o-mini",
         messages: [
           {
             role: "system",

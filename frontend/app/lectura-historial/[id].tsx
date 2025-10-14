@@ -115,6 +115,7 @@ export default function LecturaHistorialDetalle() {
                 if (
                   descRes.data &&
                   descRes.data.description &&
+                  descRes.data.description !== "Descripción no disponible" &&
                   descRes.data.description !== "Descripción no encontrada"
                 ) {
                   setDescripcion(descRes.data.description.trim());
@@ -124,7 +125,8 @@ export default function LecturaHistorialDetalle() {
                   setDescripcionGenerada(false);
                 }
               })
-              .catch(() => {
+              .catch((error) => {
+                console.error("Error generando descripción:", error);
                 setDescripcion("");
                 setDescripcionGenerada(false);
               });

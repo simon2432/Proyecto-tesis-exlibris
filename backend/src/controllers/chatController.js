@@ -8,7 +8,7 @@
  * - Recomendaciones personalizadas por chat
  * - Mantiene historial de conversación
  *
- * MODELO: GPT-3.5-turbo (económico para conversaciones)
+ * MODELO: GPT-4o-mini (mejor comprensión y más económico que GPT-3.5-turbo)
  * TEMPERATURA: 0.8 (alta para respuestas creativas y conversacionales)
  *
  * PERSONALIDAD: "Exlibris" - Una lechuza sabia y apasionada por la literatura
@@ -65,7 +65,7 @@ Siempre iniciá la conversación con un mensaje amable que invite al usuario a h
  * FLUJO:
  * 1. Recibe mensaje del usuario + historial de conversación
  * 2. Construye contexto completo (system prompt + historial + nuevo mensaje)
- * 3. Envía a ChatGPT (GPT-3.5-turbo, temperature 0.8)
+ * 3. Envía a ChatGPT (GPT-4o-mini, temperature 0.8)
  * 4. Retorna respuesta conversacional
  *
  * CARACTERÍSTICAS:
@@ -88,7 +88,7 @@ exports.chatWithAssistant = async (req, res) => {
     const response = await axios.post(
       "https://api.openai.com/v1/chat/completions",
       {
-        model: "gpt-3.5-turbo",
+        model: "gpt-4o-mini",
         messages,
         max_tokens: 400,
         temperature: 0.8,

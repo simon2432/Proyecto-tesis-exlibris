@@ -68,26 +68,26 @@ const generateDescription = async (bookInfo) => {
           {
             role: "system",
             content:
-              "Eres un experto en literatura que genera descripciones REALES de libros basándote en tu conocimiento de la obra. IMPORTANTE: Solo genera descripciones si CONOCES el libro. NO INVENTES ni ESPECULES sobre el contenido. Si no conoces el libro, responde ÚNICAMENTE 'Descripción no disponible'.",
+              "Eres un experto en literatura que genera descripciones precisas y atractivas de libros. Genera descripciones basándote en tu conocimiento de la obra. Si conoces el libro, proporciona una descripción detallada y real. Si no tienes suficiente información, genera una descripción general basándote en el título, autor y género, indicando que es una descripción general. SOLO responde 'Descripción no disponible' si absolutamente no tienes ninguna información sobre el libro.",
           },
           {
             role: "user",
-            content: `Genera una descripción real y precisa (máximo 200 palabras) SOLO si conoces este libro. Si no lo conoces, responde "Descripción no disponible".
+            content: `Genera una descripción atractiva y precisa (máximo 200 palabras) para este libro:
 
 Información del libro:
 ${bookInfo}
 
 La descripción debe incluir:
-- Un resumen del contenido real (sin inventar)
+- Un resumen del contenido (si conoces el libro) o una descripción general basada en el título/autor/género
 - El género o estilo literario
-- Por qué es relevante o interesante
+- Por qué podría ser interesante para el lector
 - Sin spoilers importantes
 
-RECUERDA: Solo describe si CONOCES el libro. NO inventes contenido.`,
+Si no conoces este libro específico pero conoces al autor o el género, genera una descripción general. Solo responde "Descripción no disponible" si no tienes absolutamente ninguna información.`,
           },
         ],
         max_tokens: 300,
-        temperature: 0.5,
+        temperature: 0.7,
       },
       {
         headers: {
@@ -97,9 +97,20 @@ RECUERDA: Solo describe si CONOCES el libro. NO inventes contenido.`,
       }
     );
 
-    return response.data.choices[0].message.content.trim();
+    const description = response.data.choices[0].message.content.trim();
+
+    // Log para debugging
+    console.log(
+      `[ChatGPT] Descripción generada para: ${bookInfo.substring(0, 50)}...`
+    );
+    console.log(`[ChatGPT] Respuesta: ${description.substring(0, 100)}...`);
+
+    return description;
   } catch (error) {
-    console.error("Error generando descripción:", error);
+    console.error("Error generando descripción con ChatGPT:", error.message);
+    if (error.response) {
+      console.error("Error response:", error.response.data);
+    }
     return "Descripción no disponible";
   }
 };
